@@ -1,5 +1,8 @@
 
 # Excel AI Insight
+<p align="center">
+  <img src="https://github.com/jmesplana/excel_ai_insight/blob/main/excel_ai_insight_logo.webp" alt="excel AI Insight Logo" width=25%/>
+</p>
 
 Excel AI Insight is a web application that allows you to upload Excel files and generate insightful analyses using advanced AI models. This tool helps uncover patterns, trends, and actionable insights quickly and efficiently.
 
