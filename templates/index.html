@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel AI Insight</title>
+    <style>
+        /* General Styles */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f3f4f6;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 60px auto;
+            padding: 20px;
+            background-color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        h2 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        h3 {
+            font-size: 20px;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+        p, ul {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        ul li {
+            margin-bottom: 10px;
+        }
+
+        /* Navigation Bar */
+        .navbar {
+            background-color: #4CAF50;
+            padding: 15px;
+            text-align: center;
+            border-radius: 10px 10px 0 0;
+        }
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            font-size: 18px;
+            margin: 0 15px;
+            transition: color 0.3s;
+        }
+        .navbar a:hover {
+            color: #c8e6c9;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 20px;
+        }
+
+        /* Sections */
+        .section {
+            margin-bottom: 40px;
+        }
+        .section:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Instructions */
+        .instructions {
+            background-color: #e8f5e9;
+            padding: 15px;
+            border-left: 4px solid #4CAF50;
+            border-radius: 5px;
+            margin-bottom: 30px;
+            font-size: 15px;
+        }
+
+        /* Forms and Inputs */
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        input[type="text"], input[type="file"], textarea, select {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 16px;
+            background-color: #fdfdfd;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus, input[type="file"]:focus, textarea:focus, select:focus {
+            border-color: #4CAF50;
+            outline: none;
+        }
+        textarea {
+            height: 120px;
+            resize: vertical;
+        }
+
+        /* Buttons */
+        .button-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s, transform 0.1s;
+            flex: 1;
+        }
+        #add-column-btn {
+            background-color: #1E88E5;
+            color: white;
+        }
+        #add-column-btn:hover {
+            background-color: #1565C0;
+        }
+        #analyze-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        #analyze-btn:hover {
+            background-color: #388E3C;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* Table Styles */
+        .table-container {
+            overflow-x: auto;
+            background-color: #fafafa;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 700px;
+            margin-top: 10px;
+            background-color: #fff;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: 600;
+        }
+
+        /* Messages */
+        .message {
+            font-weight: bold;
+            color: #4CAF50;
+            margin-top: 10px;
+        }
+
+        /* Loading Spinner */
+        #loading-spinner {
+            display: none;
+            margin-left: 10px;
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #4CAF50;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 14px;
+            color: #666;
+        }
+        footer a {
+            color: #4CAF50;
+            text-decoration: none;
+        }
+        footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <div class="navbar">
+        <a href="#" onclick="showMainContent()">Home</a>
+        <a href="#" onclick="showAbout()">About Excel AI Insight</a>
+        <a href="https://www.github.com/jmesplana" target="_blank">Documentation</a>
+    </div>
+
+    <!-- Container -->
+    <div class="container">
+        <!-- Main Content -->
+        <div class="main-content" id="main-content">
+            <!-- Logo -->
+            <img src="[path_to_your_logo_image]" alt="Excel AI Insight Logo" class="logo" style="display: block; margin: 0 auto 20px; max-width: 150px;">
+            
+            <h1>Excel AI Insight</h1>
+
+            <!-- Instructions -->
+            <div class="instructions">
+                <p>Follow these steps to get started:</p>
+                <ol>
+                    <li>Enter your OpenAI API Key and general instructions for the analysis.</li>
+                    <li>Upload your Excel file (.xlsx or .xls).</li>
+                    <li>Select the sheet and configure columns for analysis.</li>
+                    <li>Click "Analyze Columns" to perform the analysis.</li>
+                    <li>Preview the results and download the analyzed file.</li>
+                </ol>
+            </div>
+
+            <div class="section">
+                <h2>Configuration</h2>
+                <label for="api-key">OpenAI API Key:</label>
+                <input type="text" id="api-key" name="api-key" placeholder="Enter your OpenAI API Key" required>
+                
+                <label for="general-instructions">General Instructions:</label>
+                <textarea id="general-instructions" name="general-instructions" placeholder="Enter general instructions for the analysis..."></textarea>
+            </div>
+
+            <div class="section">
+                <h2>Upload Excel File</h2>
+                <form id="upload-form">
+                    <label for="file">Select Excel File:</label>
+                    <input type="file" id="file" name="file" accept=".xlsx,.xls" required>
+                    <button type="submit">Upload File</button>
+                </form>
+                <div id="upload-message" class="message"></div>
+            </div>
+
+            <div id="file-preview" class="section hidden">
+                <h2>File Preview</h2>
+                <div id="sheet-selection">
+                    <label for="sheet-select">Select Sheet:</label>
+                    <select id="sheet-select"></select>
+                </div>
+                <div id="preview-table" class="table-container"></div>
+            </div>
+
+            <div id="column-selection" class="section hidden">
+                <h2>Configure Column Analysis</h2>
+                <div id="column-configs"></div>
+                <div class="button-container">
+                    <button id="add-column-btn">Add Column</button>
+                    <button id="analyze-btn">Analyze Columns</button>
+                </div>
+                <div id="analyze-message" class="message"></div>
+            </div>
+
+            <div id="result" class="section hidden">
+                <h2>Analysis Complete</h2>
+                <p id="result-message"></p>
+                <h3>Preview of Analyzed Data (Top 10 Records)</h3>
+                <div id="result-preview" class="table-container"></div>
+                <a id="download-link" href="#" class="button">Download Analyzed File</a>
+            </div>
+
+            <div id="debug-output" class="hidden"></div>
+            <div id="loading-spinner"></div>
+        </div>
+
+        <!-- About Content (Hidden by Default) -->
+        <div class="main-content hidden" id="about-content">
+            <h1>About Excel AI Insight</h1>
+
+            <!-- Product Intro -->
+            <div class="section intro">
+                <h2>Product Introduction</h2>
+                <p>Excel AI Insight is your intelligent assistant for analyzing Excel spreadsheets with the power of AI. This tool allows you to upload your Excel files and generate insightful analysis using advanced AI models, helping you uncover patterns, trends, and actionable insights quickly and efficiently.</p>
+            </div>
+
+            <!-- Use Cases -->
+            <div class="section use-cases">
+                <h2>Use Cases</h2>
+                <ul>
+                    <li><strong>Data Cleaning:</strong> Automatically detect and suggest corrections for inconsistent or missing data.</li>
+                    <li><strong>Trend Analysis:</strong> Identify key trends and outliers within your dataset.</li>
+                    <li><strong>Sentiment Analysis:</strong> Analyze text data to determine the overall sentiment (e.g., customer reviews, feedback).</li>
+                    <li><strong>Summary Generation:</strong> Generate summaries or key points from large text fields.</li>
+                    <li><strong>Custom Analysis:</strong> Tailor the analysis to your specific needs using custom prompts.</li>
+                </ul>
+            </div>
+
+            <!-- Sample Prompts -->
+            <div class="section sample-prompts">
+                <h2>Sample Prompts</h2>
+                <p>Here are some example prompts you can use:</p>
+                <ul>
+                    <li><strong>For sentiment analysis:</strong> "Analyze the sentiment of the customer feedback in this column."</li>
+                    <li><strong>For trend detection:</strong> "Identify any emerging trends in the sales data over the last quarter."</li>
+                    <li><strong>For data summarization:</strong> "Summarize the key points mentioned in the customer reviews."</li>
+                </ul>
+            </div>
+        </div>
+
+        <footer>
+            Created by <a href="https://www.github.com/jmesplana">John Mark Esplana</a>
+        </footer>
+    </div>
+
+    <script>
+        let availableColumns = [];
+        let fileData = {};
+
+        function showLoadingSpinner(show) {
+            document.getElementById('loading-spinner').style.display = show ? 'inline-block' : 'none';
+        }
+
+        function updateMessage(id, message) {
+            const messageElement = document.getElementById(id);
+            messageElement.textContent = message;
+        }
+
+        function showMainContent() {
+            document.getElementById('main-content').classList.remove('hidden');
+            document.getElementById('about-content').classList.add('hidden');
+        }
+
+        function showAbout() {
+            document.getElementById('main-content').classList.add('hidden');
+            document.getElementById('about-content').classList.remove('hidden');
+        }
+
+        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            updateMessage('upload-message', 'Uploading file...');
+            showLoadingSpinner(true);
+
+            const formData = new FormData(e.target);
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error}`);
+                }
+
+                fileData = await response.json();
+                if (fileData.error) {
+                    throw new Error(fileData.error);
+                }
+
+                updateMessage('upload-message', 'File uploaded successfully.');
+                displayFilePreview();
+            } catch (error) {
+                updateMessage('upload-message', `Error uploading file: ${error.message}`);
+            } finally {
+                showLoadingSpinner(false);
+            }
+        });
+
+        function displayFilePreview() {
+            const filePreview = document.getElementById('file-preview');
+            const sheetSelect = document.getElementById('sheet-select');
+            sheetSelect.innerHTML = '';
+
+            Object.keys(fileData.sheets).forEach(sheet => {
+                const option = document.createElement('option');
+                option.value = sheet;
+                option.textContent = sheet;
+                sheetSelect.appendChild(option);
+            });
+
+            sheetSelect.onchange = () => updatePreviewTable(sheetSelect.value);
+
+            filePreview.classList.remove('hidden');
+            updatePreviewTable(sheetSelect.value);
+        }
+
+        function updatePreviewTable(sheetName) {
+            const previewTable = document.getElementById('preview-table');
+            const sheetData = fileData.sheets[sheetName];
+            availableColumns = sheetData.columns;
+
+            let tableHTML = '<table><thead><tr>';
+            sheetData.columns.forEach(column => {
+                tableHTML += `<th>${column}</th>`;
+            });
+            tableHTML += '</tr></thead><tbody>';
+
+            sheetData.data.forEach(row => {
+                tableHTML += '<tr>';
+                sheetData.columns.forEach(column => {
+                    tableHTML += `<td>${row[column]}</td>`;
+                });
+                tableHTML += '</tr>';
+            });
+
+            tableHTML += '</tbody></table>';
+            previewTable.innerHTML = tableHTML;
+
+            document.getElementById('column-selection').classList.remove('hidden');
+            updateColumnConfigs();
+        }
+
+        function updateColumnConfigs() {
+            const columnConfigs = document.getElementById('column-configs');
+            columnConfigs.innerHTML = '';
+            addColumnConfig();
+
+            document.getElementById('add-column-btn').onclick = addColumnConfig;
+            document.getElementById('analyze-btn').onclick = analyzeColumns;
+        }
+
+        function addColumnConfig() {
+            const columnConfigs = document.getElementById('column-configs');
+            const configDiv = document.createElement('div');
+            configDiv.className = 'column-config';
+            configDiv.innerHTML = `
+                <select name="column">
+                    <option value="">Select a column</option>
+                    ${availableColumns.map(col => `<option value="${col}">${col}</option>`).join('')}
+                </select>
+                <input type="text" name="prompt" placeholder="Enter analysis prompt for this column">
+            `;
+            columnConfigs.appendChild(configDiv);
+        }
+
+        async function analyzeColumns() {
+            const analyzeButton = document.getElementById('analyze-btn');
+            const addColumnButton = document.getElementById('add-column-btn');
+            
+            // Disable the buttons to prevent multiple submissions
+            analyzeButton.disabled = true;
+            addColumnButton.disabled = true;
+            updateMessage('analyze-message', 'Analyzing columns...');
+            showLoadingSpinner(true);
+
+            const apiKey = document.getElementById('api-key').value;
+            const generalInstructions = document.getElementById('general-instructions').value;
+            const selectedSheet = document.getElementById('sheet-select').value;
+            const columnConfigs = Array.from(document.querySelectorAll('.column-config')).map(config => ({
+                column: config.querySelector('select[name="column"]').value,
+                prompt: config.querySelector('input[name="prompt"]').value
+            })).filter(config => config.column && config.prompt);
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        filename: fileData.filename,
+                        sheetName: selectedSheet,
+                        apiKey: apiKey,
+                        generalInstructions: generalInstructions,
+                        columnConfigs: columnConfigs
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error}`);
+                }
+
+                const result = await response.json();
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+
+                updateMessage('analyze-message', 'Analysis complete. Previewing results...');
+                document.getElementById('result').classList.remove('hidden');
+                document.getElementById('result-message').textContent = result.message;
+                document.getElementById('download-link').href = `/download/${result.filename}`;
+                await previewAnalyzedData(result.filename);
+            } catch (error) {
+                updateMessage('analyze-message', `Error during analysis: ${error.message}`);
+            } finally {
+                showLoadingSpinner(false);
+                // Re-enable the buttons after the analysis is done
+                analyzeButton.disabled = false;
+                addColumnButton.disabled = false;
+            }
+        }
+
+        async function previewAnalyzedData(filename) {
+            try {
+                const response = await fetch(`/download/${filename}`, { method: 'GET' });
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                const fileReader = new FileReader();
+                
+                fileReader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const previewData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }).slice(0, 11); // Top 10 + header
+
+                    let tableHTML = '<table><thead><tr>';
+                    previewData[0].forEach(header => {
+                        tableHTML += `<th>${header}</th>`;
+                    });
+                    tableHTML += '</tr></thead><tbody>';
+
+                    previewData.slice(1).forEach(row => {
+                        tableHTML += '<tr>';
+                        row.forEach(cell => {
+                            tableHTML += `<td>${cell}</td>`;
+                        });
+                        tableHTML += '</tr>';
+                    });
+
+                    tableHTML += '</tbody></table>';
+                    document.getElementById('result-preview').innerHTML = tableHTML;
+                };
+
+                fileReader.readAsArrayBuffer(blob);
+            } catch (error) {
+                console.error('Error previewing analyzed data:', error);
+            }
+        }
+    </script>
+</body>
+</html>
