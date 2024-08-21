@@ -1,7 +1,9 @@
 import os
 from flask import Flask, request, render_template, jsonify, send_file
 import pandas as pd
-from openai import OpenAI  # Import the OpenAI client
+# from openai import OpenAI  # Import the OpenAI client
+import openai
+
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
@@ -60,7 +62,9 @@ def analyze():
         column_configs = data['columnConfigs']
         
         # Initialize the OpenAI client with the provided API key
-        client = OpenAI(api_key=api_key)
+        # client = OpenAI(api_key=api_key)
+        openai.api_key = api_key
+
         
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         df = pd.read_excel(filepath, sheet_name=sheet_name)
