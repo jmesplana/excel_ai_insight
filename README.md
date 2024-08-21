@@ -36,7 +36,7 @@ Excel AI Insight is a web application that allows you to upload Excel files and 
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/[YourUsername]/excel-ai-insight.git
+   git clone https://github.com/jmesplana/excel-ai-insight.git
    cd excel-ai-insight
    ```
 
