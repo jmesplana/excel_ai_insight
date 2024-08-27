@@ -16,6 +16,7 @@ Excel AI Insight is a web application that allows you to upload Excel files and 
   - [Uploading Files](#uploading-files)
   - [Analyzing Data](#analyzing-data)
   - [Downloading Results](#downloading-results)
+  - [Sample Prompt for Data Categorization](#instruction-for-categorizing-text-data)
 - [Running Tests](#running-tests)
 - [Contributing](#contributing)
 - [License](#license)
@@ -84,6 +85,28 @@ Excel AI Insight is a web application that allows you to upload Excel files and 
 ### Downloading Results
 
 - After the analysis is complete, a download link will appear. Click it to download the analyzed Excel file.
+
+### Instruction for Categorizing Text Data
+To categorize text data effectively, follow these instructions:
+
+**Objective**: For each entry in the text data, identify the most appropriate category from a predefined list of categories.
+
+**Categories**: Below is the default list of categories. You can modify, add, or remove categories as needed for your specific use case:
+- Category 1
+- Category 2
+- Category 3
+- Category 4
+- Category 5
+- (Add or modify categories as needed)
+**Configuration**: To configure the categories:
+
+- Edit the list of categories to match the needs of your analysis.
+- Ensure each category is distinct and clearly defined to avoid overlap.
+
+**Output Requirement**: Provide only the category name as the output for each entry. Do not include explanations, the original text, or any additional information.
+
+By following these steps, you will ensure that each text entry is accurately categorized according to the most relevant category.
+
 
 ## Running Tests
 
