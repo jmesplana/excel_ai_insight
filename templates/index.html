@@ -236,7 +236,7 @@
         <!-- Main Content -->
         <div class="main-content" id="main-content">
             <!-- Logo -->
-            <img src="{{ url_for('static', filename='excel_ai_insight_logo.webp') }}" alt="Excel AI Insight Logo" class="logo" style="display: block; margin: 0 auto 20px; max-width: 150px;">
+            <img src="[path_to_your_logo_image]" alt="Excel AI Insight Logo" class="logo" style="display: block; margin: 0 auto 20px; max-width: 150px;">
             
             <h1>Excel AI Insight</h1>
 
@@ -265,7 +265,7 @@
                 <h2>Upload Excel File</h2>
                 <form id="upload-form">
                     <label for="file">Select Excel File:</label>
-                    <input type="file" id="file" name="file" accept=".xlsx,.xls" required>
+                    <input type="file" id="file" name="file" accept=".xlsx,.xls,.csv" required>
                     <button type="submit">Upload File</button>
                 </form>
                 <div id="upload-message" class="message"></div>
