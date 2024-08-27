@@ -87,6 +87,8 @@ Excel AI Insight is a web application that allows you to upload Excel files and 
 - After the analysis is complete, a download link will appear. Click it to download the analyzed Excel file.
 
 ### Instruction for Categorizing Text Data
+  ```bash
+Instruction for Categorizing Text Data
 To categorize text data effectively, follow these instructions:
 
 **Objective**: For each entry in the text data, identify the most appropriate category from a predefined list of categories.
@@ -106,7 +108,7 @@ To categorize text data effectively, follow these instructions:
 **Output Requirement**: Provide only the category name as the output for each entry. Do not include explanations, the original text, or any additional information.
 
 By following these steps, you will ensure that each text entry is accurately categorized according to the most relevant category.
-
+   ```
 
 ## Running Tests
 
