@@ -74,7 +74,7 @@ Excel AI Insight is a web application that allows you to upload Excel files and 
 
 ### Uploading Files
 
-- Click the "Upload Excel File" button and select your `.xlsx` or `.xls` file.
+- Click the "Upload Excel File" button and select your `.xlsx`, `.xls` or `.csv` file.
 
 ### Analyzing Data
 
