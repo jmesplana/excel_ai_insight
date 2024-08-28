@@ -177,7 +177,7 @@ def analyze_text(client, text, prompt):
 
         # Use the client to create a chat completion
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that analyzes text."},
                 {"role": "user", "content": f"{prompt}\n\nText to analyze: {text}"}
