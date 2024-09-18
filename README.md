@@ -110,6 +110,19 @@ To categorize text data effectively, follow these instructions:
 By following these steps, you will ensure that each text entry is accurately categorized according to the most relevant category.
    ```
 
+### Instructions for Sentiment Analysis
+**General Instructions**
+1. Upload the Dataset: Upload your file (e.g., Excel, CSV) containing feedback data.
+2. Select the Feedback Column: Specify the column name that contains the feedback entries (e.g., "Customer Feedback," "Patient Feedback").
+3. Run the Analysis: Use the tool to perform sentiment analysis, which will classify feedback as Positive, Negative, or Mixed.
+**Prompt Example**
+To perform sentiment analysis, use the following prompt format:
+
+```bash
+Analyze the '[COLUMN_NAME]' column and return only the sentiment result as 'Positive,' 'Negative,' or 'Mixed' without additional text.
+```
+This structure ensures clarity for both the general process and specific usage.
+
 ## Running Tests
 
 You can run tests to ensure everything is working correctly. Use `unittest` or `pytest`:
