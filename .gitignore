@@ -1,0 +1,36 @@
+# Python virtual environment
+venv/
+env/
+.env
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# User-uploaded files
+uploads/*.xlsx
+uploads/*.xls
+uploads/*.csv
+/tmp/
+
+# Vercel
+.vercel
+
+# Local configuration
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor directories and files
+.idea
+.vscode
+*.swp
+*.swo

@@ -4,427 +4,1199 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Excel AI Insight</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <!-- XLSX Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* General Styles */
+        :root {
+            --primary-color: #4CAF50;
+            --primary-light: #8bc34a;
+            --primary-dark: #388E3C;
+            --secondary-color: #2196F3;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+            --info-color: #17a2b8;
+            --dark-color: #343a40;
+            --light-color: #f8f9fa;
+        }
+
+        /* General Theme */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f3f4f6;
+            background-color: var(--light-color);
             color: #333;
+            transition: background-color 0.3s, color 0.3s;
         }
-        .container {
-            max-width: 800px;
-            margin: 60px auto;
-            padding: 20px;
-            background-color: #ffffff;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        
+        body.dark-mode {
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .card {
             border-radius: 10px;
-        }
-        h1, h2, h3 {
-            color: #2c3e50;
-        }
-        h1 {
-            font-size: 28px;
-            font-weight: 700;
+            transition: transform 0.3s, box-shadow 0.3s;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
             margin-bottom: 20px;
-            text-align: center;
+            border: none;
         }
-        h2 {
-            font-size: 24px;
+
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+        }
+        
+        body.dark-mode .card {
+            background-color: #1e1e1e;
+            border: 1px solid #2d2d2d;
+            color: #e0e0e0;
+        }
+
+        .card-header {
+            background-color: rgba(76, 175, 80, 0.1);
+            border-bottom: none;
+            padding: 15px 20px;
             font-weight: 600;
-            margin-bottom: 15px;
+            border-radius: 10px 10px 0 0 !important;
         }
-        h3 {
-            font-size: 20px;
-            font-weight: 500;
-            margin-bottom: 10px;
-        }
-        p, ul {
-            font-size: 16px;
-            line-height: 1.6;
-            margin-bottom: 20px;
-        }
-        ul {
-            padding-left: 20px;
-        }
-        ul li {
-            margin-bottom: 10px;
+        
+        body.dark-mode .card-header {
+            background-color: rgba(76, 175, 80, 0.15);
         }
 
-        /* Navigation Bar */
-        .navbar {
-            background-color: #4CAF50;
-            padding: 15px;
-            text-align: center;
-            border-radius: 10px 10px 0 0;
-        }
-        .navbar a {
-            color: white;
-            text-decoration: none;
-            font-size: 18px;
-            margin: 0 15px;
-            transition: color 0.3s;
-        }
-        .navbar a:hover {
-            color: #c8e6c9;
-        }
-
-        /* Main Content */
-        .main-content {
+        .card-body {
             padding: 20px;
         }
 
-        /* Sections */
-        .section {
-            margin-bottom: 40px;
-        }
-        .section:last-child {
-            margin-bottom: 0;
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
         }
 
-        /* Instructions */
-        .instructions {
-            background-color: #e8f5e9;
-            padding: 15px;
-            border-left: 4px solid #4CAF50;
-            border-radius: 5px;
-            margin-bottom: 30px;
-            font-size: 15px;
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            border-color: var(--primary-dark);
         }
 
-        /* Forms and Inputs */
-        label {
-            display: block;
-            font-weight: 500;
-            margin-bottom: 8px;
-        }
-        input[type="text"], input[type="file"], textarea, select {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 20px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            font-size: 16px;
-            background-color: #fdfdfd;
-            transition: border-color 0.3s;
-        }
-        input[type="text"]:focus, input[type="file"]:focus, textarea:focus, select:focus {
-            border-color: #4CAF50;
-            outline: none;
-        }
-        textarea {
-            height: 120px;
-            resize: vertical;
+        .btn-secondary {
+            background-color: var(--secondary-color);
+            border-color: var(--secondary-color);
         }
 
-        /* Buttons */
-        .button-container {
-            display: flex;
-            gap: 10px;
+        .btn-outline-primary {
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .btn-outline-primary:hover {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        /* Progress Stepper */
+        .stepper-wrapper {
             margin-top: 20px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            position: relative;
         }
-        button {
-            padding: 12px 20px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.3s, transform 0.1s;
+        
+        .stepper-wrapper::before {
+            content: '';
+            position: absolute;
+            top: 16px;
+            left: 10%;
+            right: 10%;
+            height: 2px;
+            background: #ccc;
+            z-index: 0;
+        }
+        
+        body.dark-mode .stepper-wrapper::before {
+            background: #444;
+        }
+        
+        .stepper-item {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             flex: 1;
+            z-index: 1;
         }
-        #add-column-btn {
-            background-color: #1E88E5;
+        
+        .step-counter {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            background: #ccc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             color: white;
+            font-weight: bold;
+            margin-bottom: 6px;
         }
-        #add-column-btn:hover {
-            background-color: #1565C0;
+        
+        body.dark-mode .step-counter {
+            background: #444;
         }
-        #analyze-btn {
-            background-color: #4CAF50;
-            color: white;
+        
+        .step-name {
+            font-size: 0.85rem;
+            text-align: center;
+            color: #666;
         }
-        #analyze-btn:hover {
-            background-color: #388E3C;
+        
+        body.dark-mode .step-name {
+            color: #aaa;
         }
-        button:active {
-            transform: scale(0.98);
+        
+        .stepper-item.active .step-counter, 
+        .stepper-item.completed .step-counter {
+            background-color: var(--primary-color);
         }
-        button:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
+        
+        .stepper-item.active .step-name, 
+        .stepper-item.completed .step-name {
+            color: var(--primary-color);
+            font-weight: bold;
         }
-
+        
+        body.dark-mode .stepper-item.active .step-name, 
+        body.dark-mode .stepper-item.completed .step-name {
+            color: var(--primary-light);
+        }
+        
+        /* Animations */
+        .fade-in {
+            animation: fadeIn 0.5s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
         /* Table Styles */
         .table-container {
             overflow-x: auto;
             overflow-y: auto; 
-            max-height: 750px; 
+            max-height: 500px; 
             background-color: #fafafa;
             padding: 10px;
-            border: 1px solid #ddd;
             border-radius: 8px;
+            margin-top: 20px;
         }
+        
+        body.dark-mode .table-container {
+            background-color: #1e1e1e;
+        }
+        
         table {
             width: 100%;
-            border-collapse: collapse;
-            min-width: 700px;
-            margin-top: 10px;
-            background-color: #fff;
-            border-radius: 6px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            margin-bottom: 0;
         }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 12px;
-            text-align: left;
+        
+        body.dark-mode .table {
+            color: #e0e0e0;
         }
-        th {
-            background-color: #f2f2f2;
+        
+        body.dark-mode .table thead th {
+            border-bottom-color: #2d2d2d;
+            background-color: #262626;
+        }
+        
+        body.dark-mode .table td,
+        body.dark-mode .table th {
+            border-color: #2d2d2d;
+        }
+        
+        /* API Key styles */
+        .api-key-input-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        /* Column Configuration */
+        .column-selection-container {
+            background-color: rgba(76, 175, 80, 0.05);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            transition: background-color 0.3s;
+        }
+        
+        body.dark-mode .column-selection-container {
+            background-color: rgba(76, 175, 80, 0.1);
+        }
+        
+        .column-selection-container:hover {
+            background-color: rgba(76, 175, 80, 0.1);
+        }
+        
+        body.dark-mode .column-selection-container:hover {
+            background-color: rgba(76, 175, 80, 0.15);
+        }
+        
+        .additional-columns {
+            margin-top: 8px;
+            margin-left: 20px;
+        }
+        
+        .additional-column {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .main-column-selector {
+            display: flex;
+            align-items: center;
+        }
+        
+        /* Pattern Detection */
+        .category-item {
+            padding: 6px 12px;
+            background-color: rgba(76, 175, 80, 0.2);
+            margin: 5px;
+            border-radius: 20px;
+            display: inline-block;
+            font-weight: 500;
+        }
+        
+        body.dark-mode .category-item {
+            background-color: rgba(76, 175, 80, 0.3);
+        }
+        
+        /* Help tooltips */
+        .help-icon {
+            font-size: 1rem;
+            color: #6c757d;
+            margin-left: 5px;
+            cursor: pointer;
+        }
+        
+        .help-icon:hover {
+            color: var(--primary-color);
+        }
+        
+        /* Navbar */
+        .navbar {
+            background-color: var(--primary-color);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        body.dark-mode .navbar {
+            background-color: #1a1a1a;
+            border-bottom: 1px solid #2d2d2d;
+        }
+        
+        .navbar-brand {
+            display: flex;
+            align-items: center;
             font-weight: 600;
         }
-
-        /* Messages */
-        .message {
-            font-weight: bold;
-            color: #4CAF50;
-            margin-top: 10px;
-        }
-
-        /* Loading Spinner */
-        #loading-spinner {
-            display: none;
-            margin-left: 10px;
-            border: 4px solid #f3f3f3;
-            border-radius: 50%;
-            border-top: 4px solid #4CAF50;
-            width: 30px;
+        
+        .navbar-brand img {
+            margin-right: 8px;
             height: 30px;
-            animation: spin 1s linear infinite;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        
+        /* Theme toggle */
+        .theme-toggle {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.25rem;
         }
-
-        /* Footer */
-        footer {
+        
+        body.dark-mode .theme-toggle {
+            color: #e0e0e0;
+        }
+        
+        /* Loading spinner */
+        .spinner-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .spinner-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
             text-align: center;
-            margin-top: 40px;
-            font-size: 14px;
-            color: #666;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
         }
-        footer a {
-            color: #4CAF50;
-            text-decoration: none;
+        
+        body.dark-mode .spinner-content {
+            background: #1e1e1e;
+            color: #e0e0e0;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
         }
-        footer a:hover {
-            text-decoration: underline;
+        
+        /* Prompt templates */
+        .prompt-template {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid var(--primary-color);
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        
+        body.dark-mode .prompt-template {
+            background-color: #2d2d2d;
+            border-left: 4px solid var(--primary-light);
+        }
+        
+        .prompt-template:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Chart section */
+        .chart-container {
+            height: 300px;
+            margin-top: 20px;
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            .step-name {
+                font-size: 0.7rem;
+            }
+            
+            .stepper-wrapper::before {
+                left: 15%;
+                right: 15%;
+            }
+            
+            .navbar-brand {
+                font-size: 1rem;
+            }
+            
+            .container {
+                padding-left: 10px;
+                padding-right: 10px;
+            }
         }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
 </head>
 <body>
     <!-- Navigation Bar -->
-    <div class="navbar">
-        <a href="#" onclick="showMainContent()">Home</a>
-        <a href="#" onclick="showAbout()">About Excel AI Insight</a>
-        <a href="https://www.github.com/jmesplana" target="_blank">Documentation</a>
-    </div>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <img src="{{ url_for('static', filename='excel_ai_insight_logo.webp') }}" alt="Logo"> Excel AI Insight
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="home-link">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="about-link">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="https://www.github.com/jmesplana" target="_blank">Documentation</a>
+                    </li>
+                </ul>
+                <button class="theme-toggle" id="theme-toggle">
+                    <i class="bi bi-sun-fill"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
 
-    <!-- Container -->
-    <div class="container">
+    <!-- Main Container -->
+    <div class="container py-4">
+        <!-- Workflow Stepper -->
+        <div class="stepper-wrapper" id="workflow-stepper">
+            <div class="stepper-item active" data-step="1">
+                <div class="step-counter">1</div>
+                <div class="step-name">Configuration</div>
+            </div>
+            <div class="stepper-item" data-step="2">
+                <div class="step-counter">2</div>
+                <div class="step-name">Upload File</div>
+            </div>
+            <div class="stepper-item" data-step="3">
+                <div class="step-counter">3</div>
+                <div class="step-name">Preview Data</div>
+            </div>
+            <div class="stepper-item" data-step="4">
+                <div class="step-counter">4</div>
+                <div class="step-name">Configure Analysis</div>
+            </div>
+            <div class="stepper-item" data-step="5">
+                <div class="step-counter">5</div>
+                <div class="step-name">Results</div>
+            </div>
+        </div>
+
         <!-- Main Content -->
-        <div class="main-content" id="main-content">
-            <!-- Logo -->
-            <img src="{{ url_for('static', filename='excel_ai_insight_logo.webp') }}" alt="Excel AI Insight Logo" class="logo" style="display: block; margin: 0 auto 20px; max-width: 150px;">
+        <div id="main-content">
+            <!-- Step 1: Configuration -->
+            <div class="step-content fade-in" id="step-1">
+                <div class="row justify-content-center">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span>API Configuration</span>
+                                <i class="bi bi-gear"></i>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="api-key" class="form-label">
+                                        OpenAI API Key
+                                        <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip" title="Your OpenAI API key is required to use AI features. It's only sent to OpenAI for processing."></i>
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="api-key" placeholder="Enter your OpenAI API Key">
+                                        <button class="btn btn-outline-secondary" type="button" id="toggle-api-key">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-check mt-2">
+                                        <input class="form-check-input" type="checkbox" id="save-api-key">
+                                        <label class="form-check-label" for="save-api-key">
+                                            Save API key in this browser
+                                        </label>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-secondary mt-2" id="clear-saved-key">Clear Saved Key</button>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="general-instructions" class="form-label">
+                                        General Instructions
+                                        <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip" title="These instructions will apply to all column analyses. Be specific about what you want the AI to do."></i>
+                                    </label>
+                                    <textarea class="form-control" id="general-instructions" rows="3" placeholder="Enter general instructions for the analysis..."></textarea>
+                                </div>
+                                
+                                <div class="prompt-templates">
+                                    <h6>Suggested Templates <i class="bi bi-lightning-charge text-warning"></i></h6>
+                                    <div class="prompt-template" data-template="You are a business analyst helping to extract insights from company data. Be concise, factual, and focus on actionable business insights. Avoid fluff and marketing language. When possible, quantify your observations.">
+                                        <h6 class="mb-1">Business Analysis</h6>
+                                        <p class="small text-muted mb-0">Extract factual, actionable business insights from data</p>
+                                    </div>
+                                    <div class="prompt-template" data-template="You are a data quality specialist. Examine each entry for inconsistencies, formatting errors, outliers, or missing information. When you find issues, provide specific suggestions for improvement. Be thorough but concise.">
+                                        <h6 class="mb-1">Data Quality Check</h6>
+                                        <p class="small text-muted mb-0">Identify issues and provide suggestions for improvement</p>
+                                    </div>
+                                    <div class="prompt-template" data-template="You are analyzing customer feedback to improve products and services. Identify the sentiment (positive/negative/neutral), extract key issues or praise points, and suggest one concrete action that could address any concerns mentioned.">
+                                        <h6 class="mb-1">Customer Feedback Analysis</h6>
+                                        <p class="small text-muted mb-0">Analyze sentiment and extract key points from feedback</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
+                                    <button class="btn btn-primary" id="config-next-btn">Next <i class="bi bi-arrow-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             
-            <h1>Excel AI Insight</h1>
-
-            <!-- Instructions -->
-            <div class="instructions">
-                <p>Follow these steps to get started:</p>
-                <ol>
-                    <li>Enter your OpenAI API Key and general instructions for the analysis.</li>
-                    <li>Upload your Excel file (.xlsx or .xls).</li>
-                    <li>Select the sheet and configure columns for analysis.</li>
-                    <li>Click "Analyze Columns" to perform the analysis.</li>
-                    <li>Preview the results and download the analyzed file.</li>
-                </ol>
-            </div>
-
-            <div class="section">
-                <h2>Configuration</h2>
-                <label for="api-key">OpenAI API Key:</label>
-                <input type="text" id="api-key" name="api-key" placeholder="Enter your OpenAI API Key" required>
-                
-                <label for="general-instructions">General Instructions:</label>
-                <textarea id="general-instructions" name="general-instructions" placeholder="Enter general instructions for the analysis..."></textarea>
-            </div>
-
-            <div class="section">
-                <h2>Upload Excel File</h2>
-                <form id="upload-form">
-                    <label for="file">Select Excel File:</label>
-                    <input type="file" id="file" name="file" accept=".xlsx,.xls,.csv" required>
-                    <button type="submit">Upload File</button>
-                </form>
-                <div id="upload-message" class="message"></div>
-            </div>
-
-            <div id="file-preview" class="section hidden">
-                <h2>File Preview</h2>
-                <div id="sheet-selection">
-                    <label for="sheet-select">Select Sheet:</label>
-                    <select id="sheet-select"></select>
+            <!-- Step 2: Upload Excel File -->
+            <div class="step-content fade-in hidden" id="step-2">
+                <div class="row justify-content-center">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span>Upload Excel File</span>
+                                <i class="bi bi-file-earmark-excel"></i>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i> Upload your Excel (.xlsx, .xls) or CSV file. The file will be analyzed using the AI model.
+                                </div>
+                                
+                                <form id="upload-form" class="mt-3">
+                                    <div class="mb-3">
+                                        <label for="file" class="form-label">Select Excel File</label>
+                                        <input class="form-control" type="file" id="file" name="file" accept=".xlsx,.xls,.csv" required>
+                                    </div>
+                                    <div class="progress mb-3 hidden" id="upload-progress">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                                    </div>
+                                    <div id="upload-message" class="alert alert-success mt-3 hidden"></div>
+                                    <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-3">
+                                        <button type="button" class="btn btn-outline-secondary" id="upload-back-btn"><i class="bi bi-arrow-left"></i> Back</button>
+                                        <button type="submit" class="btn btn-primary" id="upload-btn">Upload <i class="bi bi-cloud-upload"></i></button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div id="preview-table" class="table-container"></div>
             </div>
-
-            <div id="column-selection" class="section hidden">
-                <h2>Configure Column Analysis</h2>
-                <div id="column-configs"></div>
-                <div class="button-container">
-                    <button id="add-column-btn">Add Column</button>
-                    <button id="analyze-btn">Analyze Columns</button>
+            
+            <!-- Step 3: File Preview -->
+            <div class="step-content fade-in hidden" id="step-3">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span>File Preview</span>
+                                <i class="bi bi-table"></i>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="sheet-select" class="form-label">Select Sheet</label>
+                                    <select class="form-select" id="sheet-select"></select>
+                                </div>
+                                <div id="preview-table" class="table-container table-responsive">
+                                    <!-- Table content will be inserted here -->
+                                </div>
+                                <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-3">
+                                    <button type="button" class="btn btn-outline-secondary" id="preview-back-btn"><i class="bi bi-arrow-left"></i> Back</button>
+                                    <button type="button" class="btn btn-primary" id="preview-next-btn">Next <i class="bi bi-arrow-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div id="analyze-message" class="message"></div>
             </div>
-
-            <div id="result" class="section hidden">
-                <h2>Analysis Complete</h2>
-                <p id="result-message"></p>
-                <h3>Preview of Analyzed Data (Top 10 Records)</h3>
-                <div id="result-preview" class="table-container"></div>
-                <a id="download-link" href="#" class="button">Download Analyzed File</a>
+            
+            <!-- Step 4: Configure Column Analysis -->
+            <div class="step-content fade-in hidden" id="step-4">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span>Configure Analysis</span>
+                                <i class="bi bi-sliders"></i>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i> Select columns to analyze and provide specific instructions for each. You can combine multiple columns for more complex analysis.
+                                </div>
+                                
+                                <!-- Pattern Detection Section (Initially Hidden) -->
+                                <div id="pattern-detection" class="card mb-4 hidden">
+                                    <div class="card-header bg-info bg-opacity-10">
+                                        <i class="bi bi-search"></i> Detect Categories in Data
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="small">Find common patterns or categories in your data before analysis.</p>
+                                        
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="pattern-column" class="form-label">Select Column</label>
+                                                    <select class="form-select" id="pattern-column"></select>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="num-categories" class="form-label">Number of Categories</label>
+                                                    <input type="number" class="form-control" id="num-categories" min="2" max="20" value="5">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="pattern-prompt" class="form-label">Instructions for Categorization</label>
+                                            <textarea class="form-control" id="pattern-prompt" rows="2" placeholder="Describe how you want the data categorized. Example: 'Find common themes in these customer reviews'"></textarea>
+                                        </div>
+                                        
+                                        <button id="detect-patterns-btn" class="btn btn-info">
+                                            <i class="bi bi-search"></i> Detect Categories
+                                        </button>
+                                        
+                                        <div id="pattern-results" class="mt-3 hidden">
+                                            <h6>Detected Categories</h6>
+                                            <div id="categories-list" class="py-2"></div>
+                                            <div id="explanation" class="small fst-italic bg-light p-2 rounded"></div>
+                                            <div class="mt-2">
+                                                <button id="copy-categories-btn" class="btn btn-sm btn-outline-secondary">
+                                                    <i class="bi bi-clipboard"></i> Copy
+                                                </button>
+                                                <button id="use-categories-btn" class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-check2-circle"></i> Use in Analysis
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="column-configs">
+                                    <!-- Column configurations will be inserted here -->
+                                </div>
+                                
+                                <div class="d-flex flex-wrap gap-2 mb-3">
+                                    <button id="add-column-btn" class="btn btn-outline-primary">
+                                        <i class="bi bi-plus-circle"></i> Add Column
+                                    </button>
+                                    <button id="toggle-pattern-btn" class="btn btn-outline-info">
+                                        <i class="bi bi-search"></i> Detect Patterns
+                                    </button>
+                                </div>
+                                
+                                <div id="analyze-message" class="alert alert-success mt-3 hidden"></div>
+                                <div id="pattern-message" class="alert alert-info mt-3 hidden"></div>
+                                
+                                <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-3">
+                                    <button type="button" class="btn btn-outline-secondary" id="configure-back-btn">
+                                        <i class="bi bi-arrow-left"></i> Back
+                                    </button>
+                                    <div>
+                                        <button id="test-run-btn" class="btn btn-outline-success me-2">
+                                            <i class="bi bi-lightning"></i> Test Run (5 Rows)
+                                        </button>
+                                        <button id="analyze-btn" class="btn btn-primary">
+                                            <i class="bi bi-play-fill"></i> Analyze All Rows
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-
-            <div id="debug-output" class="hidden"></div>
-            <div id="loading-spinner"></div>
+            
+            <!-- Step 5: Results -->
+            <div class="step-content fade-in hidden" id="step-5">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span>Analysis Results</span>
+                                <i class="bi bi-graph-up"></i>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-success" id="result-message">
+                                    Analysis complete! Your results are ready.
+                                </div>
+                                
+                                <!-- Results visualization -->
+                                <ul class="nav nav-tabs" id="resultTabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active" id="table-tab" data-bs-toggle="tab" data-bs-target="#table-content" type="button" role="tab">Table View</button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="chart-tab" data-bs-toggle="tab" data-bs-target="#chart-content" type="button" role="tab">Chart View</button>
+                                    </li>
+                                </ul>
+                                
+                                <div class="tab-content mt-3" id="resultTabContent">
+                                    <div class="tab-pane fade show active" id="table-content" role="tabpanel">
+                                        <h6>Preview of Analyzed Data (Top 10 Records)</h6>
+                                        <div id="result-preview" class="table-container table-responsive">
+                                            <!-- Table content will be inserted here -->
+                                        </div>
+                                    </div>
+                                    <div class="tab-pane fade" id="chart-content" role="tabpanel">
+                                        <div class="row">
+                                            <div class="col-md-8 offset-md-2">
+                                                <select id="chart-column-select" class="form-select mb-3">
+                                                    <!-- Options will be dynamically added -->
+                                                </select>
+                                                <div class="chart-container">
+                                                    <canvas id="result-chart"></canvas>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-4">
+                                    <button type="button" class="btn btn-outline-secondary" id="results-back-btn">
+                                        <i class="bi bi-arrow-left"></i> Back to Configure
+                                    </button>
+                                    <a id="download-link" href="#" class="btn btn-success">
+                                        <i class="bi bi-download"></i> Download Results
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- About Content (Hidden by Default) -->
+            <div id="about-content" class="hidden">
+                <div class="row justify-content-center">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span>About Excel AI Insight</span>
+                                <i class="bi bi-info-circle"></i>
+                            </div>
+                            <div class="card-body">
+                                <div class="text-center mb-4">
+                                    <img src="{{ url_for('static', filename='excel_ai_insight_logo.webp') }}" alt="Excel AI Insight Logo" class="img-fluid" style="max-width: 150px;">
+                                    <h3 class="mt-3">Excel AI Insight</h3>
+                                    <p class="text-muted">Intelligent Excel Analysis with AI</p>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <h5><i class="bi bi-clipboard-data"></i> Product Introduction</h5>
+                                    <p>Excel AI Insight is your intelligent assistant for analyzing Excel spreadsheets with the power of AI. This tool allows you to upload your Excel files and generate insightful analysis using advanced AI models, helping you uncover patterns, trends, and actionable insights quickly and efficiently.</p>
+                                    <p>The app uses OpenAI's GPT models to process your data, allowing you to get human-like understanding of text, numbers, and combinations of different data types without requiring any coding or AI expertise.</p>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <h5><i class="bi bi-lightning"></i> Key Features</h5>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <ul class="list-group list-group-flush">
+                                                <li class="list-group-item bg-transparent"><i class="bi bi-file-earmark-check"></i> Multiple file formats support (.xlsx, .xls, .csv)</li>
+                                                <li class="list-group-item bg-transparent"><i class="bi bi-columns"></i> Multi-column analysis capabilities</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <ul class="list-group list-group-flush">
+                                                <li class="list-group-item bg-transparent"><i class="bi bi-sliders"></i> Custom analysis instructions</li>
+                                                <li class="list-group-item bg-transparent"><i class="bi bi-lightning"></i> Quick test runs on small data samples</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <h5><i class="bi bi-graph-up"></i> Use Cases</h5>
+                                    <div class="accordion" id="useCasesAccordion">
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#dataAnalysisCollapse">
+                                                    Data Analysis
+                                                </button>
+                                            </h2>
+                                            <div id="dataAnalysisCollapse" class="accordion-collapse collapse" data-bs-parent="#useCasesAccordion">
+                                                <div class="accordion-body">
+                                                    <ul class="list-unstyled">
+                                                        <li><i class="bi bi-check2"></i> <strong>Financial Data Analysis:</strong> Analyze financial statements, detect anomalies in expense reports</li>
+                                                        <li><i class="bi bi-check2"></i> <strong>Market Research:</strong> Process survey responses, compare competitor features</li>
+                                                        <li><i class="bi bi-check2"></i> <strong>Scientific Data:</strong> Interpret experimental results, analyze research findings</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#textProcessingCollapse">
+                                                    Text Processing
+                                                </button>
+                                            </h2>
+                                            <div id="textProcessingCollapse" class="accordion-collapse collapse" data-bs-parent="#useCasesAccordion">
+                                                <div class="accordion-body">
+                                                    <ul class="list-unstyled">
+                                                        <li><i class="bi bi-check2"></i> <strong>Customer Feedback Analysis:</strong> Categorize reviews, extract key complaints/praises</li>
+                                                        <li><i class="bi bi-check2"></i> <strong>Document Extraction:</strong> Pull key data points from text-heavy documents</li>
+                                                        <li><i class="bi bi-check2"></i> <strong>Content Optimization:</strong> Improve product descriptions, analyze marketing copy</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#dataQualityCollapse">
+                                                    Data Quality Improvement
+                                                </button>
+                                            </h2>
+                                            <div id="dataQualityCollapse" class="accordion-collapse collapse" data-bs-parent="#useCasesAccordion">
+                                                <div class="accordion-body">
+                                                    <ul class="list-unstyled">
+                                                        <li><i class="bi bi-check2"></i> <strong>Data Cleaning:</strong> Detect outliers, identify inconsistencies, suggest corrections</li>
+                                                        <li><i class="bi bi-check2"></i> <strong>Data Enrichment:</strong> Generate additional context, categorize entries</li>
+                                                        <li><i class="bi bi-check2"></i> <strong>Data Validation:</strong> Verify data integrity, check for logical inconsistencies</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="text-center">
+                                    <button id="back-to-app" class="btn btn-primary">
+                                        <i class="bi bi-arrow-left"></i> Back to Application
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-
-        <!-- About Content (Hidden by Default) -->
-        <div class="main-content hidden" id="about-content">
-            <h1>About Excel AI Insight</h1>
-
-            <!-- Product Intro -->
-            <div class="section intro">
-                <h2>Product Introduction</h2>
-                <p>Excel AI Insight is your intelligent assistant for analyzing Excel spreadsheets with the power of AI. This tool allows you to upload your Excel files and generate insightful analysis using advanced AI models, helping you uncover patterns, trends, and actionable insights quickly and efficiently.</p>
-            </div>
-
-            <!-- Use Cases -->
-            <div class="section use-cases">
-                <h2>Use Cases</h2>
-                <ul>
-                    <li><strong>Data Cleaning:</strong> Automatically detect and suggest corrections for inconsistent or missing data.</li>
-                    <li><strong>Trend Analysis:</strong> Identify key trends and outliers within your dataset.</li>
-                    <li><strong>Sentiment Analysis:</strong> Analyze text data to determine the overall sentiment (e.g., customer reviews, feedback).</li>
-                    <li><strong>Summary Generation:</strong> Generate summaries or key points from large text fields.</li>
-                    <li><strong>Custom Analysis:</strong> Tailor the analysis to your specific needs using custom prompts.</li>
-                </ul>
-            </div>
-
-            <!-- Sample Prompts -->
-            <div class="section sample-prompts">
-                <h2>Sample Prompts</h2>
-                <p>Here are some example prompts you can use:</p>
-                <ul>
-                    <li><strong>For sentiment analysis:</strong> "Analyze the sentiment of the customer feedback in this column."</li>
-                    <li><strong>For trend detection:</strong> "Identify any emerging trends in the sales data over the last quarter."</li>
-                    <li><strong>For data summarization:</strong> "Summarize the key points mentioned in the customer reviews."</li>
-                </ul>
-            </div>
-        </div>
-
-        <footer>
-            Created by <a href="https://www.github.com/jmesplana">John Mark Esplana</a>
+        
+        <footer class="mt-4 text-center text-muted">
+            <p>Created by <a href="https://www.github.com/jmesplana" target="_blank">John Mark Esplana</a></p>
         </footer>
     </div>
+    
+    <!-- Loading Spinner Overlay -->
+    <div id="spinner-overlay" class="spinner-overlay hidden">
+        <div class="spinner-content">
+            <div class="spinner-border text-success mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
+            <h5 id="spinner-message">Processing...</h5>
+            <div id="progress-container" class="mt-3 hidden">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span id="progress-percentage">0%</span>
+                    <span id="operations-count">0/0</span>
+                </div>
+                <div class="progress mt-2" style="height: 10px;">
+                    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                         role="progressbar" style="width: 0%"></div>
+                </div>
+                <p id="current-operation" class="small text-center mt-2">Initializing...</p>
+            </div>
+        </div>
+    </div>
 
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
     <script>
+        /* Global variables */
         let availableColumns = [];
         let fileData = {};
-
-        function showLoadingSpinner(show) {
-            document.getElementById('loading-spinner').style.display = show ? 'inline-block' : 'none';
+        let currentStep = 1;
+        let resultChart = null;
+        const API_KEY_STORAGE_KEY = 'excel_ai_insight_api_key';
+        
+        /* Utility functions */
+        function showSpinner(show, message = 'Processing...', showProgress = false) {
+            const spinner = document.getElementById('spinner-overlay');
+            const progressContainer = document.getElementById('progress-container');
+            
+            document.getElementById('spinner-message').textContent = message;
+            
+            if (show) {
+                spinner.classList.remove('hidden');
+                
+                // Show or hide progress tracking UI
+                if (showProgress) {
+                    progressContainer.classList.remove('hidden');
+                    resetProgress();
+                } else {
+                    progressContainer.classList.add('hidden');
+                }
+            } else {
+                spinner.classList.add('hidden');
+                progressContainer.classList.add('hidden');
+            }
         }
-
-        function updateMessage(id, message) {
-            const messageElement = document.getElementById(id);
-            messageElement.textContent = message;
+        
+        function resetProgress() {
+            document.getElementById('progress-percentage').textContent = '0%';
+            document.getElementById('operations-count').textContent = '0/0';
+            document.getElementById('progress-bar').style.width = '0%';
+            document.getElementById('current-operation').textContent = 'Initializing...';
         }
-
+        
+        function updateProgress(percentage, completedOperations, totalOperations, currentOperation = null) {
+            document.getElementById('progress-percentage').textContent = `${percentage}%`;
+            document.getElementById('operations-count').textContent = `${completedOperations}/${totalOperations}`;
+            document.getElementById('progress-bar').style.width = `${percentage}%`;
+            
+            if (currentOperation) {
+                document.getElementById('current-operation').textContent = currentOperation;
+            }
+        }
+        
+        function showAlert(id, message, type = 'success') {
+            const alertElement = document.getElementById(id);
+            alertElement.textContent = message;
+            alertElement.className = `alert alert-${type} mt-3`;
+            alertElement.classList.remove('hidden');
+            
+            // Auto-hide success messages after 5 seconds
+            if (type === 'success') {
+                setTimeout(() => {
+                    alertElement.classList.add('hidden');
+                }, 5000);
+            }
+        }
+        
+        function goToStep(step) {
+            // Hide all steps
+            document.querySelectorAll('.step-content').forEach(el => el.classList.add('hidden'));
+            
+            // Show the target step
+            document.getElementById(`step-${step}`).classList.remove('hidden');
+            
+            // Update the stepper
+            document.querySelectorAll('.stepper-item').forEach(el => {
+                const stepNum = parseInt(el.dataset.step);
+                
+                if (stepNum < step) {
+                    el.classList.add('completed');
+                    el.classList.remove('active');
+                } else if (stepNum === step) {
+                    el.classList.add('active');
+                    el.classList.remove('completed');
+                } else {
+                    el.classList.remove('active', 'completed');
+                }
+            });
+            
+            currentStep = step;
+        }
+        
+        /* Theme toggle */
+        function toggleDarkMode() {
+            const body = document.body;
+            const themeIcon = document.querySelector('#theme-toggle i');
+            
+            body.classList.toggle('dark-mode');
+            
+            if (body.classList.contains('dark-mode')) {
+                themeIcon.classList.remove('bi-sun-fill');
+                themeIcon.classList.add('bi-moon-fill');
+                localStorage.setItem('theme', 'dark');
+            } else {
+                themeIcon.classList.remove('bi-moon-fill');
+                themeIcon.classList.add('bi-sun-fill');
+                localStorage.setItem('theme', 'light');
+            }
+        }
+        
+        /* Initialize tooltips */
+        function initTooltips() {
+            const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+            [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+        }
+        
+        /* Navigation between main content and about page */
         function showMainContent() {
             document.getElementById('main-content').classList.remove('hidden');
             document.getElementById('about-content').classList.add('hidden');
         }
-
+        
         function showAbout() {
             document.getElementById('main-content').classList.add('hidden');
             document.getElementById('about-content').classList.remove('hidden');
         }
-
-        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+        
+        /* Chart initialization */
+        function initResultChart(data, labels, columnName) {
+            // Destroy existing chart if it exists
+            if (resultChart) {
+                resultChart.destroy();
+            }
+            
+            // Create a simple bar chart showing frequency of analysis results
+            const ctx = document.getElementById('result-chart').getContext('2d');
+            
+            // Count occurrences of each result category
+            const counts = {};
+            data.forEach(item => {
+                if (!counts[item]) {
+                    counts[item] = 1;
+                } else {
+                    counts[item]++;
+                }
+            });
+            
+            // Prepare data for chart
+            const chartLabels = Object.keys(counts);
+            const chartData = Object.values(counts);
+            
+            // Create chart
+            resultChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        label: `Analysis Results: ${columnName}`,
+                        data: chartData,
+                        backgroundColor: 'rgba(76, 175, 80, 0.6)',
+                        borderColor: 'rgba(76, 175, 80, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Frequency'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Categories'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        /* API Key Management */
+        function loadSavedApiKey() {
+            const savedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
+            if (savedKey) {
+                document.getElementById('api-key').value = savedKey;
+                document.getElementById('save-api-key').checked = true;
+            }
+        }
+        
+        function toggleApiKeyVisibility() {
+            const apiKeyInput = document.getElementById('api-key');
+            const toggleBtn = document.getElementById('toggle-api-key').querySelector('i');
+            
+            if (apiKeyInput.type === 'password') {
+                apiKeyInput.type = 'text';
+                toggleBtn.classList.remove('bi-eye');
+                toggleBtn.classList.add('bi-eye-slash');
+            } else {
+                apiKeyInput.type = 'password';
+                toggleBtn.classList.remove('bi-eye-slash');
+                toggleBtn.classList.add('bi-eye');
+            }
+        }
+        
+        function handleSaveApiKeyChange(e) {
+            if (e.target.checked) {
+                const apiKey = document.getElementById('api-key').value;
+                if (apiKey) {
+                    localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+                }
+            } else {
+                clearSavedApiKey();
+            }
+        }
+        
+        function clearSavedApiKey() {
+            localStorage.removeItem(API_KEY_STORAGE_KEY);
+            document.getElementById('save-api-key').checked = false;
+        }
+        
+        /* File Upload */
+        async function uploadFile(e) {
             e.preventDefault();
-            updateMessage('upload-message', 'Uploading file...');
-            showLoadingSpinner(true);
-
-            const formData = new FormData(e.target);
+            
+            const fileInput = document.getElementById('file');
+            const progressBar = document.getElementById('upload-progress');
+            
+            if (!fileInput.files.length) {
+                showAlert('upload-message', 'Please select a file to upload', 'danger');
+                return;
+            }
+            
+            // Show progress
+            progressBar.classList.remove('hidden');
+            progressBar.querySelector('.progress-bar').style.width = '0%';
+            
+            // Create form data
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
             try {
+                // Show spinner with upload message
+                showSpinner(true, 'Uploading file...');
+                
+                // Simulate progress (since we don't have actual progress events)
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress += 5;
+                    if (progress <= 90) {
+                        progressBar.querySelector('.progress-bar').style.width = `${progress}%`;
+                    }
+                }, 100);
+                
+                // Upload the file
                 const response = await fetch('/upload', {
                     method: 'POST',
                     body: formData
                 });
-
+                
+                // Clear progress interval
+                clearInterval(progressInterval);
+                progressBar.querySelector('.progress-bar').style.width = '100%';
+                
                 if (!response.ok) {
                     const errorData = await response.json();
                     throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error}`);
                 }
-
+                
                 fileData = await response.json();
                 if (fileData.error) {
                     throw new Error(fileData.error);
                 }
-
-                updateMessage('upload-message', 'File uploaded successfully.');
-                displayFilePreview();
+                
+                showAlert('upload-message', 'File uploaded successfully!', 'success');
+                
+                // Hide spinner
+                showSpinner(false);
+                
+                // Move to next step after a short delay
+                setTimeout(() => {
+                    displayFilePreview();
+                    goToStep(3);
+                }, 1000);
+                
             } catch (error) {
-                updateMessage('upload-message', `Error uploading file: ${error.message}`);
-            } finally {
-                showLoadingSpinner(false);
+                // Hide spinner
+                showSpinner(false);
+                
+                // Show error
+                showAlert('upload-message', `Error uploading file: ${error.message}`, 'danger');
+                progressBar.classList.add('hidden');
             }
-        });
-
+        }
+        
+        /* Display File Preview */
         function displayFilePreview() {
-            const filePreview = document.getElementById('file-preview');
             const sheetSelect = document.getElementById('sheet-select');
             sheetSelect.innerHTML = '';
-
+            
             Object.keys(fileData.sheets).forEach(sheet => {
                 const option = document.createElement('option');
                 option.value = sheet;
                 option.textContent = sheet;
                 sheetSelect.appendChild(option);
             });
-
+            
             sheetSelect.onchange = () => updatePreviewTable(sheetSelect.value);
-
-            filePreview.classList.remove('hidden');
             updatePreviewTable(sheetSelect.value);
         }
-
+        
         function updatePreviewTable(sheetName) {
             const previewTable = document.getElementById('preview-table');
             const sheetData = fileData.sheets[sheetName];
             availableColumns = sheetData.columns;
-
-            let tableHTML = '<table><thead><tr>';
+            
+            // Create Bootstrap table
+            let tableHTML = '<table class="table table-striped table-bordered"><thead class="table-light"><tr>';
             sheetData.columns.forEach(column => {
                 tableHTML += `<th>${column}</th>`;
             });
             tableHTML += '</tr></thead><tbody>';
-
+            
             sheetData.data.forEach(row => {
                 tableHTML += '<tr>';
                 sheetData.columns.forEach(column => {
@@ -432,55 +1204,386 @@
                 });
                 tableHTML += '</tr>';
             });
-
+            
             tableHTML += '</tbody></table>';
             previewTable.innerHTML = tableHTML;
-
-            document.getElementById('column-selection').classList.remove('hidden');
+            
+            // Store the total row count for progress tracking
+            const sheetSelect = document.getElementById('sheet-select');
+            sheetSelect.dataset.rowCount = sheetData.data.length;
+            
+            // Update column selection in pattern detection
+            const patternColumnSelect = document.getElementById('pattern-column');
+            patternColumnSelect.innerHTML = '';
+            availableColumns.forEach(column => {
+                const option = document.createElement('option');
+                option.value = column;
+                option.textContent = column;
+                patternColumnSelect.appendChild(option);
+            });
+            
             updateColumnConfigs();
         }
-
+        
+        /* Column Configuration */
         function updateColumnConfigs() {
             const columnConfigs = document.getElementById('column-configs');
             columnConfigs.innerHTML = '';
             addColumnConfig();
-
-            document.getElementById('add-column-btn').onclick = addColumnConfig;
-            document.getElementById('analyze-btn').onclick = analyzeColumns;
         }
-
+        
         function addColumnConfig() {
             const columnConfigs = document.getElementById('column-configs');
-            const configDiv = document.createElement('div');
-            configDiv.className = 'column-config';
-            configDiv.innerHTML = `
-                <select name="column">
-                    <option value="">Select a column</option>
+            const configId = Date.now().toString();
+            
+            // Create column config card
+            const configCard = document.createElement('div');
+            configCard.className = 'column-selection-container mb-3';
+            configCard.dataset.id = configId;
+            
+            // Create column selection
+            const columnSelectionHTML = `
+                <div class="row mb-2">
+                    <div class="col-md-10">
+                        <label class="form-label">Select Columns to Analyze</label>
+                        <div class="main-column-selector">
+                            <select class="form-select main-column" name="column">
+                                <option value="">Select a column</option>
+                                ${availableColumns.map(col => `<option value="${col}">${col}</option>`).join('')}
+                            </select>
+                            <button type="button" class="btn btn-sm btn-success add-column-btn-small ms-2">
+                                <i class="bi bi-plus"></i>
+                            </button>
+                        </div>
+                        <div class="additional-columns">
+                            <!-- Additional columns will be added here -->
+                        </div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-config-btn mb-2">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Analysis Instructions
+                        <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip" 
+                           title="Specific instructions for analyzing this column. Be clear about what insights you want."></i>
+                    </label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" name="prompt" 
+                               placeholder="Enter specific instructions for analyzing this column...">
+                        <button class="btn btn-outline-secondary instruction-template-btn" type="button">
+                            <i class="bi bi-lightning"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            configCard.innerHTML = columnSelectionHTML;
+            
+            // Add event listeners for the buttons
+            const addColumnBtn = configCard.querySelector('.add-column-btn-small');
+            addColumnBtn.addEventListener('click', function() {
+                addAdditionalColumn(configCard);
+            });
+            
+            const removeConfigBtn = configCard.querySelector('.remove-config-btn');
+            removeConfigBtn.addEventListener('click', function() {
+                if (document.querySelectorAll('.column-selection-container').length > 1) {
+                    configCard.remove();
+                } else {
+                    // Don't remove if it's the only config
+                    showAlert('analyze-message', 'You need at least one column configuration', 'warning');
+                }
+            });
+            
+            // Add event listener for the instruction template button
+            const templateBtn = configCard.querySelector('.instruction-template-btn');
+            templateBtn.addEventListener('click', function() {
+                // Create dropdown menu for common templates
+                const menu = document.createElement('div');
+                menu.className = 'dropdown-menu p-2 shadow';
+                menu.style.width = '300px';
+                menu.innerHTML = `
+                    <h6 class="dropdown-header">Quick Templates</h6>
+                    <button class="dropdown-item" data-template="Analyze this column and provide a sentiment score (1-5) where 1 is very negative and 5 is very positive. Explain your reasoning.">
+                        Sentiment Analysis (1-5)
+                    </button>
+                    <button class="dropdown-item" data-template="Categorize this data into one of these types: [type1, type2, type3]. Explain your classification.">
+                        Categorization Template
+                    </button>
+                    <button class="dropdown-item" data-template="Identify any errors, inconsistencies, or unusual values in this data. If issues are found, suggest corrections.">
+                        Data Quality Check
+                    </button>
+                    <button class="dropdown-item" data-template="Extract key entities (people, organizations, locations, dates) mentioned in this text.">
+                        Entity Extraction
+                    </button>
+                    <button class="dropdown-item" data-template="Provide a concise 1-2 sentence summary of the key points in this text.">
+                        Text Summarization
+                    </button>
+                `;
+                
+                // Position the menu
+                menu.style.position = 'absolute';
+                menu.style.zIndex = '1000';
+                
+                // Add event listeners to template items
+                menu.querySelectorAll('.dropdown-item').forEach(item => {
+                    item.addEventListener('click', function() {
+                        const template = this.dataset.template;
+                        configCard.querySelector('input[name="prompt"]').value = template;
+                        document.body.removeChild(menu);
+                    });
+                });
+                
+                // Add to document body, position, and show
+                document.body.appendChild(menu);
+                const rect = templateBtn.getBoundingClientRect();
+                menu.style.top = `${rect.bottom + 5}px`;
+                menu.style.left = `${rect.left - 250}px`;
+                
+                // Close when clicking outside
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target) && e.target !== templateBtn) {
+                        if (document.body.contains(menu)) {
+                            document.body.removeChild(menu);
+                        }
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            });
+            
+            columnConfigs.appendChild(configCard);
+            initTooltips();
+        }
+        
+        function addAdditionalColumn(configCard) {
+            const additionalColumnsDiv = configCard.querySelector('.additional-columns');
+            
+            const columnDiv = document.createElement('div');
+            columnDiv.className = 'additional-column d-flex align-items-center mt-2';
+            columnDiv.innerHTML = `
+                <select class="form-select form-select-sm" name="additional-column">
+                    <option value="">Select additional column</option>
                     ${availableColumns.map(col => `<option value="${col}">${col}</option>`).join('')}
                 </select>
-                <input type="text" name="prompt" placeholder="Enter analysis prompt for this column">
+                <button type="button" class="btn btn-sm btn-danger remove-column-btn-small ms-2">
+                    <i class="bi bi-dash"></i>
+                </button>
             `;
-            columnConfigs.appendChild(configDiv);
-        }
-
-        async function analyzeColumns() {
-            const analyzeButton = document.getElementById('analyze-btn');
-            const addColumnButton = document.getElementById('add-column-btn');
             
-            // Disable the buttons to prevent multiple submissions
-            analyzeButton.disabled = true;
-            addColumnButton.disabled = true;
-            updateMessage('analyze-message', 'Analyzing columns...');
-            showLoadingSpinner(true);
-
+            // Add event listener for remove button
+            columnDiv.querySelector('.remove-column-btn-small').addEventListener('click', function() {
+                columnDiv.remove();
+            });
+            
+            additionalColumnsDiv.appendChild(columnDiv);
+        }
+        
+        /* Pattern Detection */
+        function togglePatternDetection() {
+            const patternDetection = document.getElementById('pattern-detection');
+            const toggleBtn = document.getElementById('toggle-pattern-btn');
+            
+            if (patternDetection.classList.contains('hidden')) {
+                patternDetection.classList.remove('hidden');
+                toggleBtn.innerHTML = '<i class="bi bi-eye-slash"></i> Hide Pattern Detection';
+            } else {
+                patternDetection.classList.add('hidden');
+                toggleBtn.innerHTML = '<i class="bi bi-search"></i> Detect Patterns';
+            }
+        }
+        
+        async function detectPatterns() {
+            const column = document.getElementById('pattern-column').value;
+            const numCategories = document.getElementById('num-categories').value;
+            const patternPrompt = document.getElementById('pattern-prompt').value;
+            const apiKey = document.getElementById('api-key').value;
+            const selectedSheet = document.getElementById('sheet-select').value;
+            
+            if (!column || !patternPrompt || !apiKey) {
+                showAlert('pattern-message', 'Please fill in all required fields for pattern detection', 'warning');
+                return;
+            }
+            
+            // Show loading spinner
+            showSpinner(true, 'Detecting patterns in your data...');
+            
+            try {
+                const response = await fetch('/detect_patterns', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        filename: fileData.filename,
+                        sheetName: selectedSheet,
+                        apiKey: apiKey,
+                        column: column,
+                        patternPrompt: patternPrompt,
+                        numCategories: parseInt(numCategories)
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error}`);
+                }
+                
+                const result = await response.json();
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                
+                // Parse the JSON string returned
+                const categoriesData = JSON.parse(result.result);
+                displayCategories(categoriesData);
+                
+                showAlert('pattern-message', 'Categories detected successfully!', 'success');
+            } catch (error) {
+                showAlert('pattern-message', `Error detecting patterns: ${error.message}`, 'danger');
+            } finally {
+                showSpinner(false);
+            }
+        }
+        
+        function displayCategories(data) {
+            const categoriesList = document.getElementById('categories-list');
+            const explanation = document.getElementById('explanation');
+            
+            // Generate category items
+            categoriesList.innerHTML = data.categories.map(category => 
+                `<span class="category-item">${category}</span>`
+            ).join(' ');
+            
+            // Display explanation
+            explanation.textContent = data.explanation;
+            
+            // Show results section
+            document.getElementById('pattern-results').classList.remove('hidden');
+        }
+        
+        function copyCategoriesToClipboard() {
+            const categoriesList = document.getElementById('categories-list');
+            const categories = Array.from(categoriesList.querySelectorAll('.category-item'))
+                .map(item => item.textContent)
+                .join(', ');
+                
+            // Create temporary element for copying
+            const tempInput = document.createElement('textarea');
+            tempInput.value = categories;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            
+            showAlert('pattern-message', 'Categories copied to clipboard!', 'success');
+        }
+        
+        function useCategoriesInPrompt() {
+            const categories = Array.from(document.querySelectorAll('.category-item'))
+                .map(item => item.textContent)
+                .join(', ');
+                
+            // Find an empty config or create a new one
+            const configs = document.querySelectorAll('.column-selection-container');
+            let targetConfig = null;
+            
+            // Find an empty config to use
+            for (const config of configs) {
+                const promptInput = config.querySelector('input[name="prompt"]');
+                if (!promptInput.value) {
+                    targetConfig = config;
+                    break;
+                }
+            }
+            
+            // If no empty config found, create a new one
+            if (!targetConfig) {
+                addColumnConfig();
+                targetConfig = document.querySelector('.column-selection-container:last-child');
+            }
+            
+            // Set the same column as was used for pattern detection
+            const columnSelect = targetConfig.querySelector('select[name="column"]');
+            columnSelect.value = document.getElementById('pattern-column').value;
+            
+            // Set the prompt with categories
+            const promptInput = targetConfig.querySelector('input[name="prompt"]');
+            promptInput.value = `Categorize each item into one of these categories: ${categories}. Explain the reason for your categorization.`;
+            
+            // Hide pattern detection
+            togglePatternDetection();
+            
+            showAlert('analyze-message', 'Categories added to analysis prompt!', 'success');
+        }
+        
+        /* Column Analysis */
+        async function analyzeColumns(isTestRun = false) {
             const apiKey = document.getElementById('api-key').value;
             const generalInstructions = document.getElementById('general-instructions').value;
             const selectedSheet = document.getElementById('sheet-select').value;
-            const columnConfigs = Array.from(document.querySelectorAll('.column-config')).map(config => ({
-                column: config.querySelector('select[name="column"]').value,
-                prompt: config.querySelector('input[name="prompt"]').value
-            })).filter(config => config.column && config.prompt);
-
+            
+            // Validate inputs
+            if (!apiKey) {
+                showAlert('analyze-message', 'Please enter your OpenAI API key', 'danger');
+                return;
+            }
+            
+            // Get column configurations
+            const columnConfigs = Array.from(document.querySelectorAll('.column-selection-container')).map(config => {
+                // Get the main column
+                const mainColumn = config.querySelector('select[name="column"]').value;
+                
+                // Get any additional columns
+                const additionalColumns = Array.from(config.querySelectorAll('.additional-column select'))
+                    .map(select => select.value)
+                    .filter(col => col !== "");
+                
+                // Combine main column with additional columns
+                const columns = [mainColumn, ...additionalColumns].filter(col => col !== "");
+                
+                return {
+                    column: mainColumn,
+                    columns: columns,
+                    prompt: config.querySelector('input[name="prompt"]').value,
+                    id: config.dataset.id || Date.now().toString()
+                };
+            }).filter(config => config.column && config.prompt);
+            
+            // Check if we have valid configurations
+            if (columnConfigs.length === 0) {
+                showAlert('analyze-message', 'Please configure at least one column for analysis', 'danger');
+                return;
+            }
+            
+            // Calculate total operations for progress tracking
+            const totalRows = isTestRun ? 5 : parseInt(document.getElementById('sheet-select').dataset.rowCount || 0);
+            const totalOperations = columnConfigs.length * (totalRows || 1);
+            
+            // Show spinner with progress bar
+            showSpinner(true, isTestRun ? 'Running test analysis on 5 rows...' : 'Analyzing all data...', true);
+            updateProgress(0, 0, totalOperations, 'Starting analysis...');
+            
+            // Set up polling for progress updates
+            const progressCheckInterval = setInterval(() => {
+                fetch('/analysis_progress')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.in_progress) {
+                            const percentage = Math.min(Math.round((data.progress.completed / data.progress.total) * 100), 99);
+                            updateProgress(
+                                percentage, 
+                                data.progress.completed, 
+                                data.progress.total, 
+                                `Analyzing ${data.progress.current_column || 'data'}...`
+                            );
+                        }
+                    })
+                    .catch(err => console.error('Error checking progress:', err));
+            }, 1000);
+            
             try {
                 const response = await fetch('/analyze', {
                     method: 'POST',
@@ -492,43 +1595,92 @@
                         sheetName: selectedSheet,
                         apiKey: apiKey,
                         generalInstructions: generalInstructions,
-                        columnConfigs: columnConfigs
+                        columnConfigs: columnConfigs,
+                        isTestRun: isTestRun
                     })
                 });
-
+                
+                // Clear the progress check interval
+                clearInterval(progressCheckInterval);
+                
                 if (!response.ok) {
                     const errorData = await response.json();
                     throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error}`);
                 }
-
+                
                 const result = await response.json();
                 if (result.error) {
                     throw new Error(result.error);
                 }
-
-                updateMessage('analyze-message', 'Analysis complete. Previewing results...');
-                document.getElementById('result').classList.remove('hidden');
+                
+                // Process results for both test runs and full analysis
                 document.getElementById('result-message').textContent = result.message;
                 document.getElementById('download-link').href = `/download/${result.filename}`;
                 await previewAnalyzedData(result.filename);
+                
+                if (isTestRun) {
+                    // Create a floating preview panel for test run results
+                    const previewPanel = document.createElement('div');
+                    previewPanel.className = 'card position-fixed bottom-0 end-0 mb-4 me-4 shadow';
+                    previewPanel.style.width = '90%';
+                    previewPanel.style.maxWidth = '800px';
+                    previewPanel.style.maxHeight = '70vh';
+                    previewPanel.style.overflow = 'auto';
+                    previewPanel.style.zIndex = '1050';
+                    previewPanel.innerHTML = `
+                        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-lightning"></i> Test Run Results (5 Rows)</span>
+                            <div>
+                                <button class="btn btn-sm btn-outline-light me-2" id="go-to-results-btn">
+                                    <i class="bi bi-arrows-fullscreen"></i> Full View
+                                </button>
+                                <button class="btn btn-sm btn-outline-light" id="close-preview-btn">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="test-result-preview overflow-auto" style="max-height: 50vh;">
+                                ${document.getElementById('result-preview').innerHTML}
+                            </div>
+                            <div class="d-flex justify-content-end mt-3">
+                                <a href="${document.getElementById('download-link').href}" class="btn btn-sm btn-success">
+                                    <i class="bi bi-download"></i> Download Test Results
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(previewPanel);
+                    
+                    // Add event listeners to the preview panel buttons
+                    document.getElementById('close-preview-btn').addEventListener('click', () => {
+                        document.body.removeChild(previewPanel);
+                    });
+                    
+                    document.getElementById('go-to-results-btn').addEventListener('click', () => {
+                        document.body.removeChild(previewPanel);
+                        goToStep(5);
+                    });
+                    
+                    showAlert('analyze-message', 'Test run complete! Results shown in the preview panel. Click "Full View" to see complete results.', 'success');
+                } else {
+                    // Move to results page for full analysis
+                    goToStep(5);
+                }
             } catch (error) {
-                updateMessage('analyze-message', `Error during analysis: ${error.message}`);
+                showAlert('analyze-message', `Error during analysis: ${error.message}`, 'danger');
             } finally {
-                showLoadingSpinner(false);
-                // Re-enable the buttons after the analysis is done
-                analyzeButton.disabled = false;
-                addColumnButton.disabled = false;
+                clearInterval(progressCheckInterval);
+                // Show 100% progress briefly before closing
+                updateProgress(100, totalOperations, totalOperations, 'Analysis complete!');
+                setTimeout(() => showSpinner(false), 1000);
             }
         }
-
+        
         async function previewAnalyzedData(filename) {
             try {
                 const response = await fetch(`/download/${filename}`, { method: 'GET' });
                 const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
                 const fileReader = new FileReader();
                 
                 fileReader.onload = (e) => {
@@ -536,31 +1688,152 @@
                     const workbook = XLSX.read(data, { type: 'array' });
                     const firstSheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[firstSheetName];
-                    const previewData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }).slice(0, 11); // Top 10 + header
-
-                    let tableHTML = '<table><thead><tr>';
-                    previewData[0].forEach(header => {
-                        tableHTML += `<th>${header}</th>`;
-                    });
-                    tableHTML += '</tr></thead><tbody>';
-
-                    previewData.slice(1).forEach(row => {
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    // Just get the top 10 rows for preview
+                    const previewData = jsonData.slice(0, 10);
+                    
+                    // Get the headers (columns)
+                    const headers = Object.keys(previewData[0] || {});
+                    
+                    // Create the table HTML
+                    let tableHTML = `
+                        <table class="table table-striped table-bordered table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    ${headers.map(h => `<th>${h}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    
+                    // Add the data rows
+                    previewData.forEach(row => {
                         tableHTML += '<tr>';
-                        row.forEach(cell => {
-                            tableHTML += `<td>${cell}</td>`;
+                        headers.forEach(header => {
+                            tableHTML += `<td>${row[header] || ''}</td>`;
                         });
                         tableHTML += '</tr>';
                     });
-
+                    
                     tableHTML += '</tbody></table>';
+                    
+                    // Update the preview
                     document.getElementById('result-preview').innerHTML = tableHTML;
+                    
+                    // Set up chart visualization
+                    setupChartVisualization(jsonData, headers);
                 };
-
+                
                 fileReader.readAsArrayBuffer(blob);
             } catch (error) {
                 console.error('Error previewing analyzed data:', error);
             }
         }
+        
+        function setupChartVisualization(data, headers) {
+            // Filter headers to only include analysis columns
+            const analysisColumns = headers.filter(h => h.includes('_analysis_'));
+            
+            if (analysisColumns.length === 0) {
+                document.getElementById('chart-content').innerHTML = '<div class="alert alert-info">No analysis columns found for visualization.</div>';
+                return;
+            }
+            
+            // Create select options for chart
+            const selectElem = document.getElementById('chart-column-select');
+            selectElem.innerHTML = '';
+            
+            analysisColumns.forEach(column => {
+                const option = document.createElement('option');
+                option.value = column;
+                
+                // Try to get a more user-friendly name
+                const originalColName = column.split('_analysis_')[0];
+                option.textContent = `Analysis of ${originalColName}`;
+                
+                selectElem.appendChild(option);
+            });
+            
+            // Set up event listener for chart selection
+            selectElem.addEventListener('change', function() {
+                const selectedColumn = this.value;
+                if (selectedColumn) {
+                    // Extract data for the selected column
+                    const chartData = data.map(row => row[selectedColumn]);
+                    initResultChart(chartData, data.map(row => ''), selectedColumn);
+                }
+            });
+            
+            // Initialize with first column
+            if (analysisColumns.length > 0) {
+                selectElem.value = analysisColumns[0];
+                const chartData = data.map(row => row[analysisColumns[0]]);
+                initResultChart(chartData, data.map(row => ''), analysisColumns[0]);
+            }
+        }
+        
+        /* Document Ready */
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load saved API key
+            loadSavedApiKey();
+            
+            // Initialize tooltips
+            initTooltips();
+            
+            // Load theme preference
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                toggleDarkMode();
+            }
+            
+            // Set up event listeners
+            
+            // Theme toggle
+            document.getElementById('theme-toggle').addEventListener('click', toggleDarkMode);
+            
+            // Navigation
+            document.getElementById('home-link').addEventListener('click', showMainContent);
+            document.getElementById('about-link').addEventListener('click', showAbout);
+            document.getElementById('back-to-app').addEventListener('click', showMainContent);
+            
+            // API key management
+            document.getElementById('toggle-api-key').addEventListener('click', toggleApiKeyVisibility);
+            document.getElementById('save-api-key').addEventListener('change', handleSaveApiKeyChange);
+            document.getElementById('clear-saved-key').addEventListener('click', clearSavedApiKey);
+            document.getElementById('api-key').addEventListener('input', function(e) {
+                if (document.getElementById('save-api-key').checked) {
+                    localStorage.setItem(API_KEY_STORAGE_KEY, e.target.value);
+                }
+            });
+            
+            // Step navigation
+            document.getElementById('config-next-btn').addEventListener('click', () => goToStep(2));
+            document.getElementById('upload-back-btn').addEventListener('click', () => goToStep(1));
+            document.getElementById('preview-back-btn').addEventListener('click', () => goToStep(2));
+            document.getElementById('preview-next-btn').addEventListener('click', () => goToStep(4));
+            document.getElementById('configure-back-btn').addEventListener('click', () => goToStep(3));
+            document.getElementById('results-back-btn').addEventListener('click', () => goToStep(4));
+            
+            // File upload
+            document.getElementById('upload-form').addEventListener('submit', uploadFile);
+            
+            // Analysis workflow
+            document.getElementById('add-column-btn').addEventListener('click', addColumnConfig);
+            document.getElementById('toggle-pattern-btn').addEventListener('click', togglePatternDetection);
+            document.getElementById('detect-patterns-btn').addEventListener('click', detectPatterns);
+            document.getElementById('copy-categories-btn').addEventListener('click', copyCategoriesToClipboard);
+            document.getElementById('use-categories-btn').addEventListener('click', useCategoriesInPrompt);
+            document.getElementById('test-run-btn').addEventListener('click', () => analyzeColumns(true));
+            document.getElementById('analyze-btn').addEventListener('click', () => analyzeColumns(false));
+            
+            // Template selection
+            document.querySelectorAll('.prompt-template').forEach(template => {
+                template.addEventListener('click', function() {
+                    document.getElementById('general-instructions').value = this.dataset.template;
+                });
+            });
+        });
     </script>
 </body>
 </html>
