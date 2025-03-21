@@ -23,7 +23,7 @@ progress_lock = threading.Lock()
 
 # Configure upload folder and allowed extensions
 # For Vercel compatibility, check if we're in production and use /tmp if so
-if os.environ.get('VERCEL_ENV') == 'production':
+if os.environ.get('VERCEL') == '1' or os.environ.get('VERCEL_ENV') == 'production':
     UPLOAD_FOLDER = '/tmp'
 else:
     UPLOAD_FOLDER = 'uploads'
@@ -75,9 +75,28 @@ def upload_file():
         return jsonify({"error": "No selected file"}), 400
     
     if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
+        try:
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            
+            # Debug info about file paths
+            app.logger.info(f"Upload folder: {UPLOAD_FOLDER}, File path: {filepath}")
+            
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            
+            # Save the file
+            file.save(filepath)
+            
+            # Verify file was saved
+            if not os.path.exists(filepath):
+                app.logger.error(f"File was not saved to {filepath}")
+                return jsonify({"error": "Failed to save file to server"}), 500
+                
+            app.logger.info(f"File saved successfully to {filepath}")
+        except Exception as save_error:
+            app.logger.error(f"Error saving file: {str(save_error)}")
+            return jsonify({"error": f"Error saving file: {str(save_error)}"}), 500
         
         try:
             # 1. Read the file based on its extension
@@ -89,14 +108,28 @@ def upload_file():
                 sheets = process_dataframe(df, "Sheet1")
             else:
                 app.logger.info("Excel file detected and being processed.")
-                xls = pd.ExcelFile(filepath)
                 
-                # Process each sheet in the Excel file
-                sheets = {}
-                for sheet_name in xls.sheet_names:
-                    df = pd.read_excel(filepath, sheet_name=sheet_name, nrows=10)  # Preview first 10 rows
-                    sheet_data = process_dataframe(df, sheet_name)
-                    sheets.update(sheet_data)
+                # Improved error handling for Excel files
+                try:
+                    xls = pd.ExcelFile(filepath)
+                    
+                    # Process each sheet in the Excel file
+                    sheets = {}
+                    for sheet_name in xls.sheet_names:
+                        try:
+                            df = pd.read_excel(filepath, sheet_name=sheet_name, nrows=10)  # Preview first 10 rows
+                            sheet_data = process_dataframe(df, sheet_name)
+                            sheets.update(sheet_data)
+                        except Exception as sheet_error:
+                            app.logger.error(f"Error processing sheet '{sheet_name}': {str(sheet_error)}")
+                            # Continue with other sheets if one fails
+                except Exception as excel_error:
+                    app.logger.error(f"Error opening Excel file: {str(excel_error)}")
+                    return jsonify({"error": f"Cannot open Excel file: {str(excel_error)}"}), 500
+                
+                # Check if we successfully processed at least one sheet
+                if not sheets:
+                    return jsonify({"error": "Could not process any sheets in the Excel file"}), 500
             
             # Return the JSON response
             return jsonify({"filename": filename, "sheets": sheets})
