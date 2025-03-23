@@ -444,6 +444,10 @@
                         <a class="nav-link" href="https://www.github.com/jmesplana" target="_blank">Documentation</a>
                     </li>
                 </ul>
+                <!-- API Settings Button -->
+                <button class="btn btn-outline-light me-2" id="api-settings-btn">
+                    <i class="bi bi-gear"></i> API Settings
+                </button>
                 <button class="theme-toggle" id="theme-toggle">
                     <i class="bi bi-sun-fill"></i>
                 </button>
@@ -453,8 +457,132 @@
 
     <!-- Main Container -->
     <div class="container py-4">
-        <!-- Workflow Stepper -->
-        <div class="stepper-wrapper" id="workflow-stepper">
+        <!-- Landing Page Section -->
+        <div id="landing-page" class="mb-5">
+            <div class="row align-items-center mb-4">
+                <div class="col-md-6">
+                    <h1 class="display-5 fw-bold mb-3">Transform Your Excel Data with AI Insights</h1>
+                    <p class="lead">Excel AI Insight helps you analyze spreadsheets of any size by automatically extracting patterns and generating meaningful insights using advanced AI technology.</p>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-start mt-4">
+                        <button class="btn btn-primary btn-lg px-4 me-md-2" id="get-started-btn">
+                            Get Started
+                        </button>
+                        <button class="btn btn-outline-secondary btn-lg px-4" id="learn-more-btn">
+                            Learn More
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-6 mt-4 mt-md-0 text-center">
+                    <img src="{{ url_for('static', filename='excel_ai_insight_logo.webp') }}" alt="Excel AI Insight" class="img-fluid" style="max-height: 250px;">
+                </div>
+            </div>
+            
+            <div class="row mt-5">
+                <div class="col-12 text-center mb-4">
+                    <h2 class="fw-bold">Why Choose Excel AI Insight?</h2>
+                </div>
+            </div>
+            
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body text-center">
+                            <div class="mb-3">
+                                <i class="bi bi-lightning-charge-fill text-primary" style="font-size: 2.5rem;"></i>
+                            </div>
+                            <h5 class="card-title">Speed & Efficiency</h5>
+                            <p class="card-text">Analyze thousands of rows in minutes instead of hours. Save time and focus on decision-making, not data processing.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body text-center">
+                            <div class="mb-3">
+                                <i class="bi bi-graph-up-arrow text-primary" style="font-size: 2.5rem;"></i>
+                            </div>
+                            <h5 class="card-title">AI-Powered Insights</h5>
+                            <p class="card-text">Leverage the latest AI technology to uncover patterns, trends, and anomalies that traditional analysis might miss.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body text-center">
+                            <div class="mb-3">
+                                <i class="bi bi-shield-lock-fill text-primary" style="font-size: 2.5rem;"></i>
+                            </div>
+                            <h5 class="card-title">Privacy & Security</h5>
+                            <p class="card-text">Your data stays private. API keys are stored locally in your browser, and you maintain full control of your information.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-5">
+                <div class="col-12 text-center mb-4">
+                    <h2 class="fw-bold">How It Works</h2>
+                </div>
+            </div>
+            
+            <div class="row g-4">
+                <div class="col-md-3">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body text-center">
+                            <div class="mb-3 rounded-circle bg-primary bg-opacity-10 d-inline-flex justify-content-center align-items-center" style="width: 70px; height: 70px;">
+                                <span class="h3 mb-0 text-primary">1</span>
+                            </div>
+                            <h5 class="card-title">Configure</h5>
+                            <p class="card-text">Set your API key in Settings and define general analysis instructions.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body text-center">
+                            <div class="mb-3 rounded-circle bg-primary bg-opacity-10 d-inline-flex justify-content-center align-items-center" style="width: 70px; height: 70px;">
+                                <span class="h3 mb-0 text-primary">2</span>
+                            </div>
+                            <h5 class="card-title">Upload</h5>
+                            <p class="card-text">Upload your Excel or CSV file with the data you want to analyze.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body text-center">
+                            <div class="mb-3 rounded-circle bg-primary bg-opacity-10 d-inline-flex justify-content-center align-items-center" style="width: 70px; height: 70px;">
+                                <span class="h3 mb-0 text-primary">3</span>
+                            </div>
+                            <h5 class="card-title">Configure Analysis</h5>
+                            <p class="card-text">Select columns to analyze and provide custom instructions for the AI.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body text-center">
+                            <div class="mb-3 rounded-circle bg-primary bg-opacity-10 d-inline-flex justify-content-center align-items-center" style="width: 70px; height: 70px;">
+                                <span class="h3 mb-0 text-primary">4</span>
+                            </div>
+                            <h5 class="card-title">Get Results</h5>
+                            <p class="card-text">Review AI-generated insights and download your enhanced file with analysis.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-5">
+                <div class="col-12 text-center">
+                    <button class="btn btn-primary btn-lg px-5" id="start-analyzing-btn">
+                        Start Analyzing Your Data
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Workflow Stepper (Hidden initially) -->
+        <div class="stepper-wrapper hidden" id="workflow-stepper">
             <div class="stepper-item active" data-step="1">
                 <div class="step-counter">1</div>
                 <div class="step-name">Configuration</div>
@@ -492,10 +620,10 @@
                                     <div class="col-md-7">
                                         <h5 class="mb-3">Excel AI Insight helps you analyze your spreadsheets with AI in 5 simple steps:</h5>
                                         <ol class="how-it-works-steps">
-                                            <li><strong>Configure:</strong> Enter your OpenAI API key (stored only in your browser)</li>
+                                            <li><strong>Set API Key:</strong> Click the API Settings button in the navigation bar and enter your OpenAI API key</li>
+                                            <li><strong>Configure:</strong> Set general instructions for your analysis</li>
                                             <li><strong>Upload:</strong> Select an Excel or CSV file to analyze</li>
-                                            <li><strong>Preview:</strong> View your data and select sheets</li>
-                                            <li><strong>Configure Analysis:</strong> Choose columns to analyze and provide custom instructions</li>
+                                            <li><strong>Preview & Configure:</strong> View your data and select columns for analysis</li>
                                             <li><strong>Results:</strong> Review AI-generated insights and download your analyzed file</li>
                                         </ol>
                                         <p class="mt-3 mb-0"><strong>Pro tip:</strong> Start with a test run to analyze just 5 rows and confirm your settings before running a full analysis.</p>
@@ -530,36 +658,20 @@
                     <div class="col-md-8">
                         <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center">
-                                <span>API Configuration</span>
-                                <i class="bi bi-gear"></i>
+                                <span>Analysis Configuration</span>
+                                <i class="bi bi-sliders"></i>
                             </div>
                             <div class="card-body">
-                                <div class="mb-3">
-                                    <label for="api-key" class="form-label">
-                                        OpenAI API Key
-                                        <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip" title="Your OpenAI API key is required to use AI features. It's only sent to OpenAI for processing."></i>
-                                    </label>
-                                    <div class="input-group">
-                                        <input type="password" class="form-control" id="api-key" placeholder="Enter your OpenAI API Key">
-                                        <button class="btn btn-outline-secondary" type="button" id="toggle-api-key">
-                                            <i class="bi bi-eye"></i>
-                                        </button>
-                                    </div>
-                                    <div class="form-check mt-2">
-                                        <input class="form-check-input" type="checkbox" id="save-api-key">
-                                        <label class="form-check-label" for="save-api-key">
-                                            Save API key in this browser
-                                        </label>
-                                    </div>
-                                    <button class="btn btn-sm btn-outline-secondary mt-2" id="clear-saved-key">Clear Saved Key</button>
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i> Before starting your analysis, configure general instructions that will apply to all analyzed columns. An OpenAI API key is required - you can set this from the <strong>API Settings</strong> button in the top navigation bar.
                                 </div>
                                 
-                                <div class="mb-3">
+                                <div class="mb-4">
                                     <label for="general-instructions" class="form-label">
                                         General Instructions
                                         <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip" title="These instructions will apply to all column analyses. Be specific about what you want the AI to do."></i>
                                     </label>
-                                    <textarea class="form-control" id="general-instructions" rows="3" placeholder="Enter general instructions for the analysis..."></textarea>
+                                    <textarea class="form-control" id="general-instructions" rows="4" placeholder="Enter general instructions for the analysis..."></textarea>
                                 </div>
                                 
                                 <div class="prompt-templates">
@@ -1098,9 +1210,15 @@
         
         /* Chart initialization */
         function initResultChart(data, labels, columnName) {
+            // Ensure resultChart is declared
+            if (typeof resultChart === 'undefined') {
+                window.resultChart = null;
+            }
+            
             // Destroy existing chart if it exists
             if (resultChart) {
                 resultChart.destroy();
+                resultChart = null;
             }
             
             // Create a simple bar chart showing frequency of analysis results
@@ -1159,40 +1277,81 @@
         function loadSavedApiKey() {
             const savedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
             if (savedKey) {
-                document.getElementById('api-key').value = savedKey;
-                document.getElementById('save-api-key').checked = true;
+                // Update main form field if it exists
+                const apiKeyInput = document.getElementById('modal-api-key');
+                if (apiKeyInput) {
+                    apiKeyInput.value = savedKey;
+                    const saveKeyCheckbox = document.getElementById('save-api-key');
+                    if (saveKeyCheckbox) {
+                        saveKeyCheckbox.checked = true;
+                    }
+                }
+                
+                // Update modal fields if they exist
+                const modalApiKeyField = document.getElementById('modal-api-key');
+                const modalSaveKeyCheckbox = document.getElementById('modal-save-api-key');
+                if (modalApiKeyField) {
+                    modalApiKeyField.value = savedKey;
+                    if (modalSaveKeyCheckbox) {
+                        modalSaveKeyCheckbox.checked = true;
+                    }
+                }
             }
         }
         
         function toggleApiKeyVisibility() {
-            const apiKeyInput = document.getElementById('api-key');
-            const toggleBtn = document.getElementById('toggle-api-key').querySelector('i');
+            const apiKeyInput = document.getElementById('modal-api-key');
+            const toggleBtn = document.getElementById('toggle-api-key');
             
-            if (apiKeyInput.type === 'password') {
-                apiKeyInput.type = 'text';
-                toggleBtn.classList.remove('bi-eye');
-                toggleBtn.classList.add('bi-eye-slash');
-            } else {
-                apiKeyInput.type = 'password';
-                toggleBtn.classList.remove('bi-eye-slash');
-                toggleBtn.classList.add('bi-eye');
+            if (apiKeyInput && toggleBtn) {
+                const iconElement = toggleBtn.querySelector('i');
+                
+                if (apiKeyInput.type === 'password') {
+                    apiKeyInput.type = 'text';
+                    if (iconElement) {
+                        iconElement.classList.remove('bi-eye');
+                        iconElement.classList.add('bi-eye-slash');
+                    }
+                } else {
+                    apiKeyInput.type = 'password';
+                    if (iconElement) {
+                        iconElement.classList.remove('bi-eye-slash');
+                        iconElement.classList.add('bi-eye');
+                    }
+                }
             }
         }
         
         function handleSaveApiKeyChange(e) {
-            if (e.target.checked) {
-                const apiKey = document.getElementById('api-key').value;
-                if (apiKey) {
-                    localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+            if (e && e.target) {
+                if (e.target.checked) {
+                    const apiKeyInput = document.getElementById('modal-api-key');
+                    if (apiKeyInput && apiKeyInput.value) {
+                        localStorage.setItem(API_KEY_STORAGE_KEY, apiKeyInput.value);
+                    }
+                } else {
+                    // Use the local function to avoid reference errors
+                    localStorage.removeItem(API_KEY_STORAGE_KEY);
+                    const saveApiKeyCheckbox = document.getElementById('save-api-key');
+                    if (saveApiKeyCheckbox) {
+                        saveApiKeyCheckbox.checked = false;
+                    }
                 }
-            } else {
-                clearSavedApiKey();
             }
         }
         
         function clearSavedApiKey() {
             localStorage.removeItem(API_KEY_STORAGE_KEY);
-            document.getElementById('save-api-key').checked = false;
+            const saveApiKeyCheckbox = document.getElementById('save-api-key');
+            if (saveApiKeyCheckbox) {
+                saveApiKeyCheckbox.checked = false;
+            }
+            
+            // Also clear the modal fields if they exist
+            const modalSaveApiKeyCheckbox = document.getElementById('modal-save-api-key');
+            if (modalSaveApiKeyCheckbox) {
+                modalSaveApiKeyCheckbox.checked = false;
+            }
         }
         
         /* File Upload */
@@ -1499,7 +1658,7 @@
             const column = document.getElementById('pattern-column').value;
             const numCategories = document.getElementById('num-categories').value;
             const patternPrompt = document.getElementById('pattern-prompt').value;
-            const apiKey = document.getElementById('api-key').value;
+            const apiKey = document.getElementById('modal-api-key').value;
             const selectedSheet = document.getElementById('sheet-select').value;
             
             if (!column || !patternPrompt || !apiKey) {
@@ -1621,7 +1780,16 @@
         
         /* Column Analysis */
         async function analyzeColumns(isTestRun = false) {
-            const apiKey = document.getElementById('api-key').value;
+            // Clear previous results before starting a new analysis, but only if elements exist
+            const resultPreview = document.getElementById('result-preview');
+            const chartContent = document.getElementById('chart-content');
+            const chartColumnSelect = document.getElementById('chart-column-select');
+            
+            if (resultPreview) resultPreview.innerHTML = '<div class="alert alert-info">Processing your data...</div>';
+            if (chartContent) chartContent.innerHTML = '<div class="alert alert-info">Chart will appear after analysis is complete.</div>';
+            if (chartColumnSelect) chartColumnSelect.innerHTML = '';
+            
+            const apiKey = document.getElementById('modal-api-key').value;
             const generalInstructions = document.getElementById('general-instructions').value;
             const selectedSheet = document.getElementById('sheet-select').value;
             
@@ -1716,52 +1884,11 @@
                 // Process results for both test runs and full analysis
                 document.getElementById('result-message').textContent = result.message;
                 document.getElementById('download-link').href = `/download/${result.filename}`;
-                await previewAnalyzedData(result.filename);
+                
+                // First preview the data to ensure it's loaded
+                await previewAnalyzedData(result.filename, isTestRun);
                 
                 if (isTestRun) {
-                    // Create a floating preview panel for test run results
-                    const previewPanel = document.createElement('div');
-                    previewPanel.className = 'card position-fixed bottom-0 end-0 mb-4 me-4 shadow';
-                    previewPanel.style.width = '90%';
-                    previewPanel.style.maxWidth = '800px';
-                    previewPanel.style.maxHeight = '70vh';
-                    previewPanel.style.overflow = 'auto';
-                    previewPanel.style.zIndex = '1050';
-                    previewPanel.innerHTML = `
-                        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                            <span><i class="bi bi-lightning"></i> Test Run Results (5 Rows)</span>
-                            <div>
-                                <button class="btn btn-sm btn-outline-light me-2" id="go-to-results-btn">
-                                    <i class="bi bi-arrows-fullscreen"></i> Full View
-                                </button>
-                                <button class="btn btn-sm btn-outline-light" id="close-preview-btn">
-                                    <i class="bi bi-x-lg"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="test-result-preview overflow-auto" style="max-height: 50vh;">
-                                ${document.getElementById('result-preview').innerHTML}
-                            </div>
-                            <div class="d-flex justify-content-end mt-3">
-                                <a href="${document.getElementById('download-link').href}" class="btn btn-sm btn-success">
-                                    <i class="bi bi-download"></i> Download Test Results
-                                </a>
-                            </div>
-                        </div>
-                    `;
-                    document.body.appendChild(previewPanel);
-                    
-                    // Add event listeners to the preview panel buttons
-                    document.getElementById('close-preview-btn').addEventListener('click', () => {
-                        document.body.removeChild(previewPanel);
-                    });
-                    
-                    document.getElementById('go-to-results-btn').addEventListener('click', () => {
-                        document.body.removeChild(previewPanel);
-                        goToStep(5);
-                    });
-                    
                     showAlert('analyze-message', 'Test run complete! Results shown in the preview panel. Click "Full View" to see complete results.', 'success');
                 } else {
                     // Move to results page for full analysis
@@ -1777,8 +1904,27 @@
             }
         }
         
-        async function previewAnalyzedData(filename) {
+        async function previewAnalyzedData(filename, isTestRun = false) {
             try {
+                // Clear any existing data first to ensure we display fresh results
+                const resultPreview = document.getElementById('result-preview');
+                const chartContent = document.getElementById('chart-content');
+                const chartColumnSelect = document.getElementById('chart-column-select');
+                
+                // Remove any existing test run panels
+                const existingPanels = document.querySelectorAll('.test-run-preview-panel');
+                existingPanels.forEach(panel => {
+                    try {
+                        document.body.removeChild(panel);
+                    } catch (e) {
+                        console.error('Error removing panel:', e);
+                    }
+                });
+                
+                if (resultPreview) resultPreview.innerHTML = '<div class="alert alert-info">Loading analysis results...</div>';
+                if (chartContent) chartContent.innerHTML = '<div class="alert alert-info">Preparing chart visualization...</div>';
+                if (chartColumnSelect) chartColumnSelect.innerHTML = '';
+                
                 const response = await fetch(`/download/${filename}`, { method: 'GET' });
                 const blob = await response.blob();
                 const fileReader = new FileReader();
@@ -1819,10 +1965,56 @@
                     tableHTML += '</tbody></table>';
                     
                     // Update the preview
-                    document.getElementById('result-preview').innerHTML = tableHTML;
+                    if (resultPreview) resultPreview.innerHTML = tableHTML;
                     
                     // Set up chart visualization
                     setupChartVisualization(jsonData, headers);
+                    
+                    // If this is a test run, create a floating preview panel
+                    if (isTestRun) {
+                        // Create a floating preview panel for test run results
+                        const previewPanel = document.createElement('div');
+                        previewPanel.className = 'card position-fixed bottom-0 end-0 mb-4 me-4 shadow test-run-preview-panel';
+                        previewPanel.style.width = '90%';
+                        previewPanel.style.maxWidth = '800px';
+                        previewPanel.style.maxHeight = '70vh';
+                        previewPanel.style.overflow = 'auto';
+                        previewPanel.style.zIndex = '1050';
+                        previewPanel.innerHTML = `
+                            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-lightning"></i> Test Run Results (5 Rows)</span>
+                                <div>
+                                    <button class="btn btn-sm btn-outline-light me-2" id="go-to-results-btn">
+                                        <i class="bi bi-arrows-fullscreen"></i> Full View
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-light" id="close-preview-btn">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="test-result-preview overflow-auto" style="max-height: 50vh;">
+                                    ${tableHTML}
+                                </div>
+                                <div class="d-flex justify-content-end mt-3">
+                                    <a href="/download/${filename}" class="btn btn-sm btn-success">
+                                        <i class="bi bi-download"></i> Download Test Results
+                                    </a>
+                                </div>
+                            </div>
+                        `;
+                        document.body.appendChild(previewPanel);
+                        
+                        // Add event listeners to the preview panel buttons
+                        document.getElementById('close-preview-btn').addEventListener('click', () => {
+                            document.body.removeChild(previewPanel);
+                        });
+                        
+                        document.getElementById('go-to-results-btn').addEventListener('click', () => {
+                            document.body.removeChild(previewPanel);
+                            goToStep(5);
+                        });
+                    }
                 };
                 
                 fileReader.readAsArrayBuffer(blob);
@@ -1832,44 +2024,71 @@
         }
         
         function setupChartVisualization(data, headers) {
+            // Get references to chart elements
+            const chartContent = document.getElementById('chart-content');
+            const chartColumnSelect = document.getElementById('chart-column-select');
+            const chartContainer = chartContent ? chartContent.querySelector('.chart-container') : null;
+            
+            // Clear the select options but keep the chart container structure
+            if (chartColumnSelect) chartColumnSelect.innerHTML = '';
+            
             // Filter headers to only include analysis columns
             const analysisColumns = headers.filter(h => h.includes('_analysis_'));
             
             if (analysisColumns.length === 0) {
-                document.getElementById('chart-content').innerHTML = '<div class="alert alert-info">No analysis columns found for visualization.</div>';
+                if (chartContainer) chartContainer.innerHTML = '<div class="alert alert-info">No analysis columns found for visualization.</div>';
                 return;
             }
             
-            // Create select options for chart
-            const selectElem = document.getElementById('chart-column-select');
-            selectElem.innerHTML = '';
+            // Always recreate the canvas element to ensure a fresh chart
+            if (chartContainer) {
+                // Remove existing canvas if it exists
+                const existingCanvas = chartContainer.querySelector('canvas');
+                if (existingCanvas) {
+                    chartContainer.removeChild(existingCanvas);
+                }
+                
+                // Create a new canvas element
+                const canvas = document.createElement('canvas');
+                canvas.id = 'result-chart';
+                chartContainer.appendChild(canvas);
+            }
             
-            analysisColumns.forEach(column => {
-                const option = document.createElement('option');
-                option.value = column;
+            // Already have a reference to chartColumnSelect
+            // Just ensure it exists before manipulating it
+            if (chartColumnSelect) {
+                // Clear again to be safe
+                chartColumnSelect.innerHTML = '';
                 
-                // Try to get a more user-friendly name
-                const originalColName = column.split('_analysis_')[0];
-                option.textContent = `Analysis of ${originalColName}`;
-                
-                selectElem.appendChild(option);
-            });
+                analysisColumns.forEach(column => {
+                    const option = document.createElement('option');
+                    option.value = column;
+                    
+                    // Try to get a more user-friendly name
+                    const originalColName = column.split('_analysis_')[0];
+                    option.textContent = `Analysis of ${originalColName}`;
+                    
+                    chartColumnSelect.appendChild(option);
+                });
+            }
             
             // Set up event listener for chart selection
-            selectElem.addEventListener('change', function() {
-                const selectedColumn = this.value;
-                if (selectedColumn) {
-                    // Extract data for the selected column
-                    const chartData = data.map(row => row[selectedColumn]);
-                    initResultChart(chartData, data.map(row => ''), selectedColumn);
+            if (chartColumnSelect) {
+                chartColumnSelect.addEventListener('change', function() {
+                    const selectedColumn = this.value;
+                    if (selectedColumn) {
+                        // Extract data for the selected column
+                        const chartData = data.map(row => row[selectedColumn]);
+                        initResultChart(chartData, data.map(row => ''), selectedColumn);
+                    }
+                });
+                
+                // Initialize with first column
+                if (analysisColumns.length > 0) {
+                    chartColumnSelect.value = analysisColumns[0];
+                    const chartData = data.map(row => row[analysisColumns[0]]);
+                    initResultChart(chartData, data.map(row => ''), analysisColumns[0]);
                 }
-            });
-            
-            // Initialize with first column
-            if (analysisColumns.length > 0) {
-                selectElem.value = analysisColumns[0];
-                const chartData = data.map(row => row[analysisColumns[0]]);
-                initResultChart(chartData, data.map(row => ''), analysisColumns[0]);
             }
         }
         
@@ -1895,63 +2114,436 @@
                 }
             }
             
+            // Initialize UI state - show landing page, hide workflow
+            const landingPageEl = document.getElementById('landing-page');
+            const workflowStepperEl = document.getElementById('workflow-stepper');
+            
+            if (landingPageEl && workflowStepperEl) {
+                // Show landing page, hide workflow stepper
+                landingPageEl.classList.remove('hidden');
+                workflowStepperEl.classList.add('hidden');
+                
+                // Hide all step content except step 1 (since we want that visible if user clicks "Get Started")
+                const stepContents = document.querySelectorAll('.step-content');
+                stepContents.forEach(content => {
+                    if (content.id !== 'step-1') {
+                        content.classList.add('hidden');
+                    }
+                });
+            }
+            
             // Set up event listeners
             
             // Theme toggle
-            document.getElementById('theme-toggle').addEventListener('click', toggleDarkMode);
+            const themeToggle = document.getElementById('theme-toggle');
+            if (themeToggle && typeof toggleDarkMode === 'function') {
+                themeToggle.addEventListener('click', toggleDarkMode);
+            }
             
             // Navigation
-            document.getElementById('home-link').addEventListener('click', showMainContent);
-            document.getElementById('about-link').addEventListener('click', showAbout);
-            document.getElementById('back-to-app').addEventListener('click', showMainContent);
+            const homeLink = document.getElementById('home-link');
+            const aboutLink = document.getElementById('about-link');
+            const backToAppLink = document.getElementById('back-to-app');
             
-            // API key management
-            document.getElementById('toggle-api-key').addEventListener('click', toggleApiKeyVisibility);
-            document.getElementById('save-api-key').addEventListener('change', handleSaveApiKeyChange);
-            document.getElementById('clear-saved-key').addEventListener('click', clearSavedApiKey);
-            document.getElementById('api-key').addEventListener('input', function(e) {
-                if (document.getElementById('save-api-key').checked) {
-                    localStorage.setItem(API_KEY_STORAGE_KEY, e.target.value);
+            if (homeLink && typeof showHome === 'function') {
+                homeLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    showHome();
+                });
+            }
+            
+            if (aboutLink && typeof showAbout === 'function') {
+                aboutLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    showAbout();
+                });
+            }
+            
+            if (backToAppLink) {
+                backToAppLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    // Use appropriate function if it exists, otherwise fallback
+                    if (typeof showMainContent === 'function') {
+                        showMainContent();
+                    } else if (typeof goToStep === 'function') {
+                        goToStep(1);
+                    }
+                });
+            }
+            
+            // API key management - check if elements exist first (we've moved these to modal)
+            const toggleApiKey = document.getElementById('toggle-api-key');
+            const saveApiKey = document.getElementById('save-api-key');
+            const clearSavedKey = document.getElementById('clear-saved-key');
+            const apiKey = document.getElementById('modal-api-key');
+            
+            if (toggleApiKey && typeof toggleApiKeyVisibility === 'function') {
+                toggleApiKey.addEventListener('click', toggleApiKeyVisibility);
+            }
+            
+            if (saveApiKey && typeof handleSaveApiKeyChange === 'function') {
+                saveApiKey.addEventListener('change', handleSaveApiKeyChange);
+            }
+            
+            if (clearSavedKey) {
+                clearSavedKey.addEventListener('click', function() {
+                    localStorage.removeItem(API_KEY_STORAGE_KEY);
+                    if (saveApiKey) saveApiKey.checked = false;
+                });
+            }
+            
+            if (apiKey && saveApiKey) {
+                apiKey.addEventListener('input', function(e) {
+                    if (saveApiKey.checked) {
+                        localStorage.setItem(API_KEY_STORAGE_KEY, e.target.value);
+                    }
+                });
+            }
+            
+            // How It Works section
+            const closeHowItWorksBtn = document.getElementById('close-how-it-works');
+            if (closeHowItWorksBtn) {
+                closeHowItWorksBtn.addEventListener('click', function() {
+                    // Hide the How It Works section
+                    const howItWorksSection = document.getElementById('how-it-works-section');
+                    if (howItWorksSection) {
+                        howItWorksSection.style.display = 'none';
+                        
+                        // Save preference in localStorage
+                        localStorage.setItem('hideHowItWorks', 'true');
+                    }
+                });
+            }
+            
+            // Step navigation - with null checks
+            const configNextBtn = document.getElementById('config-next-btn');
+            const uploadBackBtn = document.getElementById('upload-back-btn');
+            const previewBackBtn = document.getElementById('preview-back-btn');
+            const previewNextBtn = document.getElementById('preview-next-btn');
+            const configureBackBtn = document.getElementById('configure-back-btn');
+            const resultsBackBtn = document.getElementById('results-back-btn');
+            
+            if (configNextBtn && typeof goToStep === 'function') configNextBtn.addEventListener('click', () => goToStep(2));
+            if (uploadBackBtn && typeof goToStep === 'function') uploadBackBtn.addEventListener('click', () => goToStep(1));
+            if (previewBackBtn && typeof goToStep === 'function') previewBackBtn.addEventListener('click', () => goToStep(2));
+            if (previewNextBtn && typeof goToStep === 'function') previewNextBtn.addEventListener('click', () => goToStep(4));
+            if (configureBackBtn && typeof goToStep === 'function') configureBackBtn.addEventListener('click', () => goToStep(3));
+            if (resultsBackBtn && typeof goToStep === 'function') resultsBackBtn.addEventListener('click', () => goToStep(4));
+            
+            // File upload
+            const uploadForm = document.getElementById('upload-form');
+            if (uploadForm && typeof uploadFile === 'function') {
+                uploadForm.addEventListener('submit', uploadFile);
+            }
+            
+            // Analysis workflow - with null checks
+            const addColumnBtn = document.getElementById('add-column-btn');
+            const togglePatternBtn = document.getElementById('toggle-pattern-btn');
+            const detectPatternsBtn = document.getElementById('detect-patterns-btn');
+            const copyCategoriesBtn = document.getElementById('copy-categories-btn');
+            const useCategoriesBtn = document.getElementById('use-categories-btn');
+            const testRunBtn = document.getElementById('test-run-btn');
+            const analyzeBtn = document.getElementById('analyze-btn');
+            
+            if (addColumnBtn && typeof addColumnConfig === 'function') {
+                addColumnBtn.addEventListener('click', addColumnConfig);
+            }
+            
+            if (togglePatternBtn && typeof togglePatternDetection === 'function') {
+                togglePatternBtn.addEventListener('click', togglePatternDetection);
+            }
+            
+            if (detectPatternsBtn && typeof detectPatterns === 'function') {
+                detectPatternsBtn.addEventListener('click', detectPatterns);
+            }
+            
+            if (copyCategoriesBtn && typeof copyCategoriesToClipboard === 'function') {
+                copyCategoriesBtn.addEventListener('click', copyCategoriesToClipboard);
+            }
+            
+            if (useCategoriesBtn && typeof useCategoriesInPrompt === 'function') {
+                useCategoriesBtn.addEventListener('click', useCategoriesInPrompt);
+            }
+            
+            if (testRunBtn && typeof analyzeColumns === 'function') {
+                testRunBtn.addEventListener('click', () => analyzeColumns(true));
+            }
+            
+            if (analyzeBtn && typeof analyzeColumns === 'function') {
+                analyzeBtn.addEventListener('click', () => analyzeColumns(false));
+            }
+            
+            // Template selection with null check
+            document.querySelectorAll('.prompt-template').forEach(template => {
+                template.addEventListener('click', function() {
+                    const generalInstructions = document.getElementById('general-instructions');
+                    if (generalInstructions && this.dataset.template) {
+                        generalInstructions.value = this.dataset.template;
+                    }
+                });
+            });
+            
+            // Landing page functionality
+            // These variables are already defined in the DOMContentLoaded event listener
+            // Remove the duplicate window.addEventListener('DOMContentLoaded') that was causing issues
+            
+            function startAnalysis() {
+                const landingPage = document.getElementById('landing-page');
+                const workflowStepper = document.getElementById('workflow-stepper');
+                landingPage.classList.add('hidden');
+                workflowStepper.classList.remove('hidden');
+                goToStep(1);
+            }
+            
+            function showHome() {
+                const landingPage = document.getElementById('landing-page');
+                const workflowStepper = document.getElementById('workflow-stepper');
+                const howItWorksSection = document.getElementById('how-it-works-section');
+                landingPage.classList.remove('hidden');
+                workflowStepper.classList.add('hidden');
+                howItWorksSection.classList.add('hidden');
+            }
+            
+            function showAbout() {
+                // Create a modal to display the About information
+                const aboutModal = new bootstrap.Modal(document.createElement('div'));
+                aboutModal.element.innerHTML = `
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">About Excel AI Insight</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="col-md-4 text-center mb-4 mb-md-0">
+                                    <img src="{{ url_for('static', filename='excel_ai_insight_logo.webp') }}" alt="Excel AI Insight" class="img-fluid" style="max-height: 180px;">
+                                </div>
+                                <div class="col-md-8">
+                                    <h4>Transforming Excel Analysis with AI</h4>
+                                    <p>Excel AI Insight is a powerful tool that leverages advanced AI to analyze Excel and CSV data, automatically extracting insights that would take hours to find manually.</p>
+                                    <p>Our mission is to make data analysis accessible to everyone, regardless of technical expertise.</p>
+                                </div>
+                            </div>
+                            
+                            <hr class="my-4">
+                            
+                            <h5>Key Features</h5>
+                            <ul>
+                                <li><strong>AI-Powered Analysis:</strong> Generate meaningful insights from your data in seconds</li>
+                                <li><strong>Pattern Detection:</strong> Automatically identify patterns and categorize data</li>
+                                <li><strong>Custom Instructions:</strong> Tailor the analysis to your specific needs</li>
+                                <li><strong>Multi-Column Analysis:</strong> Analyze relationships between different data points</li>
+                                <li><strong>Privacy-First:</strong> All processing happens on secure AI servers, no data storage</li>
+                            </ul>
+                            
+                            <h5 class="mt-4">Use Cases</h5>
+                            <ul>
+                                <li><strong>Business Intelligence:</strong> Extract actionable insights from sales, marketing, or financial data</li>
+                                <li><strong>Data Cleaning:</strong> Identify inconsistencies and errors in your datasets</li>
+                                <li><strong>Customer Analysis:</strong> Understand patterns in customer feedback and behavior</li>
+                                <li><strong>Research Analysis:</strong> Quickly process and extract meaning from research data</li>
+                                <li><strong>Report Generation:</strong> Create summaries and highlights from large data sets</li>
+                            </ul>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+                `;
+                
+                aboutModal.element.classList.add('modal', 'fade');
+                document.body.appendChild(aboutModal.element);
+                aboutModal.show();
+                
+                // Clean up modal after it's hidden
+                aboutModal.element.addEventListener('hidden.bs.modal', function() {
+                    document.body.removeChild(aboutModal.element);
+                });
+            }
+            
+            // Navigation handlers
+            document.getElementById('home-link').addEventListener('click', function(e) {
+                e.preventDefault();
+                showHome();
+            });
+            
+            document.getElementById('about-link').addEventListener('click', function(e) {
+                e.preventDefault();
+                showAbout();
+            });
+            
+            document.getElementById('get-started-btn').addEventListener('click', startAnalysis);
+            document.getElementById('start-analyzing-btn').addEventListener('click', startAnalysis);
+            
+            document.getElementById('learn-more-btn').addEventListener('click', function() {
+                // Scroll to "How It Works" section in the landing page
+                const howItWorksHeading = document.querySelector('.row.mt-5:nth-of-type(2)');
+                if (howItWorksHeading) {
+                    howItWorksHeading.scrollIntoView({ behavior: 'smooth' });
                 }
             });
             
-            // How It Works section
-            document.getElementById('close-how-it-works').addEventListener('click', function() {
-                // Hide the How It Works section
-                const howItWorksSection = document.getElementById('how-it-works-section');
-                howItWorksSection.style.display = 'none';
-                
-                // Save preference in localStorage
-                localStorage.setItem('hideHowItWorks', 'true');
-            });
+            // Load saved API key from localStorage if available
+            function loadSavedApiKey() {
+                const savedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
+                if (savedKey) {
+                    // Update modal fields - need to get fresh references here
+                    const modalApiKeyField = document.getElementById('modal-api-key');
+                    const modalSaveKeyCheckbox = document.getElementById('modal-save-api-key');
+                    
+                    if (modalApiKeyField) {
+                        modalApiKeyField.value = savedKey;
+                        if (modalSaveKeyCheckbox) {
+                            modalSaveKeyCheckbox.checked = true;
+                        }
+                    }
+                    
+                    // Update main form field if it exists 
+                    // (we've removed it from UI but keeping compatibility with old code)
+                    const apiKeyInput = document.getElementById('modal-api-key');
+                    if (apiKeyInput) {
+                        apiKeyInput.value = savedKey;
+                        const saveKeyCheckbox = document.getElementById('save-api-key');
+                        if (saveKeyCheckbox) {
+                            saveKeyCheckbox.checked = true;
+                        }
+                    }
+                }
+            }
             
-            // Step navigation
-            document.getElementById('config-next-btn').addEventListener('click', () => goToStep(2));
-            document.getElementById('upload-back-btn').addEventListener('click', () => goToStep(1));
-            document.getElementById('preview-back-btn').addEventListener('click', () => goToStep(2));
-            document.getElementById('preview-next-btn').addEventListener('click', () => goToStep(4));
-            document.getElementById('configure-back-btn').addEventListener('click', () => goToStep(3));
-            document.getElementById('results-back-btn').addEventListener('click', () => goToStep(4));
+            // Clear saved API key
+            function clearSavedApiKey() {
+                localStorage.removeItem(API_KEY_STORAGE_KEY);
+                const modalSaveKeyCheckbox = document.getElementById('modal-save-api-key');
+                if (modalSaveKeyCheckbox) {
+                    modalSaveKeyCheckbox.checked = false;
+                }
+            }
             
-            // File upload
-            document.getElementById('upload-form').addEventListener('submit', uploadFile);
+            // API Settings Modal functionality
+            const apiSettingsBtn = document.getElementById('api-settings-btn');
+            const modalApiKey = document.getElementById('modal-api-key');
+            const modalToggleApiKey = document.getElementById('modal-toggle-api-key');
+            const modalSaveApiKey = document.getElementById('modal-save-api-key');
+            const saveApiSettings = document.getElementById('save-api-settings');
             
-            // Analysis workflow
-            document.getElementById('add-column-btn').addEventListener('click', addColumnConfig);
-            document.getElementById('toggle-pattern-btn').addEventListener('click', togglePatternDetection);
-            document.getElementById('detect-patterns-btn').addEventListener('click', detectPatterns);
-            document.getElementById('copy-categories-btn').addEventListener('click', copyCategoriesToClipboard);
-            document.getElementById('use-categories-btn').addEventListener('click', useCategoriesInPrompt);
-            document.getElementById('test-run-btn').addEventListener('click', () => analyzeColumns(true));
-            document.getElementById('analyze-btn').addEventListener('click', () => analyzeColumns(false));
+            // Initialize Modal
+            const apiSettingsModal = new bootstrap.Modal(document.getElementById('api-settings-modal'));
             
-            // Template selection
-            document.querySelectorAll('.prompt-template').forEach(template => {
-                template.addEventListener('click', function() {
-                    document.getElementById('general-instructions').value = this.dataset.template;
+            // Add event listeners with null checks
+            if (apiSettingsBtn) {
+                apiSettingsBtn.addEventListener('click', function() {
+                    // Load current API key from localStorage if available
+                    loadSavedApiKey();
+                    apiSettingsModal.show();
                 });
-            });
+            }
+            
+            // Toggle API key visibility in modal
+            if (modalToggleApiKey && modalApiKey) {
+                modalToggleApiKey.addEventListener('click', function() {
+                    if (modalApiKey.type === 'password') {
+                        modalApiKey.type = 'text';
+                        modalToggleApiKey.innerHTML = '<i class="bi bi-eye-slash"></i>';
+                    } else {
+                        modalApiKey.type = 'password';
+                        modalToggleApiKey.innerHTML = '<i class="bi bi-eye"></i>';
+                    }
+                });
+            }
+            
+            // Save API settings
+            if (saveApiSettings && modalApiKey && modalSaveApiKey) {
+                saveApiSettings.addEventListener('click', function() {
+                    const apiKey = modalApiKey.value.trim();
+                    const saveKey = modalSaveApiKey.checked;
+                    
+                    if (apiKey) {
+                        // Save to localStorage if checkbox is checked
+                        if (saveKey) {
+                            localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+                        } else {
+                            localStorage.removeItem(API_KEY_STORAGE_KEY);
+                        }
+                        
+                        // Update main form field if it exists
+                        const apiKeyInput = document.getElementById('modal-api-key');
+                        if (apiKeyInput) {
+                            apiKeyInput.value = apiKey;
+                            const saveKeyCheckbox = document.getElementById('save-api-key');
+                            if (saveKeyCheckbox) {
+                                saveKeyCheckbox.checked = saveKey;
+                            }
+                        }
+                        
+                        apiSettingsModal.hide();
+                        
+                        // Show success message
+                        alert('API key saved successfully!');
+                    } else {
+                        alert('Please enter a valid API key.');
+                    }
+                });
+            }
+            
+            // Handle the old toggle-api-key button (which we've removed from UI)
+            const oldToggleBtn = document.getElementById('toggle-api-key');
+            if (oldToggleBtn) {
+                oldToggleBtn.addEventListener('click', function() {
+                    const apiKeyInput = document.getElementById('modal-api-key');
+                    if (apiKeyInput) {
+                        if (apiKeyInput.type === 'password') {
+                            apiKeyInput.type = 'text';
+                            this.innerHTML = '<i class="bi bi-eye-slash"></i>';
+                        } else {
+                            apiKeyInput.type = 'password';
+                            this.innerHTML = '<i class="bi bi-eye"></i>';
+                        }
+                    }
+                });
+            }
         });
     </script>
+    
+    <!-- API Settings Modal -->
+    <div class="modal fade" id="api-settings-modal" tabindex="-1" aria-labelledby="api-settings-modal-label" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="api-settings-modal-label"><i class="bi bi-gear"></i> API Settings</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> An OpenAI API key is required to analyze your data. Your key is stored only in your browser and never on our servers.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="modal-api-key" class="form-label">OpenAI API Key</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="modal-api-key" placeholder="Enter your OpenAI API Key">
+                            <button class="btn btn-outline-secondary" type="button" id="modal-toggle-api-key">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">Get your API key from <a href="https://platform.openai.com/account/api-keys" target="_blank">OpenAI's website</a></div>
+                    </div>
+                    
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox" id="modal-save-api-key">
+                        <label class="form-check-label" for="modal-save-api-key">
+                            Save API key in this browser
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="save-api-settings">Save Settings</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
