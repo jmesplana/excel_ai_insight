@@ -567,7 +567,7 @@
                         <a class="nav-link" href="#" id="home-link">Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" id="about-link">About</a>
+                        <a class="nav-link" href="/about">About</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="https://www.github.com/jmesplana/excel_ai_insight" target="_blank">Documentation</a>
@@ -1262,7 +1262,102 @@
                                     </ol>
                                     <p>The application uses the GPT-4o-mini model to analyze your data, providing you with cost-effective yet powerful AI analysis. Your data is processed securely within the application, and your API key is never stored on our servers.</p>
                                 </div>
-                                
+
+                                <div class="mb-4">
+                                    <h5><i class="bi bi-question-circle"></i> Frequently Asked Questions</h5>
+                                    <div class="accordion" id="faqAccordion">
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#offlineCollapse">
+                                                    Can I use it offline?
+                                                </button>
+                                            </h2>
+                                            <div id="offlineCollapse" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                                <div class="accordion-body">
+                                                    <p><strong>Short answer:</strong> Partially, but it requires technical setup.</p>
+
+                                                    <p><strong>For offline LLM processing:</strong><br>
+                                                    Yes, if you:
+                                                    <ul>
+                                                        <li>Have a powerful machine capable of running local LLMs</li>
+                                                        <li>Are comfortable setting up tools like <a href="https://ollama.ai" target="_blank">Ollama</a> or similar LLM runners</li>
+                                                        <li>Clone the repository and configure it to use your local LLM</li>
+                                                        <li>Have sufficient computing power to process your dataset</li>
+                                                    </ul>
+                                                    </p>
+
+                                                    <p><strong>For most users (OpenAI API):</strong><br>
+                                                    Using OpenAI's API requires internet connectivity. Here's what you should know:</p>
+
+                                                    <div class="alert alert-info mt-3">
+                                                        <strong><i class="bi bi-shield-check"></i> Data Privacy with OpenAI API:</strong>
+                                                        <ul class="mb-0 mt-2">
+                                                            <li>✅ <strong>Not used for training</strong> - Your data is NOT used to train or improve OpenAI's models</li>
+                                                            <li>⏰ <strong>30-day retention</strong> - Data is retained for up to 30 days for abuse and misuse monitoring only</li>
+                                                            <li>🗑️ <strong>Automatic deletion</strong> - After 30 days, your data is automatically deleted</li>
+                                                            <li>📄 <strong>Full details:</strong> <a href="https://openai.com/policies/api-data-usage-policies" target="_blank">OpenAI API Data Usage Policies</a></li>
+                                                        </ul>
+                                                    </div>
+
+                                                    <p class="mb-0"><strong>Privacy note:</strong> Your OpenAI API key is stored locally in your browser and never sent to our servers.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#costCollapse">
+                                                    How much does it cost?
+                                                </button>
+                                            </h2>
+                                            <div id="costCollapse" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                                <div class="accordion-body">
+                                                    <p><strong>The tool is free to use.</strong> You only pay for OpenAI API usage at their rates.</p>
+                                                    <p>OpenAI charges based on the number of tokens (words/characters) processed. The GPT-4o-mini model is cost-effective, typically costing just a few cents to analyze hundreds of rows.</p>
+                                                    <p><a href="https://openai.com/api/pricing/" target="_blank">View OpenAI Pricing</a></p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#dataStoreCollapse">
+                                                    Do you store my data?
+                                                </button>
+                                            </h2>
+                                            <div id="dataStoreCollapse" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                                <div class="accordion-body">
+                                                    <p><strong>No.</strong> We do not store your uploaded files or API credentials on our servers.</p>
+                                                    <ul>
+                                                        <li>Files are processed temporarily in your browser or on the server (if deployed) and automatically deleted</li>
+                                                        <li>Your OpenAI API key is stored only in your browser's localStorage</li>
+                                                        <li>API calls go directly from your browser to OpenAI</li>
+                                                        <li>You maintain full control of your data</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#formatsCollapse">
+                                                    What file formats are supported?
+                                                </button>
+                                            </h2>
+                                            <div id="formatsCollapse" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                                <div class="accordion-body">
+                                                    <p>We support the following file formats:</p>
+                                                    <ul>
+                                                        <li>Excel files: <code>.xlsx</code>, <code>.xls</code></li>
+                                                        <li>CSV files: <code>.csv</code></li>
+                                                    </ul>
+                                                    <p>Files can contain multiple sheets (Excel only), and you can choose which sheet to analyze.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="text-center">
                                     <button id="back-to-app" class="btn btn-primary">
                                         <i class="bi bi-arrow-left"></i> Back to Application
@@ -2561,6 +2656,57 @@
                                 <li><strong>Research Analysis:</strong> Quickly process and extract meaning from research data</li>
                                 <li><strong>Report Generation:</strong> Create summaries and highlights from large data sets</li>
                             </ul>
+
+                            <h5 class="mt-4"><i class="bi bi-question-circle"></i> Frequently Asked Questions</h5>
+                            <div class="accordion" id="modalFaqAccordion">
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#modalOfflineCollapse">
+                                            Can I use it offline?
+                                        </button>
+                                    </h2>
+                                    <div id="modalOfflineCollapse" class="accordion-collapse collapse" data-bs-parent="#modalFaqAccordion">
+                                        <div class="accordion-body">
+                                            <p><strong>Short answer:</strong> Partially, but it requires technical setup.</p>
+                                            <p><strong>For offline LLM processing:</strong><br>
+                                            Yes, if you have a powerful machine and are comfortable setting up tools like <a href="https://ollama.ai" target="_blank">Ollama</a> to run local LLMs.</p>
+                                            <div class="alert alert-info">
+                                                <strong><i class="bi bi-shield-check"></i> OpenAI API Data Privacy:</strong>
+                                                <ul class="mb-0 mt-2 small">
+                                                    <li>✅ <strong>Not used for training</strong> - Your data is NOT used to train or improve their models</li>
+                                                    <li>⏰ <strong>30-day retention</strong> - Retained for abuse monitoring only</li>
+                                                    <li>🗑️ <strong>Auto-deleted</strong> - Deleted after 30 days</li>
+                                                    <li>📄 <a href="https://openai.com/policies/api-data-usage-policies" target="_blank">Full Policy</a></li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#modalCostCollapse">
+                                            How much does it cost?
+                                        </button>
+                                    </h2>
+                                    <div id="modalCostCollapse" class="accordion-collapse collapse" data-bs-parent="#modalFaqAccordion">
+                                        <div class="accordion-body">
+                                            <p><strong>The tool is free.</strong> You only pay for OpenAI API usage (typically cents for hundreds of rows). <a href="https://openai.com/api/pricing/" target="_blank">View Pricing</a></p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#modalDataCollapse">
+                                            Do you store my data?
+                                        </button>
+                                    </h2>
+                                    <div id="modalDataCollapse" class="accordion-collapse collapse" data-bs-parent="#modalFaqAccordion">
+                                        <div class="accordion-body">
+                                            <p><strong>No.</strong> Your API key is stored locally in your browser only. Files are processed temporarily and automatically deleted.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
