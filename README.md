@@ -1,39 +1,38 @@
 
 # Excel AI Insight
 <p align="center">
-  <img src="https://github.com/jmesplana/excel_ai_insight/blob/main/excel_ai_insight_logo.webp" alt="excel AI Insight Logo" width=25%/>
+  <img src="https://github.com/jmesplana/excel_ai_insight/blob/main/excel_ai_insight_logo.webp" alt="Excel AI Insight Logo" width=25%/>
 </p>
 
-Excel AI Insight is a web application that allows you to upload Excel files and generate insightful analyses using advanced AI models. This tool helps uncover patterns, trends, and actionable insights quickly and efficiently.
+**Stop spending hours on manual data analysis.** Excel AI Insight transforms your spreadsheets with AI-powered insights, sentiment analysis, translations, and pattern detection—all in minutes, not hours.
 
-## Table of Contents
+Perfect for e-commerce managers analyzing customer reviews, HR professionals categorizing survey responses, market researchers translating feedback, and anyone drowning in Excel data.
 
-- [Features](#features)
-- [Prerequisites](#prerequisites)
+## 🚀 Key Features
+
+- **AI-Powered Analysis**: Automatically analyze thousands of rows with GPT-4o-mini
+- **Sentiment Analysis**: Extract sentiment (Positive/Negative/Neutral) from customer feedback
+- **Translation Service**: Translate text to any language (English, Spanish, French, Japanese, etc.)
+- **Pattern Detection**: Discover categories and themes in your data automatically
+- **Multi-Column Analysis**: Analyze multiple columns together for deeper insights
+- **Test Mode**: Test your prompts on 5 rows before running full analysis
+- **Progress Tracking**: Real-time progress updates during analysis
+- **Dark Mode**: Easy on the eyes for long analysis sessions
+- **Privacy First**: API keys stored locally in your browser, never on our servers
+
+## 📋 Table of Contents
+
+- [Quick Start](#quick-start)
+- [Use Cases](#use-cases)
+- [Features in Detail](#features-in-detail)
 - [Installation](#installation)
-- [Usage](#usage)
-  - [Configuration](#configuration)
-  - [Uploading Files](#uploading-files)
-  - [Analyzing Data](#analyzing-data)
-  - [Downloading Results](#downloading-results)
-  - [Sample Prompt for Data Categorization](#instruction-for-categorizing-text-data)
-- [Running Tests](#running-tests)
+- [Usage Guide](#usage-guide)
+- [Prompt Templates](#prompt-templates)
+- [Deployment](#deployment)
 - [Contributing](#contributing)
 - [License](#license)
 
-## Features
-
-- **Excel File Upload**: Upload `.xlsx` or `.xls` files.
-- **Preview Data**: Preview the first 5 rows of any sheet within the uploaded Excel file.
-- **AI-Powered Analysis**: Use OpenAI's GPT model to analyze text data in the Excel sheets.
-- **Download Results**: Download the analyzed data as an Excel file.
-
-## Prerequisites
-
-- Python 3.7 or higher
-- [OpenAI API key](https://beta.openai.com/signup/)
-
-## Installation
+## ⚡ Quick Start
 
 1. **Clone the repository:**
    ```bash
@@ -44,7 +43,7 @@ Excel AI Insight is a web application that allows you to upload Excel files and 
 2. **Create a virtual environment:**
    ```bash
    python3 -m venv venv
-   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 3. **Install dependencies:**
@@ -52,96 +51,231 @@ Excel AI Insight is a web application that allows you to upload Excel files and 
    pip install -r requirements.txt
    ```
 
-4. **Set up the OpenAI API key:** (Optional)
-   Create a `.env` file in the project root and add your OpenAI API key:
-   ```env
-   OPENAI_API_KEY=your-openai-api-key
-   ```
-
-## Usage
-
-1. **Run the Flask application:**
+4. **Run the application:**
    ```bash
    python app.py
    ```
 
-2. **Access the web app:**
-   Open your web browser and go to `http://127.0.0.1:5000/`.
+5. **Open your browser:**
+   Navigate to `http://127.0.0.1:5000/`
 
-### Configuration
+6. **Get your OpenAI API key:**
+   - Sign up at [OpenAI Platform](https://platform.openai.com/)
+   - Create an API key
+   - Enter it in the Settings tab
 
-- Enter your OpenAI API key and any general instructions for the analysis.
+## 💼 Use Cases
 
-### Uploading Files
+### E-commerce Manager: Customer Review Analysis
+**Challenge**: 500+ customer reviews weekly—too many to read manually
+**Solution**: AI analyzes all reviews for sentiment and key issues in 5 minutes
 
-- Click the "Upload Excel File" button and select your `.xlsx`, `.xls` or `.csv` file.
+### HR Professional: Employee Survey Categorization
+**Challenge**: 1,000 employee survey responses need categorization
+**Solution**: AI categorizes by topic (benefits, culture, workload) and flags urgent concerns
 
-### Analyzing Data
+### Market Researcher: Multi-Language Translation
+**Challenge**: Customer feedback in 5 different languages needs translation
+**Solution**: AI translates all 800 responses to English in minutes
 
-- Choose the sheet you want to analyze.
-- Configure which columns you want to analyze and provide specific prompts.
-- Click the "Analyze Columns" button to start the analysis.
+### Data Analyst: Quality Assurance
+**Challenge**: Need to identify data inconsistencies and errors across thousands of entries
+**Solution**: AI checks for formatting errors, outliers, and missing information
 
-### Downloading Results
+## 🎯 Features in Detail
 
-- After the analysis is complete, a download link will appear. Click it to download the analyzed Excel file.
+### Sentiment Analysis (Concise)
+Get one-word sentiment without explanations:
+```
+Analyze the sentiment of this text. Return ONLY one word: Positive, Negative, or Neutral.
+Do not include any explanation, reasoning, or additional text.
+```
 
-### Instruction for Categorizing Text Data
-  ```bash
-Instruction for Categorizing Text Data
-To categorize text data effectively, follow these instructions:
+### Translation Service
+Translate to any language:
+```
+Translate the following text to [TARGET_LANGUAGE]. Return ONLY the translation without any
+additional commentary, notes, or explanations. If the text is already in [TARGET_LANGUAGE],
+return it unchanged.
+```
 
-**Objective**: For each entry in the text data, identify the most appropriate category from a predefined list of categories.
+### Pattern Detection
+Discover categories automatically:
+- AI analyzes a sample of your data (up to 100 values)
+- Suggests distinct categories based on patterns
+- Provides explanation of categorization logic
 
-**Categories**: Below is the default list of categories. You can modify, add, or remove categories as needed for your specific use case:
-- Category 1
-- Category 2
-- Category 3
-- Category 4
-- Category 5
-- (Add or modify categories as needed)
-**Configuration**: To configure the categories:
+### Multi-Column Analysis
+Analyze relationships across columns:
+- Select multiple columns for combined analysis
+- AI considers all selected data together
+- Perfect for context-dependent insights
 
-- Edit the list of categories to match the needs of your analysis.
-- Ensure each category is distinct and clearly defined to avoid overlap.
+## 🛠️ Installation
 
-**Output Requirement**: Provide only the category name as the output for each entry. Do not include explanations, the original text, or any additional information.
+### Prerequisites
 
-By following these steps, you will ensure that each text entry is accurately categorized according to the most relevant category.
+- Python 3.7 or higher
+- [OpenAI API key](https://platform.openai.com/api-keys)
+
+### Local Development
+
+```bash
+# Clone repository
+git clone https://github.com/jmesplana/excel-ai-insight.git
+cd excel-ai-insight
+
+# Create virtual environment
+python3 -m venv venv
+
+# Activate virtual environment
+# On macOS/Linux:
+source venv/bin/activate
+# On Windows:
+venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the application
+python app.py
+```
+
+Access the app at `http://127.0.0.1:5000/`
+
+## 📖 Usage Guide
+
+### Step 1: Configuration
+1. Click the **Settings** button
+2. Enter your **OpenAI API key**
+3. Add **General Instructions** (optional, applies to all analyses)
+4. Choose from suggested prompt templates or write your own
+
+### Step 2: Upload Your File
+1. Click **Get Started** or **Try It Free**
+2. Upload your Excel (`.xlsx`, `.xls`) or CSV file
+3. Preview your data to verify upload
+
+### Step 3: Select Columns & Configure Analysis
+1. Select the sheet you want to analyze
+2. Choose columns for analysis
+3. Add column-specific prompts
+4. Optionally enable **Multi-Column Analysis** for related columns
+
+### Step 4: Run Analysis
+1. Click **Run Test (5 rows)** to test your prompts first (recommended)
+2. Review test results
+3. Click **Analyze All Rows** to process entire dataset
+4. Monitor real-time progress
+
+### Step 5: Download Results
+1. Once complete, click **Download Analyzed File**
+2. Open in Excel to see AI-generated insights in new columns
+
+## 📝 Prompt Templates
+
+### Business Analysis
+```
+You are a business analyst helping to extract insights from company data. Be concise, factual,
+and focus on actionable business insights. Avoid fluff and marketing language. When possible,
+quantify your observations.
+```
+
+### Data Quality Check
+```
+You are a data quality specialist. Examine each entry for inconsistencies, formatting errors,
+outliers, or missing information. When you find issues, provide specific suggestions for
+improvement. Be thorough but concise.
+```
+
+### Customer Feedback Analysis (Detailed)
+```
+You are analyzing customer feedback to improve products and services. Identify the sentiment
+(positive/negative/neutral), extract key issues or praise points, and suggest one concrete
+action that could address any concerns mentioned.
+```
+
+### Translation Service
+```
+Translate the following text to [TARGET_LANGUAGE]. Return ONLY the translation without any
+additional commentary, notes, or explanations. If the text is already in [TARGET_LANGUAGE],
+return it unchanged.
+```
+
+**💡 Tip**: For concise outputs (e.g., sentiment analysis), explicitly instruct the AI to provide ONLY the required value without explanations. Example: "Return only the sentiment (Positive/Negative/Neutral) without any additional text or explanation."
+
+## 🚀 Deployment
+
+### Deploy to Vercel
+
+1. Install Vercel CLI:
+   ```bash
+   npm install -g vercel
    ```
 
-### Instructions for Sentiment Analysis
-**General Instructions**
-1. Upload the Dataset: Upload your file (e.g., Excel, CSV) containing feedback data.
-2. Select the Feedback Column: Specify the column name that contains the feedback entries (e.g., "Customer Feedback," "Patient Feedback").
-3. Run the Analysis: Use the tool to perform sentiment analysis, which will classify feedback as Positive, Negative, or Mixed.
-**Prompt Example**
-To perform sentiment analysis, use the following prompt format:
+2. Deploy:
+   ```bash
+   vercel
+   ```
 
-```bash
-Analyze the '[COLUMN_NAME]' column and return only the sentiment result as 'Positive,' 'Negative,' or 'Mixed' without additional text.
-```
-This structure ensures clarity for both the general process and specific usage.
+3. Follow the prompts to complete deployment
 
-## Running Tests
+The `vercel.json` configuration is already included in the repository.
 
-You can run tests to ensure everything is working correctly. Use `unittest` or `pytest`:
+### Environment Variables
 
-```bash
-pytest
-```
+For production deployment, set:
+- `VERCEL=1` (automatically set by Vercel)
+- No need to set OpenAI API key—users provide their own
 
-## Contributing
+## 🔒 Privacy & Security
+
+- **API keys stored locally**: Your OpenAI API key is stored in your browser's localStorage, never transmitted to our servers
+- **No data retention**: Uploaded files are processed temporarily and automatically deleted
+- **Client-side API calls**: OpenAI API calls are made directly from your browser to OpenAI
+- **Full control**: You maintain complete control over your data and API usage
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**Error: "Cannot take a larger sample than population when 'replace=False'"**
+- **Cause**: Trying to sample more rows than exist in the column
+- **Solution**: Update to latest version (fixed in v1.1.0)
+
+**Error: "Invalid OpenAI API key"**
+- **Cause**: API key is incorrect or expired
+- **Solution**: Generate a new API key from OpenAI Platform
+
+**Analysis is slow**
+- **Cause**: Processing many rows or complex prompts
+- **Solution**: Use Test Mode first, optimize prompts for conciseness
+
+## 🤝 Contributing
 
 Contributions are welcome! Please follow these steps:
 
-1. Fork the repository.
-2. Create a new branch (`git checkout -b feature-branch`).
-3. Make your changes.
-4. Commit your changes (`git commit -am 'Add new feature'`).
-5. Push to the branch (`git push origin feature-branch`).
-6. Open a pull request.
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Built with [Flask](https://flask.palletsprojects.com/)
+- Powered by [OpenAI GPT-4o-mini](https://openai.com/)
+- UI components from [Bootstrap 5](https://getbootstrap.com/)
+
+## 📧 Support
+
+- **Issues**: [GitHub Issues](https://github.com/jmesplana/excel_ai_insight/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/jmesplana/excel_ai_insight/discussions)
+
+---
+
+**Made with ❤️ for data professionals who deserve their time back**

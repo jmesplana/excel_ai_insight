@@ -399,6 +399,98 @@
             height: 300px;
             margin-top: 20px;
         }
+
+        /* Mock UI Section */
+        .mock-ui-container {
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.05) 0%, rgba(33, 150, 243, 0.05) 100%);
+            border-radius: 15px;
+            padding: 30px;
+            margin-top: 40px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        body.dark-mode .mock-ui-container {
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.1) 0%, rgba(33, 150, 243, 0.1) 100%);
+        }
+
+        .mock-spreadsheet {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 15px;
+        }
+
+        body.dark-mode .mock-spreadsheet {
+            background: #2d2d2d;
+        }
+
+        .mock-spreadsheet table {
+            width: 100%;
+            margin: 0;
+        }
+
+        .mock-spreadsheet th {
+            background: #f5f5f5;
+            padding: 12px;
+            font-weight: 600;
+            border-bottom: 2px solid #e0e0e0;
+            font-size: 0.9rem;
+        }
+
+        body.dark-mode .mock-spreadsheet th {
+            background: #1e1e1e;
+            border-bottom-color: #404040;
+        }
+
+        .mock-spreadsheet td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.85rem;
+        }
+
+        body.dark-mode .mock-spreadsheet td {
+            border-bottom-color: #404040;
+        }
+
+        .mock-ai-result {
+            background: rgba(76, 175, 80, 0.1);
+            color: #2e7d32;
+            font-style: italic;
+            padding: 8px 12px;
+            border-left: 3px solid #4CAF50;
+        }
+
+        body.dark-mode .mock-ai-result {
+            background: rgba(76, 175, 80, 0.2);
+            color: #81c784;
+        }
+
+        .use-case-card {
+            border-left: 4px solid var(--primary-color);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .use-case-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .persona-badge {
+            display: inline-block;
+            background: rgba(76, 175, 80, 0.15);
+            color: var(--primary-dark);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        body.dark-mode .persona-badge {
+            background: rgba(76, 175, 80, 0.25);
+            color: var(--primary-light);
+        }
         
         /* Mobile optimizations */
         @media (max-width: 768px) {
@@ -459,30 +551,104 @@
     <div class="container py-4">
         <!-- Landing Page Section -->
         <div id="landing-page" class="mb-5">
-            <div class="row align-items-center mb-4">
+            <div class="row align-items-center mb-5">
                 <div class="col-md-6">
-                    <h1 class="display-5 fw-bold mb-3">Transform Your Excel Data with AI Insights</h1>
-                    <p class="lead">Excel AI Insight helps you analyze spreadsheets of any size by automatically extracting patterns and generating meaningful insights using advanced AI technology.</p>
+                    <h1 class="display-5 fw-bold mb-3">Stop Spending Hours on Manual Data Analysis</h1>
+                    <p class="lead">You have hundreds (or thousands) of rows in Excel. Reading through them manually is exhausting. Let AI do the heavy lifting.</p>
+                    <p class="text-muted">Excel AI Insight analyzes your spreadsheets automatically, extracting insights, sentiment, translations, and patterns in minutes—not hours.</p>
                     <div class="d-grid gap-2 d-md-flex justify-content-md-start mt-4">
                         <button class="btn btn-primary btn-lg px-4 me-md-2" id="get-started-btn">
-                            Get Started
+                            <i class="bi bi-rocket-takeoff"></i> Try It Free
                         </button>
                         <button class="btn btn-outline-secondary btn-lg px-4" id="learn-more-btn">
-                            Learn More
+                            See How It Works
                         </button>
                     </div>
                 </div>
-                <div class="col-md-6 mt-4 mt-md-0 text-center">
-                    <img src="{{ url_for('static', filename='excel_ai_insight_logo.webp') }}" alt="Excel AI Insight" class="img-fluid" style="max-height: 250px;">
+                <div class="col-md-6 mt-4 mt-md-0">
+                    <div class="mock-ui-container">
+                        <h6 class="text-center mb-3 fw-bold">See it in Action</h6>
+                        <div class="mock-spreadsheet">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Customer Feedback</th>
+                                        <th>AI Analysis</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Love the product but shipping was slow</td>
+                                        <td class="mock-ai-result">Sentiment: Positive<br>Issue: Shipping delay</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Terrible experience, won't buy again</td>
+                                        <td class="mock-ai-result">Sentiment: Negative<br>Action: Immediate follow-up</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Decent product, meets expectations</td>
+                                        <td class="mock-ai-result">Sentiment: Neutral<br>Note: Standard satisfaction</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-center small text-muted mb-0"><i class="bi bi-magic"></i> AI analyzes your entire dataset automatically</p>
+                    </div>
                 </div>
             </div>
             
             <div class="row mt-5">
                 <div class="col-12 text-center mb-4">
-                    <h2 class="fw-bold">Why Choose Excel AI Insight?</h2>
+                    <h2 class="fw-bold">Real People, Real Problems, Real Solutions</h2>
+                    <p class="text-muted">See how professionals like you are using AI to save time</p>
                 </div>
             </div>
-            
+
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm use-case-card">
+                        <div class="card-body">
+                            <span class="persona-badge"><i class="bi bi-shop"></i> E-commerce Manager</span>
+                            <h5 class="card-title fw-bold">Sarah's Challenge</h5>
+                            <p class="text-muted small mb-2">"I get 500+ customer reviews weekly. I can't read them all, but I need to know what customers are saying."</p>
+                            <hr>
+                            <h6 class="text-success"><i class="bi bi-check-circle-fill"></i> Solution</h6>
+                            <p class="small mb-0">AI analyzes all reviews for sentiment and key issues in 5 minutes. Sarah now spots problems early and highlights positive feedback for her team.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm use-case-card">
+                        <div class="card-body">
+                            <span class="persona-badge"><i class="bi bi-briefcase"></i> HR Professional</span>
+                            <h5 class="card-title fw-bold">Marcus's Challenge</h5>
+                            <p class="text-muted small mb-2">"I need to categorize 1,000 employee survey responses. Doing it manually would take me days."</p>
+                            <hr>
+                            <h6 class="text-success"><i class="bi bi-check-circle-fill"></i> Solution</h6>
+                            <p class="small mb-0">AI categorizes responses by topic (benefits, culture, workload) and flags urgent concerns. Marcus completes his report the same day.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm use-case-card">
+                        <div class="card-body">
+                            <span class="persona-badge"><i class="bi bi-globe"></i> Market Researcher</span>
+                            <h5 class="card-title fw-bold">Priya's Challenge</h5>
+                            <p class="text-muted small mb-2">"I have customer feedback in 5 different languages. I need everything translated to English for our report."</p>
+                            <hr>
+                            <h6 class="text-success"><i class="bi bi-check-circle-fill"></i> Solution</h6>
+                            <p class="small mb-0">AI translates all 800 responses to English in minutes. Priya's international insights report is ready on time.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mt-5">
+                <div class="col-12 text-center mb-4">
+                    <h2 class="fw-bold">Why Excel AI Insight Works for You</h2>
+                </div>
+            </div>
+
             <div class="row g-4">
                 <div class="col-md-4">
                     <div class="card h-100 border-0 shadow-sm">
@@ -490,8 +656,8 @@
                             <div class="mb-3">
                                 <i class="bi bi-lightning-charge-fill text-primary" style="font-size: 2.5rem;"></i>
                             </div>
-                            <h5 class="card-title">Speed & Efficiency</h5>
-                            <p class="card-text">Analyze thousands of rows in minutes instead of hours. Save time and focus on decision-making, not data processing.</p>
+                            <h5 class="card-title">Save Hours Every Week</h5>
+                            <p class="card-text">What takes you 8 hours manually takes AI 10 minutes. Reclaim your time for strategic work that actually matters.</p>
                         </div>
                     </div>
                 </div>
@@ -499,10 +665,10 @@
                     <div class="card h-100 border-0 shadow-sm">
                         <div class="card-body text-center">
                             <div class="mb-3">
-                                <i class="bi bi-graph-up-arrow text-primary" style="font-size: 2.5rem;"></i>
+                                <i class="bi bi-person-check-fill text-primary" style="font-size: 2.5rem;"></i>
                             </div>
-                            <h5 class="card-title">AI-Powered Insights</h5>
-                            <p class="card-text">Leverage the latest AI technology to uncover patterns, trends, and anomalies that traditional analysis might miss.</p>
+                            <h5 class="card-title">No Technical Skills Needed</h5>
+                            <p class="card-text">If you can use Excel, you can use this. Upload your file, tell AI what you need, and get results. That's it.</p>
                         </div>
                     </div>
                 </div>
@@ -512,8 +678,8 @@
                             <div class="mb-3">
                                 <i class="bi bi-shield-lock-fill text-primary" style="font-size: 2.5rem;"></i>
                             </div>
-                            <h5 class="card-title">Privacy & Security</h5>
-                            <p class="card-text">Your data stays private. API keys are stored locally in your browser, and you maintain full control of your information.</p>
+                            <h5 class="card-title">Your Data Stays Private</h5>
+                            <p class="card-text">Your API key stays in your browser. We never store your files or API credentials on our servers. You're in control.</p>
                         </div>
                     </div>
                 </div>
@@ -676,6 +842,11 @@
                                 
                                 <div class="prompt-templates">
                                     <h6>Suggested Templates <i class="bi bi-lightning-charge text-warning"></i></h6>
+
+                                    <div class="alert alert-warning small mb-3">
+                                        <i class="bi bi-lightbulb"></i> <strong>Prompt Writing Tip:</strong> For concise outputs (e.g., sentiment analysis), explicitly instruct the AI to provide ONLY the required value without explanations. Example: "Return only the sentiment (Positive/Negative/Neutral) without any additional text or explanation."
+                                    </div>
+
                                     <div class="prompt-template" data-template="You are a business analyst helping to extract insights from company data. Be concise, factual, and focus on actionable business insights. Avoid fluff and marketing language. When possible, quantify your observations.">
                                         <h6 class="mb-1">Business Analysis</h6>
                                         <p class="small text-muted mb-0">Extract factual, actionable business insights from data</p>
@@ -684,9 +855,17 @@
                                         <h6 class="mb-1">Data Quality Check</h6>
                                         <p class="small text-muted mb-0">Identify issues and provide suggestions for improvement</p>
                                     </div>
+                                    <div class="prompt-template" data-template="Analyze the sentiment of this text. Return ONLY one word: Positive, Negative, or Neutral. Do not include any explanation, reasoning, or additional text.">
+                                        <h6 class="mb-1">Sentiment Analysis (Concise)</h6>
+                                        <p class="small text-muted mb-0">Get one-word sentiment without explanations</p>
+                                    </div>
                                     <div class="prompt-template" data-template="You are analyzing customer feedback to improve products and services. Identify the sentiment (positive/negative/neutral), extract key issues or praise points, and suggest one concrete action that could address any concerns mentioned.">
-                                        <h6 class="mb-1">Customer Feedback Analysis</h6>
+                                        <h6 class="mb-1">Customer Feedback Analysis (Detailed)</h6>
                                         <p class="small text-muted mb-0">Analyze sentiment and extract key points from feedback</p>
+                                    </div>
+                                    <div class="prompt-template" data-template="Translate the following text to [TARGET_LANGUAGE]. Return ONLY the translation without any additional commentary, notes, or explanations. If the text is already in [TARGET_LANGUAGE], return it unchanged.">
+                                        <h6 class="mb-1">Translation Service</h6>
+                                        <p class="small text-muted mb-0">Replace [TARGET_LANGUAGE] with your desired language (e.g., English, Spanish, French, Japanese)</p>
                                     </div>
                                 </div>
                                 

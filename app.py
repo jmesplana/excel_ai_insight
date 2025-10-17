@@ -27,7 +27,7 @@ if os.environ.get('VERCEL') == '1' or os.environ.get('VERCEL_ENV') == 'productio
     UPLOAD_FOLDER = '/tmp'
 else:
     UPLOAD_FOLDER = 'uploads'
-    
+
 ALLOWED_EXTENSIONS = {'xlsx', 'xls', 'csv'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -45,13 +45,13 @@ def process_dataframe(df, sheet_name):
 
     # Replace Inf, -Inf values with None, and handle NaNs correctly
     df.replace([float('inf'), float('-inf')], pd.NA, inplace=True)
-    
+
     # Convert DataFrame to use pandas NA type before filling
-    df = df.convert_dtypes()  
-    
+    df = df.convert_dtypes()
+
     # Now fill NaNs
     df.fillna(value=pd.NA, inplace=True)
-    
+
     # Convert the cleaned DataFrame to JSON-compatible format
     return {
         sheet_name: {
@@ -70,49 +70,49 @@ def upload_file():
         return jsonify({"error": "No file part"}), 400
 
     file = request.files['file']
-    
+
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
-    
+
     if file and allowed_file(file.filename):
         try:
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            
+
             # Debug info about file paths
             app.logger.info(f"Upload folder: {UPLOAD_FOLDER}, File path: {filepath}")
-            
+
             # Ensure directory exists
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            
+
             # Save the file
             file.save(filepath)
-            
+
             # Verify file was saved
             if not os.path.exists(filepath):
                 app.logger.error(f"File was not saved to {filepath}")
                 return jsonify({"error": "Failed to save file to server"}), 500
-                
+
             app.logger.info(f"File saved successfully to {filepath}")
         except Exception as save_error:
             app.logger.error(f"Error saving file: {str(save_error)}")
             return jsonify({"error": f"Error saving file: {str(save_error)}"}), 500
-        
+
         try:
             # 1. Read the file based on its extension
             if filename.rsplit('.', 1)[1].lower() == 'csv':
                 app.logger.info("CSV file detected and being processed.")
                 df = pd.read_csv(filepath, nrows=10)  # Preview first 10 rows
-                
+
                 # Process CSV as a single sheet
                 sheets = process_dataframe(df, "Sheet1")
             else:
                 app.logger.info("Excel file detected and being processed.")
-                
+
                 # Improved error handling for Excel files
                 try:
                     xls = pd.ExcelFile(filepath)
-                    
+
                     # Process each sheet in the Excel file
                     sheets = {}
                     for sheet_name in xls.sheet_names:
@@ -126,18 +126,18 @@ def upload_file():
                 except Exception as excel_error:
                     app.logger.error(f"Error opening Excel file: {str(excel_error)}")
                     return jsonify({"error": f"Cannot open Excel file: {str(excel_error)}"}), 500
-                
+
                 # Check if we successfully processed at least one sheet
                 if not sheets:
                     return jsonify({"error": "Could not process any sheets in the Excel file"}), 500
-            
+
             # Return the JSON response
             return jsonify({"filename": filename, "sheets": sheets})
-        
+
         except Exception as e:
             app.logger.error(f"Error processing file: {str(e)}")
             return jsonify({"error": f"Error processing file: {str(e)}"}), 500
-    
+
     return jsonify({"error": "Invalid file type"}), 400
 
 
@@ -147,10 +147,10 @@ def detect_patterns():
         app.logger.info("Detect patterns route called")
         data = request.json
         app.logger.info(f"Received pattern detection data: {data}")
-        
+
         if not data:
             raise ValueError("No data received in request.")
-            
+
         # Extract and validate data from the request
         filename = data.get('filename')
         sheet_name = data.get('sheetName')
@@ -158,50 +158,56 @@ def detect_patterns():
         column = data.get('column')
         pattern_prompt = data.get('patternPrompt')
         num_categories = data.get('numCategories', 5)
-        
+
         # Check if all necessary keys are present and not empty
         if not all([filename, sheet_name, api_key, column, pattern_prompt]):
-            missing = [k for k in ['filename', 'sheetName', 'apiKey', 'column', 'patternPrompt'] 
+            missing = [k for k in ['filename', 'sheetName', 'apiKey', 'column', 'patternPrompt']
                       if not data.get(k)]
             return jsonify({"error": f"Missing required fields: {', '.join(missing)}"}), 400
-            
+
         # Set the OpenAI API key
         client = OpenAI(api_key=api_key)
-        
+
         # Construct the full file path
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        
+
         # Check if the file exists
         if not os.path.exists(filepath):
             return jsonify({"error": f"The file {filename} does not exist in the upload folder."}), 404
-            
+
         # Read the file based on its extension
         try:
-            if filename.endswith(('xlsx', 'xls')):
+            if filename.endswith(('.xlsx', '.xls')):
                 df = pd.read_excel(filepath, sheet_name=sheet_name)
             else:
                 df = pd.read_csv(filepath)
         except Exception as e:
             return jsonify({"error": f"Error reading file {filename}: {e}"}), 500
-            
+
         # Check if the column exists in the DataFrame
         if column not in df.columns:
             return jsonify({"error": f"Column '{column}' not found in the file."}), 400
-            
+
         # Get a sample of the data (up to 100 values) for pattern detection
-        sample_values = df[column].dropna().sample(min(100, len(df[column]))).tolist()
-        
+        # Fix: Get non-null values first, then sample from those
+        non_null_values = df[column].dropna()
+        if len(non_null_values) == 0:
+            return jsonify({"error": f"Column '{column}' contains no valid data."}), 400
+
+        sample_size = min(100, len(non_null_values))
+        sample_values = non_null_values.sample(sample_size).tolist()
+
         # Format the sample values for the AI
         sample_text = "\n".join([f"- {str(val)}" for val in sample_values])
-        
+
         # Create the full prompt for pattern detection
         full_prompt = f"""
         {pattern_prompt}
-        
+
         Please analyze the following sample data from the column '{column}' and suggest {num_categories} distinct categories:
-        
+
         {sample_text}
-        
+
         Based on the above sample, provide exactly {num_categories} categories in the following JSON format:
         {{
           "categories": [
@@ -212,7 +218,7 @@ def detect_patterns():
           "explanation": "Explanation of your categorization logic and how to apply these categories to new data."
         }}
         """
-        
+
         try:
             # Use the client to create a chat completion
             response = client.chat.completions.create(
@@ -223,15 +229,15 @@ def detect_patterns():
                 ],
                 response_format={"type": "json_object"}
             )
-            
+
             # Get the response content
             categories_json = response.choices[0].message.content
             return jsonify({"result": categories_json})
-            
+
         except Exception as e:
             app.logger.error(f"Error in pattern detection: {str(e)}")
             return jsonify({"error": f"Error in pattern detection: {str(e)}"}), 500
-            
+
     except Exception as e:
         app.logger.error(f"Error in detect_patterns: {str(e)}")
         return jsonify({"error": str(e)}), 500
@@ -309,7 +315,7 @@ def analyze():
 
         # Read the file based on its extension
         try:
-            if filename.endswith(('xlsx', 'xls')):
+            if filename.endswith(('.xlsx', '.xls')):
                 df = pd.read_excel(filepath, sheet_name=sheet_name)
             else:
                 df = pd.read_csv(filepath)
@@ -318,22 +324,22 @@ def analyze():
 
         # Get row limit based on test mode
         row_limit = 5 if is_test_run else len(df)
-        
+
         # Track progress for logging and UI updates
         total_operations = len(column_configs) * min(row_limit, len(df))
         operations_completed = 0
         error_count = 0
-        
+
         # Update progress tracking
         with progress_lock:
             analysis_progress["total"] = total_operations
             analysis_progress["completed"] = 0
-        
+
         # Validate columns before processing
         for config in column_configs:
             column = config.get('column')
             columns = config.get('columns', [column])
-            
+
             for col in columns:
                 if col not in df.columns:
                     return jsonify({"error": f"Column '{col}' not found in the file."}), 400
@@ -343,45 +349,45 @@ def analyze():
             column = config.get('column')
             prompt = config.get('prompt')
             config_id = config.get('id', str(i))  # Get unique ID for each config or use index
-            
+
             # Update current column in progress tracking
             with progress_lock:
                 analysis_progress["current_column"] = column
-            
+
             full_prompt = f"{general_instructions}\n\nColumn-specific instructions: {prompt}"
 
             # Catch NaN and other potential data issues
             try:
                 # Create a unique analysis column name using the config_id
                 analysis_column_name = f'{column}_analysis_{config_id}'
-                
+
                 # Check for multiple column analysis
                 columns = config.get('columns', [column])
                 multiple_columns = len(columns) > 1
-                
+
                 # Function to process a single row with multiple columns
                 def process_row(row_idx):
                     nonlocal operations_completed, error_count
-                    
+
                     try:
                         # Handle multiple columns if present
                         if multiple_columns:
                             # Combine the values from multiple columns
                             combined_values = []
                             column_headers = []
-                            
+
                             for col in columns:
                                 if col in df.columns and pd.notna(df.at[row_idx, col]):
                                     combined_values.append(str(df.at[row_idx, col]))
                                     column_headers.append(col)
-                            
+
                             if not combined_values:
                                 operations_completed += 1
                                 # Update progress tracking
                                 with progress_lock:
                                     analysis_progress["completed"] = operations_completed
                                 return "No valid data in selected columns"
-                            
+
                             # Create a formatted input with column headers
                             formatted_input = "\n".join([f"{col}: {val}" for col, val in zip(column_headers, combined_values)])
                             result = analyze_text(client, formatted_input, full_prompt)
@@ -414,25 +420,25 @@ def analyze():
                             analysis_progress["completed"] = operations_completed
                         app.logger.error(f"Error processing row {row_idx} for column '{column}': {str(e)}")
                         return f"Error: {str(e)[:50]}..."
-                
+
                 # Ensure the analysis column exists
                 if analysis_column_name not in df.columns:
                     df[analysis_column_name] = pd.NA
-                
+
                 # Process rows based on test mode
                 for idx in range(min(row_limit, len(df))):
                     # Log progress for every 10% completion
                     progress_percentage = int((operations_completed / total_operations) * 100) if total_operations > 0 else 0
                     if progress_percentage % 10 == 0 and operations_completed > 0:
                         app.logger.info(f"Analysis progress: {progress_percentage}%, errors: {error_count}")
-                    
+
                     try:
                         df.at[idx, analysis_column_name] = process_row(idx)
                     except Exception as row_error:
                         app.logger.error(f"Error processing row {idx}: {str(row_error)}")
                         df.at[idx, analysis_column_name] = f"Error: {str(row_error)[:50]}..."
                         error_count += 1
-                    
+
             except Exception as e:
                 app.logger.error(f"Error analyzing column '{column}': {str(e)}")
                 return jsonify({"error": f"Error analyzing column '{column}': {str(e)}"}), 500
@@ -441,7 +447,7 @@ def analyze():
         output_filename = f"analyzed_{filename}"
         output_filepath = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
         try:
-            if filename.endswith(('xlsx', 'xls')):
+            if filename.endswith(('.xlsx', '.xls')):
                 with pd.ExcelWriter(output_filepath, engine='openpyxl') as writer:
                     df.to_excel(writer, sheet_name=sheet_name, index=False)
             else:
@@ -451,12 +457,12 @@ def analyze():
             return jsonify({"error": f"Error saving the analyzed file: {str(e)}"}), 500
 
         app.logger.info(f"Analysis complete. Processed {operations_completed} cells with {error_count} errors.")
-        
+
         # Reset progress tracking
         with progress_lock:
             analysis_in_progress = False
             analysis_progress["completed"] = analysis_progress["total"]  # Ensure 100%
-            
+
         return jsonify({
             "message": "Analysis complete!" + (" (Test run on 5 rows)" if is_test_run else ""),
             "filename": output_filename,
@@ -479,22 +485,22 @@ def analyze_text(client, text, prompt):
         # Ensure client is an instance of OpenAI
         if not isinstance(client, OpenAI):
             client = OpenAI(api_key=client)  # Assuming client might be the API key string
-            
+
         # Truncate text if it's too long (to avoid token limits)
         MAX_TEXT_LENGTH = 8000  # Conservative limit for gpt-4o-mini
         if len(text) > MAX_TEXT_LENGTH:
             text = text[:MAX_TEXT_LENGTH] + "... [text truncated due to length]"
-            
+
         # Define a system message that sets expectations for the response
-        system_message = """You are an expert data analyst helping to analyze text data. 
+        system_message = """You are an expert data analyst helping to analyze text data.
         Provide concise, insightful analysis based on the user's instructions.
-        Keep your response focused and under 100 words. 
+        Keep your response focused and under 100 words.
         If the text is unclear or lacks sufficient information, say so briefly."""
-        
+
         # Add retry logic for rate limits
         max_retries = 3
         retry_delay = 2  # seconds
-        
+
         for attempt in range(max_retries):
             try:
                 # Use the client to create a chat completion
@@ -507,11 +513,11 @@ def analyze_text(client, text, prompt):
                     max_tokens=150,  # Increased slightly to allow more detailed analysis
                     temperature=0.3   # Lower temperature for more consistent, focused responses
                 )
-                
+
                 # Access the content
                 message_content = response.choices[0].message.content.strip()
                 return message_content
-                
+
             except APIConnectionError as e:
                 if "rate limit" in str(e).lower() and attempt < max_retries - 1:
                     # Exponential backoff
@@ -521,7 +527,7 @@ def analyze_text(client, text, prompt):
                     continue
                 else:
                     raise
-    
+
     except AuthenticationError as e:
         app.logger.error(f"Authentication error: {e}")
         raise ValueError("Invalid API key provided. Please check your API key and try again.")
