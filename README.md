@@ -1,12 +1,12 @@
 
-# Excel AI Insight
+# Aidstack Insights
 <p align="center">
-  <img src="https://github.com/jmesplana/excel_ai_insight/blob/main/excel_ai_insight_logo.webp" alt="Excel AI Insight Logo" width=25%/>
+  <img src="https://github.com/jmesplana/excel_ai_insight/blob/main/excel_ai_insight_logo.webp" alt="Aidstack Insights Logo" width=25%/>
 </p>
 
-**Stop spending hours on manual data analysis.** Excel AI Insight transforms your spreadsheets with AI-powered insights, sentiment analysis, translations, and pattern detection—all in minutes, not hours.
+**Turn spreadsheets into insights in minutes.** Aidstack Insights transforms your Excel data with AI-powered analysis, sentiment detection, translations, and pattern recognition—automatically.
 
-Perfect for e-commerce managers analyzing customer reviews, HR professionals categorizing survey responses, market researchers translating feedback, and anyone drowning in Excel data.
+Perfect for anyone drowning in Excel data: e-commerce managers analyzing customer reviews, HR professionals categorizing survey responses, market researchers translating feedback, and data analysts extracting insights.
 
 ## 🚀 Key Features
 
@@ -36,8 +36,8 @@ Perfect for e-commerce managers analyzing customer reviews, HR professionals cat
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/jmesplana/excel-ai-insight.git
-   cd excel-ai-insight
+   git clone https://github.com/jmesplana/excel_ai_insight.git
+   cd excel_ai_insight
    ```
 
 2. **Create a virtual environment:**
@@ -122,8 +122,8 @@ Analyze relationships across columns:
 
 ```bash
 # Clone repository
-git clone https://github.com/jmesplana/excel-ai-insight.git
-cd excel-ai-insight
+git clone https://github.com/jmesplana/excel_ai_insight.git
+cd excel_ai_insight
 
 # Create virtual environment
 python3 -m venv venv
@@ -270,6 +270,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Built with [Flask](https://flask.palletsprojects.com/)
 - Powered by [OpenAI GPT-4o-mini](https://openai.com/)
 - UI components from [Bootstrap 5](https://getbootstrap.com/)
+- Design system follows [Aidstack Brand Guidelines](aidstack-brand-guide.md)
 
 ## 📧 Support
 
@@ -278,4 +279,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Made with ❤️ for data professionals who deserve their time back**
+**Part of the Aidstack.ai ecosystem** | Visit [aidstack.ai](https://aidstack.ai) to explore more tools
