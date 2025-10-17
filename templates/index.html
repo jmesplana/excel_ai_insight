@@ -355,6 +355,20 @@
             margin-right: 8px;
             height: 30px;
         }
+
+        /* Aidstack brand name styling */
+        .navbar-brand {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+        }
+
+        .navbar-brand .brand-name {
+            color: var(--accent-color);  /* Orange */
+        }
+
+        body.dark-mode .navbar-brand .brand-name {
+            color: var(--accent-color);  /* Orange in dark mode too */
+        }
         
         /* Theme toggle */
         .theme-toggle {
@@ -542,7 +556,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container">
             <a class="navbar-brand" href="#">
-                <img src="{{ url_for('static', filename='excel_ai_insight_logo.webp') }}" alt="Aidstack Logo"> Aidstack Insights
+                <img src="{{ url_for('static', filename='excel_ai_insight_logo.webp') }}" alt="Aidstack Logo"> <span class="brand-name">Aidstack</span> Insights
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -556,7 +570,7 @@
                         <a class="nav-link" href="#" id="about-link">About</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="https://www.github.com/jmesplana" target="_blank">Documentation</a>
+                        <a class="nav-link" href="https://www.github.com/jmesplana/excel_ai_insight" target="_blank">Documentation</a>
                     </li>
                 </ul>
                 <!-- API Settings Button -->
