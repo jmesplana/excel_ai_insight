@@ -2725,27 +2725,28 @@
                 });
             }
             
-            // Navigation handlers
-            document.getElementById('home-link').addEventListener('click', function(e) {
-                e.preventDefault();
-                showHome();
-            });
-            
-            document.getElementById('about-link').addEventListener('click', function(e) {
-                e.preventDefault();
-                showAbout();
-            });
-            
-            document.getElementById('get-started-btn').addEventListener('click', startAnalysis);
-            document.getElementById('start-analyzing-btn').addEventListener('click', startAnalysis);
-            
-            document.getElementById('learn-more-btn').addEventListener('click', function() {
-                // Scroll to "How It Works" section in the landing page
-                const howItWorksHeading = document.querySelector('.row.mt-5:nth-of-type(2)');
-                if (howItWorksHeading) {
-                    howItWorksHeading.scrollIntoView({ behavior: 'smooth' });
-                }
-            });
+            // Button handlers
+            const getStartedBtn = document.getElementById('get-started-btn');
+            const startAnalyzingBtn = document.getElementById('start-analyzing-btn');
+
+            if (getStartedBtn) {
+                getStartedBtn.addEventListener('click', startAnalysis);
+            }
+
+            if (startAnalyzingBtn) {
+                startAnalyzingBtn.addEventListener('click', startAnalysis);
+            }
+
+            const learnMoreBtn = document.getElementById('learn-more-btn');
+            if (learnMoreBtn) {
+                learnMoreBtn.addEventListener('click', function() {
+                    // Scroll to "How It Works" section in the landing page
+                    const howItWorksHeading = document.querySelector('.row.mt-5:nth-of-type(2)');
+                    if (howItWorksHeading) {
+                        howItWorksHeading.scrollIntoView({ behavior: 'smooth' });
+                    }
+                });
+            }
             
             // Load saved API key from localStorage if available
             function loadSavedApiKey() {
