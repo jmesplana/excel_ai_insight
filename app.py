@@ -558,6 +558,164 @@ def analyze_text(client, text, prompt):
         raise
 
 
+@app.route('/get_analyzed_data/<filename>')
+def get_analyzed_data(filename):
+    """Fetch analyzed file data as JSON for display in the results viewer."""
+    try:
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        # Check if the file exists
+        if not os.path.exists(filepath):
+            return jsonify({"error": f"File {filename} not found"}), 404
+
+        # Read the file based on its extension
+        try:
+            if filename.endswith(('.xlsx', '.xls')):
+                # Read all sheets from Excel file
+                xls = pd.ExcelFile(filepath)
+                sheets_data = {}
+
+                for sheet_name in xls.sheet_names:
+                    df = pd.read_excel(filepath, sheet_name=sheet_name)
+                    # Process the dataframe to handle NaN values
+                    sheets_data.update(process_dataframe(df, sheet_name))
+
+                return jsonify({"sheets": sheets_data})
+            else:
+                # Read CSV file
+                df = pd.read_csv(filepath)
+                sheets_data = process_dataframe(df, "Sheet1")
+                return jsonify({"sheets": sheets_data})
+
+        except Exception as e:
+            app.logger.error(f"Error reading file {filename}: {str(e)}")
+            return jsonify({"error": f"Error reading file: {str(e)}"}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error in get_analyzed_data: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/chat_with_data', methods=['POST'])
+def chat_with_data():
+    """Handle AI-powered questions about the analyzed data."""
+    try:
+        data = request.json
+        app.logger.info(f"Chat request received: {data}")
+
+        # Extract request parameters
+        filename = data.get('filename')
+        question = data.get('question')
+        api_key = data.get('apiKey')
+
+        # Validate required fields
+        if not filename:
+            return jsonify({"error": "Missing 'filename' in the request data."}), 400
+        if not question:
+            return jsonify({"error": "Missing 'question' in the request data."}), 400
+        if not api_key:
+            return jsonify({"error": "Missing 'apiKey' in the request data."}), 400
+
+        # Validate API key
+        try:
+            client = OpenAI(api_key=api_key)
+        except Exception as e:
+            return jsonify({"error": f"Invalid API key: {str(e)}"}), 401
+
+        # Load the analyzed file
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if not os.path.exists(filepath):
+            return jsonify({"error": f"File {filename} not found"}), 404
+
+        try:
+            # Read the file and prepare data context
+            if filename.endswith(('.xlsx', '.xls')):
+                xls = pd.ExcelFile(filepath)
+                # For simplicity, we'll focus on the first sheet for chat
+                # Future enhancement: allow users to specify which sheet
+                first_sheet = xls.sheet_names[0]
+                df = pd.read_excel(filepath, sheet_name=first_sheet)
+            else:
+                df = pd.read_csv(filepath)
+
+            # Create a data summary for the AI
+            # Include: column names, data types, sample rows, and basic stats
+            data_summary = f"""
+Dataset Information:
+- Total rows: {len(df)}
+- Total columns: {len(df.columns)}
+- Columns: {', '.join(df.columns.tolist())}
+
+Column Details:
+"""
+            for col in df.columns:
+                dtype = df[col].dtype
+                non_null = df[col].notna().sum()
+                data_summary += f"  - {col} ({dtype}): {non_null} non-null values\n"
+
+                # Add some sample values for context
+                sample_values = df[col].dropna().head(3).tolist()
+                if sample_values:
+                    data_summary += f"    Sample values: {sample_values}\n"
+
+            # Add basic statistics for numeric columns
+            numeric_cols = df.select_dtypes(include=['number']).columns
+            if len(numeric_cols) > 0:
+                data_summary += "\nNumeric Column Statistics:\n"
+                stats = df[numeric_cols].describe().to_string()
+                data_summary += stats
+
+            # Limit data summary size to avoid token limits
+            MAX_SUMMARY_LENGTH = 4000
+            if len(data_summary) > MAX_SUMMARY_LENGTH:
+                data_summary = data_summary[:MAX_SUMMARY_LENGTH] + "\n... [truncated for length]"
+
+            # Create the AI prompt
+            system_message = """You are an expert data analyst helping users understand their analyzed data.
+You have access to a dataset summary with column information, sample values, and statistics.
+Answer questions about the data clearly and concisely. If you need to reference specific data points,
+use the information provided. If the question cannot be answered with the available information,
+say so and suggest what additional information might help."""
+
+            user_message = f"""Here is a summary of the dataset:
+
+{data_summary}
+
+User's question: {question}
+
+Please provide a clear, insightful answer based on the data summary above."""
+
+            # Call OpenAI API
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": user_message}
+                    ],
+                    max_tokens=500,
+                    temperature=0.7
+                )
+
+                answer = response.choices[0].message.content.strip()
+
+                return jsonify({
+                    "answer": answer,
+                    "question": question
+                })
+
+            except Exception as api_error:
+                app.logger.error(f"OpenAI API error in chat: {str(api_error)}")
+                return jsonify({"error": f"Error communicating with AI: {str(api_error)}"}), 500
+
+        except Exception as file_error:
+            app.logger.error(f"Error reading file for chat: {str(file_error)}")
+            return jsonify({"error": f"Error reading file: {str(file_error)}"}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error in chat_with_data: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/download/<filename>')
 def download_file(filename):
     return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename), as_attachment=True)
