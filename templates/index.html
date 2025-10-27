@@ -593,6 +593,47 @@
         .markdown-content em {
             font-style: italic;
         }
+
+        /* Floating Chat Button */
+        .floating-chat-button {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            animation: pulse 2s infinite;
+        }
+
+        .floating-chat-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            }
+            50% {
+                box-shadow: 0 4px 20px rgba(var(--accent-orange-rgb), 0.6);
+            }
+        }
+
+        /* Quick Question Buttons */
+        .quick-question-btn {
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -3515,9 +3556,241 @@
 
             // Initialize preview chat when file is uploaded
             setupPreviewChat();
+
+            // =========================================================================
+            // FLOATING CHAT MODAL FUNCTIONALITY
+            // =========================================================================
+
+            const floatingChatBtn = document.getElementById('floating-chat-btn');
+            const chatModal = new bootstrap.Modal(document.getElementById('chat-modal'));
+            const modalChatInput = document.getElementById('modal-chat-input');
+            const modalChatSendBtn = document.getElementById('modal-chat-send-btn');
+            const modalChatMessages = document.getElementById('modal-chat-messages');
+            const quickQuestionsContainer = document.getElementById('quick-questions');
+
+            // Track current file for chat
+            let currentChatFilename = null;
+            let isAnalyzedData = false;
+
+            // Show floating button when file is uploaded
+            function showFloatingChatButton(filename, analyzed = false) {
+                currentChatFilename = filename;
+                isAnalyzedData = analyzed;
+                floatingChatBtn.classList.remove('hidden');
+
+                // Update quick questions based on context
+                updateQuickQuestions(analyzed);
+            }
+
+            // Quick questions based on context
+            function updateQuickQuestions(analyzed) {
+                const questions = analyzed ? [
+                    "What are the main trends in the analyzed data?",
+                    "Summarize the key findings",
+                    "What insights can you provide?",
+                    "How many rows were analyzed?",
+                    "What columns contain analysis results?"
+                ] : [
+                    "What columns are in this dataset?",
+                    "How many rows and columns are there?",
+                    "Show me a summary of the data",
+                    "What data types are present?",
+                    "Are there any null values?"
+                ];
+
+                quickQuestionsContainer.innerHTML = questions.map(q =>
+                    `<button class="btn btn-sm btn-outline-primary quick-question-btn" data-question="${q}">${q}</button>`
+                ).join('');
+
+                // Add click handlers to quick question buttons
+                document.querySelectorAll('.quick-question-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        modalChatInput.value = this.dataset.question;
+                        sendModalChatMessage();
+                    });
+                });
+            }
+
+            // Open chat modal
+            floatingChatBtn.addEventListener('click', function() {
+                chatModal.show();
+            });
+
+            // Handle modal chat send
+            modalChatSendBtn.addEventListener('click', sendModalChatMessage);
+            modalChatInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendModalChatMessage();
+                }
+            });
+
+            // Send message in modal
+            async function sendModalChatMessage() {
+                const question = modalChatInput.value.trim();
+
+                if (!question) {
+                    return;
+                }
+
+                if (!currentChatFilename) {
+                    alert('No file loaded. Please upload a file first.');
+                    return;
+                }
+
+                // Add user message
+                const userMessageDiv = document.createElement('div');
+                userMessageDiv.className = 'mb-3 text-end';
+                userMessageDiv.innerHTML = `
+                    <div class="d-inline-block bg-primary text-white rounded p-2" style="max-width: 70%;">
+                        <strong>You:</strong> ${question}
+                    </div>
+                `;
+                modalChatMessages.appendChild(userMessageDiv);
+
+                // Clear input
+                modalChatInput.value = '';
+
+                // Scroll to bottom
+                const container = document.getElementById('modal-chat-container');
+                container.scrollTop = container.scrollHeight;
+
+                // Show loading
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'mb-3';
+                loadingDiv.id = 'modal-chat-loading';
+                loadingDiv.innerHTML = `
+                    <div class="d-inline-block bg-light rounded p-2">
+                        <span class="spinner-border spinner-border-sm"></span> AI is thinking...
+                    </div>
+                `;
+                modalChatMessages.appendChild(loadingDiv);
+                container.scrollTop = container.scrollHeight;
+
+                try {
+                    // Get API key
+                    const apiKey = document.getElementById('modal-api-key')?.value || localStorage.getItem(API_KEY_STORAGE_KEY);
+                    if (!apiKey) {
+                        throw new Error('Please configure your API key in Settings first');
+                    }
+
+                    // Send request
+                    const response = await fetch('/chat_with_data', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            filename: currentChatFilename,
+                            question: question,
+                            apiKey: apiKey
+                        })
+                    });
+
+                    // Remove loading
+                    document.getElementById('modal-chat-loading')?.remove();
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to get response');
+                    }
+
+                    const result = await response.json();
+
+                    // Add AI response with markdown rendering
+                    const aiMessageDiv = document.createElement('div');
+                    aiMessageDiv.className = 'mb-3';
+                    aiMessageDiv.innerHTML = `
+                        <div class="d-inline-block bg-light rounded p-3" style="max-width: 80%;">
+                            <strong>AI:</strong>
+                            <div class="markdown-content mt-2">${marked.parse(result.answer)}</div>
+                        </div>
+                    `;
+                    modalChatMessages.appendChild(aiMessageDiv);
+
+                } catch (error) {
+                    // Remove loading
+                    document.getElementById('modal-chat-loading')?.remove();
+
+                    // Show error
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'mb-3';
+                    errorDiv.innerHTML = `
+                        <div class="d-inline-block bg-danger text-white rounded p-2" style="max-width: 70%;">
+                            <strong>Error:</strong> ${error.message}
+                        </div>
+                    `;
+                    modalChatMessages.appendChild(errorDiv);
+                }
+
+                // Scroll to bottom
+                container.scrollTop = container.scrollHeight;
+            }
+
+            // Update showFloatingChatButton calls in existing code
+            // Show button after file upload (Step 3)
+            const originalGoToStep = goToStep;
+            goToStep = function(step) {
+                originalGoToStep(step);
+                if (step === 3 && fileData && fileData.filename) {
+                    showFloatingChatButton(fileData.filename, false);
+                }
+                if (step === 5 && currentAnalyzedFilename) {
+                    showFloatingChatButton(currentAnalyzedFilename, true);
+                }
+            };
         });
     </script>
-    
+
+    <!-- Floating Chat Button -->
+    <div id="floating-chat-btn" class="floating-chat-button hidden" title="Chat with your data">
+        <i class="bi bi-chat-dots"></i>
+    </div>
+
+    <!-- Chat Modal -->
+    <div class="modal fade" id="chat-modal" tabindex="-1" aria-labelledby="chat-modal-label" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content" style="height: 80vh;">
+                <div class="modal-header bg-primary bg-opacity-10">
+                    <h5 class="modal-title" id="chat-modal-label">
+                        <i class="bi bi-robot text-primary"></i> AI Data Assistant
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body d-flex flex-column p-0">
+                    <!-- Quick Questions -->
+                    <div class="p-3 border-bottom bg-light">
+                        <small class="text-muted d-block mb-2"><i class="bi bi-lightbulb"></i> <strong>Quick Questions:</strong></small>
+                        <div class="d-flex flex-wrap gap-2" id="quick-questions">
+                            <!-- Quick question buttons will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Chat Messages -->
+                    <div class="flex-grow-1 p-3" style="overflow-y: auto; min-height: 400px;" id="modal-chat-container">
+                        <div id="modal-chat-messages">
+                            <div class="mb-3">
+                                <div class="d-inline-block bg-light rounded p-3" style="max-width: 85%;">
+                                    <strong>AI Assistant:</strong> Hello! I'm here to help you understand your data.
+                                    You can ask me anything about your dataset - columns, values, trends, or insights.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Input -->
+                    <div class="p-3 border-top bg-light">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="modal-chat-input" placeholder="Ask a question about your data..." />
+                            <button class="btn btn-primary" id="modal-chat-send-btn" type="button">
+                                <i class="bi bi-send"></i> Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- API Settings Modal -->
     <div class="modal fade" id="api-settings-modal" tabindex="-1" aria-labelledby="api-settings-modal-label" aria-hidden="true">
         <div class="modal-dialog">
