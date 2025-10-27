@@ -955,7 +955,7 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center">
-                                <span>File Preview</span>
+                                <span>File Preview & Exploration</span>
                                 <i class="bi bi-table"></i>
                             </div>
                             <div class="card-body">
@@ -963,9 +963,59 @@
                                     <label for="sheet-select" class="form-label">Select Sheet</label>
                                     <select class="form-select" id="sheet-select"></select>
                                 </div>
-                                <div id="preview-table" class="table-container table-responsive">
-                                    <!-- Table content will be inserted here -->
+
+                                <!-- Preview navigation tabs -->
+                                <ul class="nav nav-tabs" id="previewTabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active" id="preview-data-tab" data-bs-toggle="tab" data-bs-target="#preview-data-content" type="button" role="tab">
+                                            <i class="bi bi-table"></i> Data Preview
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="preview-chat-tab" data-bs-toggle="tab" data-bs-target="#preview-chat-content" type="button" role="tab">
+                                            <i class="bi bi-chat-dots"></i> Chat with Data
+                                        </button>
+                                    </li>
+                                </ul>
+
+                                <div class="tab-content mt-3" id="previewTabContent">
+                                    <!-- Data Preview Tab -->
+                                    <div class="tab-pane fade show active" id="preview-data-content" role="tabpanel">
+                                        <div id="preview-table" class="table-container table-responsive">
+                                            <!-- Table content will be inserted here -->
+                                        </div>
+                                    </div>
+
+                                    <!-- Chat Tab -->
+                                    <div class="tab-pane fade" id="preview-chat-content" role="tabpanel">
+                                        <div class="alert alert-info">
+                                            <i class="bi bi-info-circle"></i> Explore your raw data before analysis. Ask questions to understand your dataset better.
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-12">
+                                                <div class="chat-container" style="height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 15px; background-color: #f8f9fa;">
+                                                    <div id="preview-chat-messages">
+                                                        <div class="alert alert-info">
+                                                            <i class="bi bi-info-circle"></i> Ask me anything about your uploaded data! I can help you understand what's in your dataset, column types, sample values, and more.
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="mt-3">
+                                                    <div class="input-group">
+                                                        <input type="text" class="form-control" id="preview-chat-input" placeholder="Ask about your data..." />
+                                                        <button class="btn btn-primary" id="preview-chat-send-btn" type="button">
+                                                            <i class="bi bi-send"></i> Send
+                                                        </button>
+                                                    </div>
+                                                    <div class="mt-2">
+                                                        <small class="text-muted">Example: "What columns are in this dataset?" or "Show me sample values from the first few rows"</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
+
                                 <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-3">
                                     <button type="button" class="btn btn-outline-secondary" id="preview-back-btn"><i class="bi bi-arrow-left"></i> Back</button>
                                     <button type="button" class="btn btn-primary" id="preview-next-btn">Next <i class="bi bi-arrow-right"></i></button>
@@ -3288,6 +3338,142 @@
 
             // Make loadAnalyzedDataFromBackend available globally
             window.loadAnalyzedDataFromBackend = loadAnalyzedDataFromBackend;
+
+            // =========================================================================
+            // PRE-ANALYSIS CHAT FUNCTIONALITY (Step 3)
+            // =========================================================================
+
+            // Setup preview chat when user uploads a file
+            function setupPreviewChat() {
+                const previewChatInput = document.getElementById('preview-chat-input');
+                const previewChatSendBtn = document.getElementById('preview-chat-send-btn');
+
+                if (previewChatSendBtn) {
+                    previewChatSendBtn.onclick = async function() {
+                        await sendPreviewChatMessage();
+                    };
+                }
+
+                if (previewChatInput) {
+                    previewChatInput.addEventListener('keypress', async function(e) {
+                        if (e.key === 'Enter') {
+                            await sendPreviewChatMessage();
+                        }
+                    });
+                }
+            }
+
+            // Send chat message about uploaded (un-analyzed) data
+            async function sendPreviewChatMessage() {
+                const chatInput = document.getElementById('preview-chat-input');
+                const chatMessages = document.getElementById('preview-chat-messages');
+                const question = chatInput.value.trim();
+
+                if (!question) {
+                    return;
+                }
+
+                // Check if we have uploaded file data
+                if (!fileData || !fileData.filename) {
+                    const errorHTML = `
+                        <div class="mb-3">
+                            <div class="d-inline-block bg-danger text-white rounded p-2">
+                                <strong>Error:</strong> No file uploaded. Please upload a file first.
+                            </div>
+                        </div>
+                    `;
+                    chatMessages.innerHTML += errorHTML;
+                    return;
+                }
+
+                // Add user message to chat
+                const userMessageHTML = `
+                    <div class="mb-3 text-end">
+                        <div class="d-inline-block bg-primary text-white rounded p-2" style="max-width: 70%;">
+                            <strong>You:</strong> ${question}
+                        </div>
+                    </div>
+                `;
+                chatMessages.innerHTML += userMessageHTML;
+
+                // Clear input
+                chatInput.value = '';
+
+                // Scroll to bottom
+                chatMessages.parentElement.scrollTop = chatMessages.parentElement.scrollHeight;
+
+                // Show loading indicator
+                const loadingHTML = `
+                    <div class="mb-3" id="preview-chat-loading">
+                        <div class="d-inline-block bg-light rounded p-2">
+                            <span class="spinner-border spinner-border-sm"></span> AI is thinking...
+                        </div>
+                    </div>
+                `;
+                chatMessages.innerHTML += loadingHTML;
+                chatMessages.parentElement.scrollTop = chatMessages.parentElement.scrollHeight;
+
+                try {
+                    // Get API key
+                    const apiKey = document.getElementById('modal-api-key')?.value || localStorage.getItem(API_KEY_STORAGE_KEY);
+                    if (!apiKey) {
+                        throw new Error('Please configure your API key in Settings first');
+                    }
+
+                    // Send request to backend using the original uploaded filename
+                    const response = await fetch('/chat_with_data', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            filename: fileData.filename,
+                            question: question,
+                            apiKey: apiKey
+                        })
+                    });
+
+                    // Remove loading indicator
+                    document.getElementById('preview-chat-loading')?.remove();
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to get response');
+                    }
+
+                    const result = await response.json();
+
+                    // Add AI response to chat
+                    const aiMessageHTML = `
+                        <div class="mb-3">
+                            <div class="d-inline-block bg-light rounded p-2" style="max-width: 70%;">
+                                <strong>AI:</strong> ${result.answer}
+                            </div>
+                        </div>
+                    `;
+                    chatMessages.innerHTML += aiMessageHTML;
+
+                } catch (error) {
+                    // Remove loading indicator
+                    document.getElementById('preview-chat-loading')?.remove();
+
+                    // Show error message
+                    const errorHTML = `
+                        <div class="mb-3">
+                            <div class="d-inline-block bg-danger text-white rounded p-2" style="max-width: 70%;">
+                                <strong>Error:</strong> ${error.message}
+                            </div>
+                        </div>
+                    `;
+                    chatMessages.innerHTML += errorHTML;
+                }
+
+                // Scroll to bottom
+                chatMessages.parentElement.scrollTop = chatMessages.parentElement.scrollHeight;
+            }
+
+            // Initialize preview chat when file is uploaded
+            setupPreviewChat();
         });
     </script>
     
