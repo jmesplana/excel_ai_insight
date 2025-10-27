@@ -1836,12 +1836,20 @@
                     </div>
                 </div>
                 <div class="mb-3">
+                    <label class="form-label">Result Column Name
+                        <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
+                           title="Name for the new column that will contain analysis results. E.g., 'Sentiment Score', 'Category', 'Translation'"></i>
+                    </label>
+                    <input type="text" class="form-control" name="output-column-name"
+                           placeholder="E.g., Sentiment Score, Category, Translation...">
+                </div>
+                <div class="mb-3">
                     <label class="form-label">Analysis Instructions
-                        <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip" 
+                        <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
                            title="Specific instructions for analyzing this column. Be clear about what insights you want."></i>
                     </label>
                     <div class="input-group">
-                        <input type="text" class="form-control" name="prompt" 
+                        <input type="text" class="form-control" name="prompt"
                                placeholder="Enter specific instructions for analyzing this column...">
                         <button class="btn btn-outline-secondary instruction-template-btn" type="button">
                             <i class="bi bi-lightning"></i>
@@ -2114,19 +2122,23 @@
             const columnConfigs = Array.from(document.querySelectorAll('.column-selection-container')).map(config => {
                 // Get the main column
                 const mainColumn = config.querySelector('select[name="column"]').value;
-                
+
                 // Get any additional columns
                 const additionalColumns = Array.from(config.querySelectorAll('.additional-column select'))
                     .map(select => select.value)
                     .filter(col => col !== "");
-                
+
                 // Combine main column with additional columns
                 const columns = [mainColumn, ...additionalColumns].filter(col => col !== "");
-                
+
+                // Get the output column name (custom name user specified)
+                const outputColumnName = config.querySelector('input[name="output-column-name"]').value.trim();
+
                 return {
                     column: mainColumn,
                     columns: columns,
                     prompt: config.querySelector('input[name="prompt"]').value,
+                    outputColumnName: outputColumnName || null, // Use null if not provided
                     id: config.dataset.id || Date.now().toString()
                 };
             }).filter(config => config.column && config.prompt);

@@ -353,6 +353,7 @@ def analyze():
             column = config.get('column')
             prompt = config.get('prompt')
             config_id = config.get('id', str(i))  # Get unique ID for each config or use index
+            output_column_name = config.get('outputColumnName')  # Get user-specified column name
 
             # Update current column in progress tracking
             with progress_lock:
@@ -362,8 +363,17 @@ def analyze():
 
             # Catch NaN and other potential data issues
             try:
-                # Create a unique analysis column name using the config_id
-                analysis_column_name = f'{column}_analysis_{config_id}'
+                # Use custom name if provided, otherwise use auto-generated name
+                if output_column_name:
+                    analysis_column_name = output_column_name
+                    # Check if column name already exists and make it unique if needed
+                    counter = 1
+                    original_name = analysis_column_name
+                    while analysis_column_name in df.columns:
+                        analysis_column_name = f"{original_name}_{counter}"
+                        counter += 1
+                else:
+                    analysis_column_name = f'{column}_analysis_{config_id}'
 
                 # Check for multiple column analysis
                 columns = config.get('columns', [column])
