@@ -17,6 +17,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
     <!-- Chart.js for visualizations -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         :root {
             /* Aidstack Brand Colors */
@@ -549,6 +551,48 @@
                 padding-right: 10px;
             }
         }
+
+        /* Markdown Content Styling */
+        .markdown-content {
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .markdown-content p {
+            margin-bottom: 0.5rem;
+        }
+
+        .markdown-content ul, .markdown-content ol {
+            margin-left: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .markdown-content code {
+            background-color: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+
+        .markdown-content pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+
+        .markdown-content pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+
+        .markdown-content strong {
+            font-weight: 600;
+        }
+
+        .markdown-content em {
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -952,75 +996,67 @@
             <!-- Step 3: File Preview -->
             <div class="step-content fade-in hidden" id="step-3">
                 <div class="row">
-                    <div class="col-12">
-                        <div class="card">
+                    <!-- Left: Data Preview -->
+                    <div class="col-lg-7">
+                        <div class="card h-100">
                             <div class="card-header d-flex justify-content-between align-items-center">
-                                <span>File Preview & Exploration</span>
-                                <i class="bi bi-table"></i>
+                                <span><i class="bi bi-table"></i> Data Preview</span>
+                                <div>
+                                    <label for="sheet-select" class="form-label me-2 mb-0">Sheet:</label>
+                                    <select class="form-select form-select-sm d-inline-block" style="width: auto;" id="sheet-select"></select>
+                                </div>
                             </div>
                             <div class="card-body">
-                                <div class="mb-3">
-                                    <label for="sheet-select" class="form-label">Select Sheet</label>
-                                    <select class="form-select" id="sheet-select"></select>
+                                <div id="preview-table" class="table-container table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                    <!-- Table content will be inserted here -->
                                 </div>
+                            </div>
+                        </div>
+                    </div>
 
-                                <!-- Preview navigation tabs -->
-                                <ul class="nav nav-tabs" id="previewTabs" role="tablist">
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link active" id="preview-data-tab" data-bs-toggle="tab" data-bs-target="#preview-data-content" type="button" role="tab">
-                                            <i class="bi bi-table"></i> Data Preview
-                                        </button>
-                                    </li>
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link" id="preview-chat-tab" data-bs-toggle="tab" data-bs-target="#preview-chat-content" type="button" role="tab">
-                                            <i class="bi bi-chat-dots"></i> Chat with Data
-                                        </button>
-                                    </li>
-                                </ul>
-
-                                <div class="tab-content mt-3" id="previewTabContent">
-                                    <!-- Data Preview Tab -->
-                                    <div class="tab-pane fade show active" id="preview-data-content" role="tabpanel">
-                                        <div id="preview-table" class="table-container table-responsive">
-                                            <!-- Table content will be inserted here -->
-                                        </div>
-                                    </div>
-
-                                    <!-- Chat Tab -->
-                                    <div class="tab-pane fade" id="preview-chat-content" role="tabpanel">
-                                        <div class="alert alert-info">
-                                            <i class="bi bi-info-circle"></i> Explore your raw data before analysis. Ask questions to understand your dataset better.
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-12">
-                                                <div class="chat-container" style="height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 15px; background-color: #f8f9fa;">
-                                                    <div id="preview-chat-messages">
-                                                        <div class="alert alert-info">
-                                                            <i class="bi bi-info-circle"></i> Ask me anything about your uploaded data! I can help you understand what's in your dataset, column types, sample values, and more.
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div class="mt-3">
-                                                    <div class="input-group">
-                                                        <input type="text" class="form-control" id="preview-chat-input" placeholder="Ask about your data..." />
-                                                        <button class="btn btn-primary" id="preview-chat-send-btn" type="button">
-                                                            <i class="bi bi-send"></i> Send
-                                                        </button>
-                                                    </div>
-                                                    <div class="mt-2">
-                                                        <small class="text-muted">Example: "What columns are in this dataset?" or "Show me sample values from the first few rows"</small>
-                                                    </div>
-                                                </div>
+                    <!-- Right: Chat Interface -->
+                    <div class="col-lg-5">
+                        <div class="card h-100">
+                            <div class="card-header d-flex justify-content-between align-items-center bg-primary bg-opacity-10">
+                                <span><i class="bi bi-chat-dots text-primary"></i> Chat with Your Data</span>
+                                <i class="bi bi-robot text-primary"></i>
+                            </div>
+                            <div class="card-body d-flex flex-column">
+                                <div class="alert alert-info flex-shrink-0">
+                                    <i class="bi bi-lightbulb"></i> Ask questions about your data before running analysis!
+                                </div>
+                                <div class="chat-container flex-grow-1" style="height: 350px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 15px; background-color: #f8f9fa; margin-bottom: 15px;">
+                                    <div id="preview-chat-messages">
+                                        <div class="mb-3">
+                                            <div class="d-inline-block bg-light rounded p-2" style="max-width: 85%;">
+                                                <strong>AI Assistant:</strong> Hello! I can help you explore your data. Try asking:
+                                                <ul class="mb-0 mt-2">
+                                                    <li>"What columns are in this dataset?"</li>
+                                                    <li>"How many rows are there?"</li>
+                                                    <li>"Show me a summary of the data"</li>
+                                                </ul>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-
-                                <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-3">
-                                    <button type="button" class="btn btn-outline-secondary" id="preview-back-btn"><i class="bi bi-arrow-left"></i> Back</button>
-                                    <button type="button" class="btn btn-primary" id="preview-next-btn">Next <i class="bi bi-arrow-right"></i></button>
+                                <div class="mt-auto">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="preview-chat-input" placeholder="Ask about your data..." />
+                                        <button class="btn btn-primary" id="preview-chat-send-btn" type="button">
+                                            <i class="bi bi-send"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+                            <button type="button" class="btn btn-outline-secondary" id="preview-back-btn"><i class="bi bi-arrow-left"></i> Back</button>
+                            <button type="button" class="btn btn-primary" id="preview-next-btn">Next <i class="bi bi-arrow-right"></i></button>
                         </div>
                     </div>
                 </div>
@@ -1125,20 +1161,16 @@
             
             <!-- Step 5: Results -->
             <div class="step-content fade-in hidden" id="step-5">
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <span>Analysis Results & Insights</span>
-                                <i class="bi bi-graph-up"></i>
-                            </div>
-                            <div class="card-body">
-                                <div class="alert alert-success" id="result-message">
-                                    Analysis complete! Your results are ready.
-                                </div>
+                <div class="alert alert-success" id="result-message">
+                    <i class="bi bi-check-circle"></i> Analysis complete! Your results are ready.
+                </div>
 
-                                <!-- Results navigation tabs -->
-                                <ul class="nav nav-tabs" id="resultTabs" role="tablist">
+                <div class="row">
+                    <!-- Left: Data & Insights -->
+                    <div class="col-lg-7">
+                        <div class="card h-100">
+                            <div class="card-header">
+                                <ul class="nav nav-tabs card-header-tabs" id="resultTabs" role="tablist">
                                     <li class="nav-item" role="presentation">
                                         <button class="nav-link active" id="insights-tab" data-bs-toggle="tab" data-bs-target="#insights-content" type="button" role="tab">
                                             <i class="bi bi-lightbulb"></i> Quick Insights
@@ -1149,23 +1181,19 @@
                                             <i class="bi bi-table"></i> Data Table
                                         </button>
                                     </li>
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link" id="chat-tab" data-bs-toggle="tab" data-bs-target="#chat-content" type="button" role="tab">
-                                            <i class="bi bi-chat-dots"></i> AI Chat
-                                        </button>
-                                    </li>
                                 </ul>
-
-                                <div class="tab-content mt-3" id="resultTabContent">
+                            </div>
+                            <div class="card-body">
+                                <div class="tab-content" id="resultTabContent">
                                     <!-- Quick Insights Tab -->
                                     <div class="tab-pane fade show active" id="insights-content" role="tabpanel">
-                                        <h5 class="mb-3">Dataset Overview</h5>
+                                        <h6 class="mb-3">Dataset Overview</h6>
                                         <div class="row mb-4" id="stats-cards">
                                             <!-- Stats cards will be inserted here dynamically -->
                                         </div>
 
-                                        <h5 class="mb-3">Column Analysis</h5>
-                                        <div id="column-insights">
+                                        <h6 class="mb-3">Column Analysis</h6>
+                                        <div id="column-insights" style="max-height: 400px; overflow-y: auto;">
                                             <!-- Column insights will be inserted here -->
                                         </div>
                                     </div>
@@ -1175,58 +1203,69 @@
                                         <div class="mb-3">
                                             <div class="row">
                                                 <div class="col-md-6">
-                                                    <input type="text" class="form-control" id="table-search" placeholder="Search in table...">
+                                                    <input type="text" class="form-control form-control-sm" id="table-search" placeholder="Search in table...">
                                                 </div>
                                                 <div class="col-md-6 text-end">
-                                                    <span id="table-info" class="text-muted"></span>
+                                                    <span id="table-info" class="text-muted small"></span>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div id="result-preview" class="table-container table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                        <div id="result-preview" class="table-container table-responsive" style="max-height: 450px; overflow-y: auto;">
                                             <!-- Interactive table will be inserted here -->
                                         </div>
-                                        <div class="mt-3 d-flex justify-content-between align-items-center">
-                                            <div id="pagination-info"></div>
-                                            <div id="pagination-controls"></div>
-                                        </div>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-                                    <!-- AI Chat Tab -->
-                                    <div class="tab-pane fade" id="chat-content" role="tabpanel">
-                                        <div class="row">
-                                            <div class="col-12">
-                                                <div class="chat-container" style="height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 15px; background-color: #f8f9fa;">
-                                                    <div id="chat-messages">
-                                                        <div class="alert alert-info">
-                                                            <i class="bi bi-info-circle"></i> Ask me anything about your analyzed data! I can help you understand patterns, trends, and specific details in your dataset.
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div class="mt-3">
-                                                    <div class="input-group">
-                                                        <input type="text" class="form-control" id="chat-input" placeholder="Ask a question about your data..." />
-                                                        <button class="btn btn-primary" id="chat-send-btn" type="button">
-                                                            <i class="bi bi-send"></i> Send
-                                                        </button>
-                                                    </div>
-                                                    <div class="mt-2">
-                                                        <small class="text-muted">Example: "What are the main trends in this data?" or "How many unique values are in column X?"</small>
-                                                    </div>
-                                                </div>
+                    <!-- Right: AI Chat (Always Visible) -->
+                    <div class="col-lg-5">
+                        <div class="card h-100">
+                            <div class="card-header d-flex justify-content-between align-items-center bg-success bg-opacity-10">
+                                <span><i class="bi bi-chat-dots text-success"></i> AI Chat</span>
+                                <i class="bi bi-robot text-success"></i>
+                            </div>
+                            <div class="card-body d-flex flex-column">
+                                <div class="alert alert-success flex-shrink-0 py-2">
+                                    <i class="bi bi-lightbulb"></i> <strong>Ask questions about your analyzed results!</strong>
+                                </div>
+                                <div class="chat-container flex-grow-1" style="height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 15px; background-color: #f8f9fa; margin-bottom: 15px;">
+                                    <div id="chat-messages">
+                                        <div class="mb-3">
+                                            <div class="d-inline-block bg-light rounded p-2" style="max-width: 85%;">
+                                                <strong>AI Assistant:</strong> I can help you understand your analysis results. Try asking:
+                                                <ul class="mb-0 mt-2">
+                                                    <li>"What are the main trends?"</li>
+                                                    <li>"Summarize the key findings"</li>
+                                                    <li>"What insights can you provide?"</li>
+                                                </ul>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-
-                                <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-4">
-                                    <button type="button" class="btn btn-outline-secondary" id="results-back-btn">
-                                        <i class="bi bi-arrow-left"></i> Back to Configure
-                                    </button>
-                                    <a id="download-link" href="#" class="btn btn-success">
-                                        <i class="bi bi-download"></i> Download Results
-                                    </a>
+                                <div class="mt-auto">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="chat-input" placeholder="Ask about your results..." />
+                                        <button class="btn btn-success" id="chat-send-btn" type="button">
+                                            <i class="bi bi-send"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+                            <button type="button" class="btn btn-outline-secondary" id="results-back-btn">
+                                <i class="bi bi-arrow-left"></i> Back to Configure
+                            </button>
+                            <a id="download-link" href="#" class="btn btn-success">
+                                <i class="bi bi-download"></i> Download Results
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -3307,15 +3346,16 @@
 
                     const result = await response.json();
 
-                    // Add AI response to chat
-                    const aiMessageHTML = `
-                        <div class="mb-3">
-                            <div class="d-inline-block bg-light rounded p-2" style="max-width: 70%;">
-                                <strong>AI:</strong> ${result.answer}
-                            </div>
+                    // Add AI response to chat with markdown rendering
+                    const aiMessageDiv = document.createElement('div');
+                    aiMessageDiv.className = 'mb-3';
+                    aiMessageDiv.innerHTML = `
+                        <div class="d-inline-block bg-light rounded p-2" style="max-width: 70%;">
+                            <strong>AI:</strong>
+                            <div class="markdown-content">${marked.parse(result.answer)}</div>
                         </div>
                     `;
-                    chatMessages.innerHTML += aiMessageHTML;
+                    chatMessages.appendChild(aiMessageDiv);
 
                 } catch (error) {
                     // Remove loading indicator
@@ -3443,15 +3483,16 @@
 
                     const result = await response.json();
 
-                    // Add AI response to chat
-                    const aiMessageHTML = `
-                        <div class="mb-3">
-                            <div class="d-inline-block bg-light rounded p-2" style="max-width: 70%;">
-                                <strong>AI:</strong> ${result.answer}
-                            </div>
+                    // Add AI response to chat with markdown rendering
+                    const aiMessageDiv = document.createElement('div');
+                    aiMessageDiv.className = 'mb-3';
+                    aiMessageDiv.innerHTML = `
+                        <div class="d-inline-block bg-light rounded p-2" style="max-width: 70%;">
+                            <strong>AI:</strong>
+                            <div class="markdown-content">${marked.parse(result.answer)}</div>
                         </div>
                     `;
-                    chatMessages.innerHTML += aiMessageHTML;
+                    chatMessages.appendChild(aiMessageDiv);
 
                 } catch (error) {
                     // Remove loading indicator
