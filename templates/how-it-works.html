@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How It Works - Aidstack Insights</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <!-- Google Fonts - Aidstack Brand Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Aidstack Brand Colors */
+            --primary-color: #1A365D;
+            --accent-color: #FF6B35;
+            --secondary-color: #475569;
+            --light-color: #F8FAFC;
+            --bg-light: #F1F5F9;
+            --dark-color: #0F172A;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--light-color);
+            color: var(--dark-color);
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+        }
+
+        .navbar {
+            background-color: var(--primary-color);
+        }
+
+        .navbar-brand {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            color: white !important;
+        }
+
+        .brand-name {
+            color: var(--accent-color);
+        }
+
+        .hero-section {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #2D5F8D 100%);
+            color: white;
+            padding: 80px 0 60px;
+        }
+
+        .btn-primary {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        .btn-primary:hover {
+            background-color: #E05525;
+            border-color: #E05525;
+        }
+
+        .step-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            height: 100%;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .step-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+        }
+
+        .step-number {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--accent-color), #E05525);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 1.5rem;
+        }
+
+        .mockup-container {
+            background: var(--bg-light);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border: 2px solid #E2E8F0;
+        }
+
+        .mockup-window {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .mockup-header {
+            background: #F1F5F9;
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid #E2E8F0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .mockup-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #CBD5E0;
+        }
+
+        .mockup-body {
+            padding: 1.5rem;
+        }
+
+        .upload-area {
+            border: 3px dashed var(--accent-color);
+            border-radius: 8px;
+            padding: 3rem 2rem;
+            text-align: center;
+            background: rgba(255, 107, 53, 0.05);
+        }
+
+        .analysis-type-box {
+            background: var(--bg-light);
+            border: 2px solid var(--primary-color);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+        }
+
+        .chat-bubble {
+            background: var(--bg-light);
+            border-radius: 12px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            max-width: 80%;
+        }
+
+        .chat-bubble.user {
+            background: var(--primary-color);
+            color: white;
+            margin-left: auto;
+        }
+
+        .chat-bubble.ai {
+            background: var(--bg-light);
+            border: 1px solid #E2E8F0;
+        }
+
+        .data-flow-arrow {
+            text-align: center;
+            color: var(--accent-color);
+            font-size: 2rem;
+            margin: 1rem 0;
+        }
+
+        .tech-badge {
+            display: inline-block;
+            background: var(--primary-color);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            margin: 0.25rem;
+        }
+
+        .privacy-callout {
+            background: #FEF3C7;
+            border-left: 4px solid #F59E0B;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            margin: 1.5rem 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <span class="brand-name">Aidstack</span> Insights
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/about">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/how-it-works">How It Works</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="https://www.github.com/jmesplana/excel_ai_insight" target="_blank">Documentation</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="container text-center">
+            <h1 class="display-4 fw-bold mb-3">How It Works</h1>
+            <p class="lead">A step-by-step guide to turning your spreadsheets into insights</p>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <!-- Overview -->
+            <div class="row mb-5">
+                <div class="col-lg-10 mx-auto text-center">
+                    <h2 class="mb-4">From Upload to Insights in 4 Simple Steps</h2>
+                    <p class="lead">Aidstack Insights uses AI to analyze your Excel data locally on your machine, ensuring privacy while delivering powerful insights.</p>
+                </div>
+            </div>
+
+            <!-- Step 1: Upload & Configure -->
+            <div class="row mb-5">
+                <div class="col-lg-10 mx-auto">
+                    <div class="step-card">
+                        <div class="step-number">1</div>
+                        <h3 class="mb-3">Upload Your File & Choose Analysis Type</h3>
+                        <p>Start by uploading your Excel file (.xlsx, .xls) or CSV file. Your file is stored <strong>locally on your machine</strong> - never uploaded to any cloud server.</p>
+
+                        <!-- Mockup: Upload Interface -->
+                        <div class="mockup-container">
+                            <div class="mockup-window">
+                                <div class="mockup-header">
+                                    <div class="mockup-dot"></div>
+                                    <div class="mockup-dot"></div>
+                                    <div class="mockup-dot"></div>
+                                </div>
+                                <div class="mockup-body">
+                                    <div class="upload-area">
+                                        <i class="bi bi-cloud-upload" style="font-size: 3rem; color: var(--accent-color);"></i>
+                                        <h5 class="mt-3">Drag & Drop Your File</h5>
+                                        <p class="text-muted mb-0">or click to browse</p>
+                                    </div>
+                                    <div class="mt-4">
+                                        <h6 class="mb-3">Select Analysis Type:</h6>
+                                        <div class="analysis-type-box">
+                                            <i class="bi bi-graph-up text-primary"></i>
+                                            <strong>Business Analysis</strong> - Sales trends, customer patterns, KPIs
+                                        </div>
+                                        <div class="analysis-type-box">
+                                            <i class="bi bi-emoji-smile text-warning"></i>
+                                            <strong>Sentiment Analysis</strong> - Analyze customer feedback and reviews
+                                        </div>
+                                        <div class="analysis-type-box">
+                                            <i class="bi bi-translate text-info"></i>
+                                            <strong>Translation</strong> - Translate text columns to any language
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h5 class="mt-4 mb-3">What Happens Behind the Scenes:</h5>
+                        <ul>
+                            <li><strong>File Processing:</strong> Your file is read and parsed using Python's Pandas library</li>
+                            <li><strong>Local Storage:</strong> The file is temporarily stored in a local folder on your machine</li>
+                            <li><strong>Data Validation:</strong> Columns are detected and validated for the selected analysis type</li>
+                            <li><strong>Sheet Selection:</strong> If your Excel file has multiple sheets, you choose which one to analyze</li>
+                        </ul>
+
+                        <div class="privacy-callout">
+                            <i class="bi bi-shield-check"></i>
+                            <strong>Privacy Note:</strong> All file processing happens on your local machine. Files are stored temporarily in a local folder and can be deleted after analysis.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: AI Processing -->
+            <div class="row mb-5">
+                <div class="col-lg-10 mx-auto">
+                    <div class="step-card">
+                        <div class="step-number">2</div>
+                        <h3 class="mb-3">AI Processes Your Data</h3>
+                        <p>Once you start the analysis, Aidstack Insights sends your data to OpenAI's API for intelligent processing. Here's the exact flow:</p>
+
+                        <!-- Mockup: Processing Flow -->
+                        <div class="mockup-container">
+                            <div class="text-center py-4">
+                                <div class="row align-items-center">
+                                    <div class="col-md-3">
+                                        <div class="bg-primary text-white p-3 rounded">
+                                            <i class="bi bi-file-earmark-spreadsheet" style="font-size: 2rem;"></i>
+                                            <p class="mb-0 mt-2 small"><strong>Your Data</strong></p>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-1">
+                                        <i class="bi bi-arrow-right" style="font-size: 2rem; color: var(--accent-color);"></i>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="bg-warning text-dark p-3 rounded">
+                                            <i class="bi bi-robot" style="font-size: 2rem;"></i>
+                                            <p class="mb-0 mt-2 small"><strong>OpenAI GPT-4o-mini</strong></p>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-1">
+                                        <i class="bi bi-arrow-right" style="font-size: 2rem; color: var(--accent-color);"></i>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="bg-success text-white p-3 rounded">
+                                            <i class="bi bi-lightbulb" style="font-size: 2rem;"></i>
+                                            <p class="mb-0 mt-2 small"><strong>Insights</strong></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h5 class="mt-4 mb-3">The Processing Pipeline:</h5>
+                        <ol>
+                            <li class="mb-2">
+                                <strong>Data Chunking:</strong> Your data is intelligently split into manageable chunks (to stay within AI model limits)
+                            </li>
+                            <li class="mb-2">
+                                <strong>Context Building:</strong> The system creates rich context including:
+                                <ul>
+                                    <li>Sample data from your spreadsheet</li>
+                                    <li>Column names and data types</li>
+                                    <li>Statistical summaries (if applicable)</li>
+                                    <li>Your selected analysis type</li>
+                                </ul>
+                            </li>
+                            <li class="mb-2">
+                                <strong>AI Analysis:</strong> OpenAI's GPT-4o-mini model (128K context window) analyzes your data:
+                                <ul>
+                                    <li>Detects patterns and trends</li>
+                                    <li>Identifies categories and themes</li>
+                                    <li>Extracts sentiment from text</li>
+                                    <li>Translates content (if requested)</li>
+                                </ul>
+                            </li>
+                            <li class="mb-2">
+                                <strong>Result Aggregation:</strong> Results from multiple chunks are combined into a coherent analysis
+                            </li>
+                            <li class="mb-2">
+                                <strong>Local Storage:</strong> Analyzed results are saved to a new Excel file on your local machine
+                            </li>
+                        </ol>
+
+                        <div class="mt-4">
+                            <h6>Technologies Used:</h6>
+                            <span class="tech-badge">Python Flask</span>
+                            <span class="tech-badge">OpenAI GPT-4o-mini</span>
+                            <span class="tech-badge">Pandas</span>
+                            <span class="tech-badge">OpenpyXL</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Review Results -->
+            <div class="row mb-5">
+                <div class="col-lg-10 mx-auto">
+                    <div class="step-card">
+                        <div class="step-number">3</div>
+                        <h3 class="mb-3">Review Your Results</h3>
+                        <p>After processing, your analyzed data is displayed in an interactive table. Each row shows the original data alongside AI-generated insights.</p>
+
+                        <!-- Mockup: Results Table -->
+                        <div class="mockup-container">
+                            <div class="mockup-window">
+                                <div class="mockup-header">
+                                    <div class="mockup-dot"></div>
+                                    <div class="mockup-dot"></div>
+                                    <div class="mockup-dot"></div>
+                                </div>
+                                <div class="mockup-body">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Customer Feedback</th>
+                                                <th>Sentiment</th>
+                                                <th>Category</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>Great product! Fast delivery</td>
+                                                <td><span class="badge bg-success">Positive</span></td>
+                                                <td>Product Quality, Shipping</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Item arrived damaged</td>
+                                                <td><span class="badge bg-danger">Negative</span></td>
+                                                <td>Shipping, Quality Issue</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Good value for money</td>
+                                                <td><span class="badge bg-success">Positive</span></td>
+                                                <td>Pricing, Value</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <div class="text-end mt-3">
+                                        <button class="btn btn-primary">
+                                            <i class="bi bi-download"></i> Download Results
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h5 class="mt-4 mb-3">What You Get:</h5>
+                        <ul>
+                            <li><strong>Interactive Table:</strong> Browse and search through your analyzed data</li>
+                            <li><strong>New Columns:</strong> AI-generated insights appear as new columns alongside your original data</li>
+                            <li><strong>Downloadable Results:</strong> Export to Excel with all original and analyzed data</li>
+                            <li><strong>Progress Tracking:</strong> Real-time progress bar shows analysis status</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Chat with Your Data -->
+            <div class="row mb-5">
+                <div class="col-lg-10 mx-auto">
+                    <div class="step-card">
+                        <div class="step-number">4</div>
+                        <h3 class="mb-3">Chat with Your Data</h3>
+                        <p>Ask questions about your data in natural language and get instant answers with streaming AI responses.</p>
+
+                        <!-- Mockup: Chat Interface -->
+                        <div class="mockup-container">
+                            <div class="mockup-window">
+                                <div class="mockup-header">
+                                    <div class="mockup-dot"></div>
+                                    <div class="mockup-dot"></div>
+                                    <div class="mockup-dot"></div>
+                                    <span class="ms-2 text-muted small">Chat with Your Data</span>
+                                </div>
+                                <div class="mockup-body" style="background: #F8FAFC; min-height: 300px;">
+                                    <div class="chat-bubble user">
+                                        Which country has the most entries?
+                                    </div>
+                                    <div class="chat-bubble ai">
+                                        <strong>AI Assistant:</strong><br>
+                                        Based on your data, <strong>United States</strong> has the most entries with 145 occurrences, followed by Canada with 89 entries and United Kingdom with 67 entries.
+                                    </div>
+                                    <div class="chat-bubble user">
+                                        Show me all unique product categories
+                                    </div>
+                                    <div class="chat-bubble ai">
+                                        <strong>AI Assistant:</strong><br>
+                                        Your dataset contains 8 unique product categories:
+                                        <ul class="mb-0 mt-2">
+                                            <li>Electronics</li>
+                                            <li>Clothing</li>
+                                            <li>Home & Garden</li>
+                                            <li>Sports & Outdoors</li>
+                                            <li>Books</li>
+                                            <li>Toys & Games</li>
+                                            <li>Health & Beauty</li>
+                                            <li>Automotive</li>
+                                        </ul>
+                                    </div>
+                                    <div class="mt-3 d-flex gap-2">
+                                        <input type="text" class="form-control" placeholder="Ask a question about your data..." disabled>
+                                        <button class="btn btn-primary" disabled>
+                                            <i class="bi bi-send"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h5 class="mt-4 mb-3">How the Chatbot Works:</h5>
+                        <ol>
+                            <li class="mb-2">
+                                <strong>Question Detection:</strong> The system analyzes your question to understand what you're asking:
+                                <ul>
+                                    <li><em>List questions:</em> "Show me all...", "What are the unique..."</li>
+                                    <li><em>Analytical questions:</em> "Which has the most...", "How many..."</li>
+                                    <li><em>Statistical questions:</em> "What's the average...", "Calculate..."</li>
+                                </ul>
+                            </li>
+                            <li class="mb-2">
+                                <strong>Direct Data Analysis:</strong> Before asking the AI, the system performs actual Pandas operations:
+                                <ul>
+                                    <li>Extracts unique values (up to 100)</li>
+                                    <li>Calculates value counts and frequencies</li>
+                                    <li>Computes statistics (mean, median, etc.)</li>
+                                    <li>Finds correlations between columns</li>
+                                </ul>
+                            </li>
+                            <li class="mb-2">
+                                <strong>Context Building:</strong> The system provides the AI with:
+                                <ul>
+                                    <li>Sample of your data (up to 8,000 characters)</li>
+                                    <li>Pre-computed analysis results</li>
+                                    <li>Column names and data types</li>
+                                </ul>
+                            </li>
+                            <li class="mb-2">
+                                <strong>AI Response Streaming:</strong> OpenAI GPT-4o-mini generates the response:
+                                <ul>
+                                    <li>Streams word-by-word using Server-Sent Events (SSE)</li>
+                                    <li>Renders markdown formatting in real-time</li>
+                                    <li>Provides natural language answers with complete data</li>
+                                </ul>
+                            </li>
+                        </ol>
+
+                        <div class="privacy-callout">
+                            <i class="bi bi-lightning-charge"></i>
+                            <strong>Smart Processing:</strong> The chatbot performs direct data analysis first (using Pandas) before asking the AI, ensuring accurate and complete answers without AI hallucinations.
+                        </div>
+
+                        <h5 class="mt-4 mb-3">Quick Question Templates:</h5>
+                        <p>Click on pre-made questions to get instant insights:</p>
+                        <div class="d-flex flex-wrap gap-2">
+                            <span class="badge bg-secondary py-2 px-3">📊 Summarize the data</span>
+                            <span class="badge bg-secondary py-2 px-3">🔍 What patterns do you see?</span>
+                            <span class="badge bg-secondary py-2 px-3">💡 Key insights</span>
+                            <span class="badge bg-secondary py-2 px-3">📈 Trends</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Privacy & Security -->
+            <div class="row mb-5">
+                <div class="col-lg-10 mx-auto">
+                    <div class="step-card" style="border: 2px solid var(--accent-color);">
+                        <h3 class="mb-4">
+                            <i class="bi bi-shield-lock text-primary"></i>
+                            Privacy & Security
+                        </h3>
+
+                        <h5>Where Is Your Data Stored?</h5>
+                        <ul>
+                            <li><strong>Uploaded Files:</strong> Stored locally in a folder on your machine (<code>/uploads</code> directory)</li>
+                            <li><strong>Analyzed Results:</strong> Saved locally in a folder on your machine (<code>/analyzed</code> directory)</li>
+                            <li><strong>API Key:</strong> Stored in your browser's localStorage - never sent to our servers</li>
+                            <li><strong>No Cloud Storage:</strong> We never store your files or data on any remote server</li>
+                        </ul>
+
+                        <h5 class="mt-4">What About OpenAI?</h5>
+                        <p>When you use OpenAI's API:</p>
+                        <ul>
+                            <li>✅ Your data is <strong>NOT used for training</strong> OpenAI's models</li>
+                            <li>⏰ Data is retained for <strong>30 days only</strong> for abuse monitoring</li>
+                            <li>🗑️ After 30 days, your data is <strong>automatically deleted</strong></li>
+                            <li>📄 Full details: <a href="https://openai.com/policies/api-data-usage-policies" target="_blank">OpenAI API Data Usage Policies</a></li>
+                        </ul>
+
+                        <h5 class="mt-4">Data Flow Summary:</h5>
+                        <div class="mockup-container">
+                            <div class="text-center py-3">
+                                <div class="d-inline-block text-start">
+                                    <p class="mb-2"><i class="bi bi-1-circle-fill text-primary"></i> You upload file → <strong>Stored locally on your machine</strong></p>
+                                    <p class="mb-2"><i class="bi bi-2-circle-fill text-primary"></i> Click analyze → <strong>Data sent to OpenAI API</strong></p>
+                                    <p class="mb-2"><i class="bi bi-3-circle-fill text-primary"></i> AI processes → <strong>Results returned to your machine</strong></p>
+                                    <p class="mb-0"><i class="bi bi-4-circle-fill text-primary"></i> Results saved → <strong>Stored locally on your machine</strong></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CTA Section -->
+            <div class="row">
+                <div class="col-12 text-center">
+                    <h3 class="mb-4">Ready to Analyze Your Data?</h3>
+                    <a href="/" class="btn btn-primary btn-lg px-5 me-3">
+                        <i class="bi bi-rocket-takeoff"></i> Try It Now
+                    </a>
+                    <a href="/about" class="btn btn-outline-secondary btn-lg px-5">
+                        <i class="bi bi-info-circle"></i> Learn More
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-light py-4 mt-5">
+        <div class="container text-center">
+            <p class="mb-0 text-muted">Part of the <a href="https://aidstack.ai" target="_blank">Aidstack.ai</a> ecosystem</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

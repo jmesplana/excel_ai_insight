@@ -59,24 +59,6 @@
             font-weight: 700;
         }
         
-        /* How It Works Section */
-        #how-it-works-section .card {
-            border-left: 4px solid var(--primary-color);
-        }
-        
-        #how-it-works-section .how-it-works-steps li {
-            margin-bottom: 10px;
-            padding-left: 5px;
-        }
-        
-        #how-it-works-section .how-it-works-steps strong {
-            color: var(--primary-color);
-        }
-        
-        body.dark-mode #how-it-works-section .how-it-works-steps strong {
-            color: var(--primary-light);
-        }
-        
         body.dark-mode {
             background-color: #121212;
             color: #e0e0e0;
@@ -655,6 +637,9 @@
                         <a class="nav-link" href="/about">About</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="/how-it-works">How It Works</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="https://www.github.com/jmesplana/excel_ai_insight" target="_blank">Documentation</a>
                     </li>
                 </ul>
@@ -682,9 +667,9 @@
                         <button class="btn btn-primary btn-lg px-4 me-md-2" id="get-started-btn">
                             <i class="bi bi-rocket-takeoff"></i> Try It Free
                         </button>
-                        <button class="btn btn-outline-secondary btn-lg px-4" id="learn-more-btn">
+                        <a href="/how-it-works" class="btn btn-outline-secondary btn-lg px-4">
                             See How It Works
-                        </button>
+                        </a>
                     </div>
                 </div>
                 <div class="col-md-6 mt-4 mt-md-0">
@@ -893,51 +878,6 @@
             </div>
         </div>
 
-        <!-- How It Works Section -->
-        <div id="how-it-works-section" class="row justify-content-center mb-4 mt-4">
-            <div class="col-lg-10">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-lightbulb"></i> How It Works</span>
-                        <button type="button" class="btn-close" id="close-how-it-works" aria-label="Close"></button>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-12">
-                                <div class="row">
-                                    <div class="col-md-7">
-                                        <h5 class="mb-3">Aidstack Insights helps you analyze your spreadsheets with AI in 5 simple steps:</h5>
-                                        <ol class="how-it-works-steps">
-                                            <li><strong>Set API Key:</strong> Click the API Settings button in the navigation bar and enter your OpenAI API key</li>
-                                            <li><strong>Configure:</strong> Set general instructions for your analysis</li>
-                                            <li><strong>Upload:</strong> Select an Excel or CSV file to analyze</li>
-                                            <li><strong>Preview & Configure:</strong> View your data and select columns for analysis</li>
-                                            <li><strong>Results:</strong> Review AI-generated insights and download your analyzed file</li>
-                                        </ol>
-                                        <p class="mt-3 mb-0"><strong>Pro tip:</strong> Start with a test run to analyze just 5 rows and confirm your settings before running a full analysis.</p>
-                                    </div>
-                                    <div class="col-md-5">
-                                        <div class="card mb-0">
-                                            <div class="card-header">Key Features</div>
-                                            <div class="card-body p-3">
-                                                <ul class="list-unstyled mb-0">
-                                                    <li><i class="bi bi-check-circle-fill text-success"></i> Multiple file formats (.xlsx, .xls, .csv)</li>
-                                                    <li><i class="bi bi-check-circle-fill text-success"></i> Multi-column analysis</li>
-                                                    <li><i class="bi bi-check-circle-fill text-success"></i> Custom analysis instructions</li>
-                                                    <li><i class="bi bi-check-circle-fill text-success"></i> Pattern detection and categorization</li>
-                                                    <li><i class="bi bi-check-circle-fill text-success"></i> Real-time progress tracking</li>
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Main Content -->
         <div id="main-content">
             <!-- Step 1: Configuration -->
@@ -1037,9 +977,8 @@
             <!-- Step 3: File Preview -->
             <div class="step-content fade-in hidden" id="step-3">
                 <div class="row">
-                    <!-- Left: Data Preview -->
-                    <div class="col-lg-7">
-                        <div class="card h-100">
+                    <div class="col-12">
+                        <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center">
                                 <span><i class="bi bi-table"></i> Data Preview</span>
                                 <div>
@@ -1048,45 +987,11 @@
                                 </div>
                             </div>
                             <div class="card-body">
-                                <div id="preview-table" class="table-container table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                <div class="alert alert-info">
+                                    <i class="bi bi-chat-dots"></i> <strong>Pro tip:</strong> Click the chat button in the bottom right corner to ask questions about your data!
+                                </div>
+                                <div id="preview-table" class="table-container table-responsive" style="max-height: 600px; overflow-y: auto;">
                                     <!-- Table content will be inserted here -->
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Right: Chat Interface -->
-                    <div class="col-lg-5">
-                        <div class="card h-100">
-                            <div class="card-header d-flex justify-content-between align-items-center bg-primary bg-opacity-10">
-                                <span><i class="bi bi-chat-dots text-primary"></i> Chat with Your Data</span>
-                                <i class="bi bi-robot text-primary"></i>
-                            </div>
-                            <div class="card-body d-flex flex-column">
-                                <div class="alert alert-info flex-shrink-0">
-                                    <i class="bi bi-lightbulb"></i> Ask questions about your data before running analysis!
-                                </div>
-                                <div class="chat-container flex-grow-1" style="height: 350px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 15px; background-color: #f8f9fa; margin-bottom: 15px;">
-                                    <div id="preview-chat-messages">
-                                        <div class="mb-3">
-                                            <div class="d-inline-block bg-light rounded p-2" style="max-width: 85%;">
-                                                <strong>AI Assistant:</strong> Hello! I can help you explore your data. Try asking:
-                                                <ul class="mb-0 mt-2">
-                                                    <li>"What columns are in this dataset?"</li>
-                                                    <li>"How many rows are there?"</li>
-                                                    <li>"Show me a summary of the data"</li>
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="mt-auto">
-                                    <div class="input-group">
-                                        <input type="text" class="form-control" id="preview-chat-input" placeholder="Ask about your data..." />
-                                        <button class="btn btn-primary" id="preview-chat-send-btn" type="button">
-                                            <i class="bi bi-send"></i>
-                                        </button>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1202,14 +1107,14 @@
             
             <!-- Step 5: Results -->
             <div class="step-content fade-in hidden" id="step-5">
-                <div class="alert alert-success" id="result-message">
-                    <i class="bi bi-check-circle"></i> Analysis complete! Your results are ready.
+                <div class="alert alert-success d-flex justify-content-between align-items-center" id="result-message">
+                    <span><i class="bi bi-check-circle"></i> Analysis complete! Your results are ready.</span>
+                    <span class="badge bg-primary"><i class="bi bi-chat-dots"></i> Chat available in bottom right</span>
                 </div>
 
                 <div class="row">
-                    <!-- Left: Data & Insights -->
-                    <div class="col-lg-7">
-                        <div class="card h-100">
+                    <div class="col-12">
+                        <div class="card">
                             <div class="card-header">
                                 <ul class="nav nav-tabs card-header-tabs" id="resultTabs" role="tablist">
                                     <li class="nav-item" role="presentation">
@@ -1234,7 +1139,7 @@
                                         </div>
 
                                         <h6 class="mb-3">Column Analysis</h6>
-                                        <div id="column-insights" style="max-height: 400px; overflow-y: auto;">
+                                        <div id="column-insights" style="max-height: 500px; overflow-y: auto;">
                                             <!-- Column insights will be inserted here -->
                                         </div>
                                     </div>
@@ -1251,46 +1156,9 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        <div id="result-preview" class="table-container table-responsive" style="max-height: 450px; overflow-y: auto;">
+                                        <div id="result-preview" class="table-container table-responsive" style="max-height: 550px; overflow-y: auto;">
                                             <!-- Interactive table will be inserted here -->
                                         </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Right: AI Chat (Always Visible) -->
-                    <div class="col-lg-5">
-                        <div class="card h-100">
-                            <div class="card-header d-flex justify-content-between align-items-center bg-success bg-opacity-10">
-                                <span><i class="bi bi-chat-dots text-success"></i> AI Chat</span>
-                                <i class="bi bi-robot text-success"></i>
-                            </div>
-                            <div class="card-body d-flex flex-column">
-                                <div class="alert alert-success flex-shrink-0 py-2">
-                                    <i class="bi bi-lightbulb"></i> <strong>Ask questions about your analyzed results!</strong>
-                                </div>
-                                <div class="chat-container flex-grow-1" style="height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 15px; background-color: #f8f9fa; margin-bottom: 15px;">
-                                    <div id="chat-messages">
-                                        <div class="mb-3">
-                                            <div class="d-inline-block bg-light rounded p-2" style="max-width: 85%;">
-                                                <strong>AI Assistant:</strong> I can help you understand your analysis results. Try asking:
-                                                <ul class="mb-0 mt-2">
-                                                    <li>"What are the main trends?"</li>
-                                                    <li>"Summarize the key findings"</li>
-                                                    <li>"What insights can you provide?"</li>
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="mt-auto">
-                                    <div class="input-group">
-                                        <input type="text" class="form-control" id="chat-input" placeholder="Ask about your results..." />
-                                        <button class="btn btn-success" id="chat-send-btn" type="button">
-                                            <i class="bi bi-send"></i>
-                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -2609,13 +2477,6 @@
                 toggleDarkMode();
             }
             
-            // Check if user has previously closed How It Works section
-            if (localStorage.getItem('hideHowItWorks') === 'true') {
-                const howItWorksSection = document.getElementById('how-it-works-section');
-                if (howItWorksSection) {
-                    howItWorksSection.style.display = 'none';
-                }
-            }
             
             // Initialize UI state - show landing page, hide workflow
             const landingPageEl = document.getElementById('landing-page');
@@ -2703,20 +2564,6 @@
                 });
             }
             
-            // How It Works section
-            const closeHowItWorksBtn = document.getElementById('close-how-it-works');
-            if (closeHowItWorksBtn) {
-                closeHowItWorksBtn.addEventListener('click', function() {
-                    // Hide the How It Works section
-                    const howItWorksSection = document.getElementById('how-it-works-section');
-                    if (howItWorksSection) {
-                        howItWorksSection.style.display = 'none';
-                        
-                        // Save preference in localStorage
-                        localStorage.setItem('hideHowItWorks', 'true');
-                    }
-                });
-            }
             
             // Step navigation - with null checks
             const configNextBtn = document.getElementById('config-next-btn');
@@ -2801,10 +2648,8 @@
             function showHome() {
                 const landingPage = document.getElementById('landing-page');
                 const workflowStepper = document.getElementById('workflow-stepper');
-                const howItWorksSection = document.getElementById('how-it-works-section');
                 landingPage.classList.remove('hidden');
                 workflowStepper.classList.add('hidden');
-                howItWorksSection.classList.add('hidden');
             }
             
             function showAbout() {
@@ -2929,16 +2774,6 @@
                 startAnalyzingBtn.addEventListener('click', startAnalysis);
             }
 
-            const learnMoreBtn = document.getElementById('learn-more-btn');
-            if (learnMoreBtn) {
-                learnMoreBtn.addEventListener('click', function() {
-                    // Scroll to "How It Works" section in the landing page
-                    const howItWorksHeading = document.querySelector('.row.mt-5:nth-of-type(2)');
-                    if (howItWorksHeading) {
-                        howItWorksHeading.scrollIntoView({ behavior: 'smooth' });
-                    }
-                });
-            }
             
             // Load saved API key from localStorage if available
             function loadSavedApiKey() {
@@ -3561,6 +3396,13 @@
             // FLOATING CHAT MODAL FUNCTIONALITY
             // =========================================================================
 
+            // Helper function to escape HTML
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
             const floatingChatBtn = document.getElementById('floating-chat-btn');
             const chatModal = new bootstrap.Modal(document.getElementById('chat-modal'));
             const modalChatInput = document.getElementById('modal-chat-input');
@@ -3642,7 +3484,7 @@
                 userMessageDiv.className = 'mb-3 text-end';
                 userMessageDiv.innerHTML = `
                     <div class="d-inline-block bg-primary text-white rounded p-2" style="max-width: 70%;">
-                        <strong>You:</strong> ${question}
+                        <strong>You:</strong> ${escapeHtml(question)}
                     </div>
                 `;
                 modalChatMessages.appendChild(userMessageDiv);
@@ -3654,26 +3496,40 @@
                 const container = document.getElementById('modal-chat-container');
                 container.scrollTop = container.scrollHeight;
 
-                // Show loading
-                const loadingDiv = document.createElement('div');
-                loadingDiv.className = 'mb-3';
-                loadingDiv.id = 'modal-chat-loading';
-                loadingDiv.innerHTML = `
-                    <div class="d-inline-block bg-light rounded p-2">
-                        <span class="spinner-border spinner-border-sm"></span> AI is thinking...
+                // Get API key
+                const apiKey = document.getElementById('modal-api-key')?.value || localStorage.getItem(API_KEY_STORAGE_KEY);
+                if (!apiKey) {
+                    alert('Please configure your API key in Settings first');
+                    return;
+                }
+
+                // Remove any existing streaming response
+                const existingStreamingResponse = document.getElementById('streaming-response');
+                if (existingStreamingResponse) {
+                    existingStreamingResponse.remove();
+                }
+
+                // Create AI response container (for streaming) with unique ID
+                const responseId = `streaming-response-${Date.now()}`;
+                const aiMessageDiv = document.createElement('div');
+                aiMessageDiv.className = 'mb-3';
+                aiMessageDiv.id = responseId;
+                aiMessageDiv.innerHTML = `
+                    <div class="d-inline-block bg-light rounded p-3" style="max-width: 80%;">
+                        <strong>AI:</strong>
+                        <div class="markdown-content mt-2" id="streaming-content-${Date.now()}">
+                            <span class="spinner-border spinner-border-sm"></span> Analyzing...
+                        </div>
                     </div>
                 `;
-                modalChatMessages.appendChild(loadingDiv);
+                modalChatMessages.appendChild(aiMessageDiv);
                 container.scrollTop = container.scrollHeight;
 
-                try {
-                    // Get API key
-                    const apiKey = document.getElementById('modal-api-key')?.value || localStorage.getItem(API_KEY_STORAGE_KEY);
-                    if (!apiKey) {
-                        throw new Error('Please configure your API key in Settings first');
-                    }
+                // Store the content div ID for this message
+                const contentDivId = aiMessageDiv.querySelector('.markdown-content').id;
 
-                    // Send request
+                try {
+                    // Use fetch for streaming response
                     const response = await fetch('/chat_with_data', {
                         method: 'POST',
                         headers: {
@@ -3686,37 +3542,98 @@
                         })
                     });
 
-                    // Remove loading
-                    document.getElementById('modal-chat-loading')?.remove();
-
                     if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || 'Failed to get response');
+                        throw new Error(`HTTP error! status: ${response.status}`);
                     }
 
-                    const result = await response.json();
+                    // Check if response is SSE stream
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('text/event-stream')) {
+                        // Handle streaming response
+                        const reader = response.body.getReader();
+                        const decoder = new TextDecoder();
+                        let accumulatedText = '';
+                        let buffer = ''; // Buffer for incomplete lines
+                        const streamingContent = document.getElementById(contentDivId);
 
-                    // Add AI response with markdown rendering
-                    const aiMessageDiv = document.createElement('div');
-                    aiMessageDiv.className = 'mb-3';
-                    aiMessageDiv.innerHTML = `
-                        <div class="d-inline-block bg-light rounded p-3" style="max-width: 80%;">
-                            <strong>AI:</strong>
-                            <div class="markdown-content mt-2">${marked.parse(result.answer)}</div>
-                        </div>
-                    `;
-                    modalChatMessages.appendChild(aiMessageDiv);
+                        if (streamingContent) {
+                            streamingContent.innerHTML = ''; // Clear loading message
+                        }
+
+                        while (true) {
+                            const { done, value } = await reader.read();
+
+                            if (done) break;
+
+                            // Decode chunk and add to buffer
+                            buffer += decoder.decode(value, { stream: true });
+
+                            // Split by double newline (SSE message separator)
+                            const messages = buffer.split('\n\n');
+
+                            // Keep the last potentially incomplete message in buffer
+                            buffer = messages.pop() || '';
+
+                            // Process complete messages
+                            for (const message of messages) {
+                                const lines = message.split('\n');
+                                for (const line of lines) {
+                                    if (line.startsWith('data: ')) {
+                                        try {
+                                            const jsonStr = line.substring(6);
+                                            const data = JSON.parse(jsonStr);
+
+                                            if (data.error) {
+                                                throw new Error(data.error);
+                                            }
+
+                                            if (data.content) {
+                                                accumulatedText += data.content;
+                                                // Update the display with accumulated markdown
+                                                if (streamingContent) {
+                                                    streamingContent.innerHTML = marked.parse(accumulatedText);
+                                                }
+                                                // Auto-scroll
+                                                container.scrollTop = container.scrollHeight;
+                                            }
+
+                                            if (data.done) {
+                                                // Streaming complete
+                                                break;
+                                            }
+                                        } catch (parseError) {
+                                            console.error('Error parsing SSE data:', parseError, 'Line:', line);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Fallback to regular JSON response (for backward compatibility)
+                        const result = await response.json();
+
+                        if (result.error) {
+                            throw new Error(result.error);
+                        }
+
+                        const streamingContent = document.getElementById(contentDivId);
+                        if (streamingContent) {
+                            streamingContent.innerHTML = marked.parse(result.answer || 'No response received');
+                        }
+                    }
 
                 } catch (error) {
-                    // Remove loading
-                    document.getElementById('modal-chat-loading')?.remove();
+                    console.error('Chat error:', error);
+
+                    // Remove the streaming response div using the unique ID
+                    document.getElementById(responseId)?.remove();
 
                     // Show error
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'mb-3';
                     errorDiv.innerHTML = `
                         <div class="d-inline-block bg-danger text-white rounded p-2" style="max-width: 70%;">
-                            <strong>Error:</strong> ${error.message}
+                            <strong>Error:</strong> ${escapeHtml(error.message)}
                         </div>
                     `;
                     modalChatMessages.appendChild(errorDiv);
