@@ -893,7 +893,42 @@
                                 <div class="alert alert-info">
                                     <i class="bi bi-info-circle"></i> Before starting your analysis, configure general instructions that will apply to all analyzed columns. An OpenAI API key is required - you can set this from the <strong>API Settings</strong> button in the top navigation bar.
                                 </div>
-                                
+
+                                <!-- Mode Chooser -->
+                                <div class="mb-4">
+                                    <label class="form-label">Choose a mode</label>
+                                    <div class="row g-3" id="mode-chooser">
+                                        <div class="col-md-6">
+                                            <div class="card h-100 mode-card border" id="mode-card-analysis" data-mode="analysis" style="cursor: pointer;">
+                                                <div class="card-body">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="app-mode" id="mode-analysis" value="analysis" checked>
+                                                        <label class="form-check-label fw-bold" for="mode-analysis">
+                                                            <i class="bi bi-robot"></i> AI Analysis
+                                                        </label>
+                                                    </div>
+                                                    <p class="small text-muted mb-0 mt-2">Analyze, summarize, classify or translate any column using OpenAI.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="card h-100 mode-card border" id="mode-card-icd" data-mode="icd" style="cursor: pointer;">
+                                                <div class="card-body">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="app-mode" id="mode-icd" value="icd">
+                                                        <label class="form-check-label fw-bold" for="mode-icd">
+                                                            <i class="bi bi-translate"></i> Medical Translation (ICD-11)
+                                                        </label>
+                                                    </div>
+                                                    <p class="small text-muted mb-0 mt-2">Map free-text diagnoses or codes to ICD-11 (and derived ICD-10). Requires WHO ICD API credentials.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- AI Analysis general instructions (hidden in ICD mode) -->
+                                <div id="analysis-instructions-block">
                                 <div class="mb-4">
                                     <label for="general-instructions" class="form-label">
                                         General Instructions
@@ -930,7 +965,15 @@
                                         <p class="small text-muted mb-0">Replace [TARGET_LANGUAGE] with your desired language (e.g., English, Spanish, French, Japanese)</p>
                                     </div>
                                 </div>
-                                
+                                </div>
+                                <!-- /analysis-instructions-block -->
+
+                                <div id="icd-intro-block" class="hidden">
+                                    <div class="alert alert-warning small">
+                                        <i class="bi bi-translate"></i> <strong>Medical Translation (ICD-11):</strong> map each row of a column to ICD-11 (and optionally a derived ICD-10 code). Make sure your <strong>WHO ICD Client ID &amp; Secret</strong> are set in <strong>API Settings</strong>. An OpenAI API key (optional) improves disambiguation of free-text input.
+                                    </div>
+                                </div>
+
                                 <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
                                     <button class="btn btn-primary" id="config-next-btn">Next <i class="bi bi-arrow-right"></i></button>
                                 </div>
@@ -1018,10 +1061,11 @@
                                 <i class="bi bi-sliders"></i>
                             </div>
                             <div class="card-body">
+                                <div id="analysis-config">
                                 <div class="alert alert-info">
                                     <i class="bi bi-info-circle"></i> Select columns to analyze and provide specific instructions for each. You can combine multiple columns for more complex analysis.
                                 </div>
-                                
+
                                 <!-- Pattern Detection Section (Initially Hidden) -->
                                 <div id="pattern-detection" class="card mb-4 hidden">
                                     <div class="card-header bg-info bg-opacity-10">
@@ -1099,14 +1143,89 @@
                                         </button>
                                     </div>
                                 </div>
+                                </div>
+                                <!-- /analysis-config -->
+
+                                <!-- ICD-11 Translation Config (hidden unless appMode === 'icd') -->
+                                <div id="icd-config" class="hidden">
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-translate"></i> Configure how the selected column is mapped to ICD-11. Each row is resolved to an ICD-11 MMS anchor entity, then the chosen output columns are produced.
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label d-block">Input type</label>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="radio" name="icd-input-type" id="icd-input-type-text" value="text" checked>
+                                                <label class="form-check-label" for="icd-input-type-text">Free text</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="radio" name="icd-input-type" id="icd-input-type-code" value="code">
+                                                <label class="form-check-label" for="icd-input-type-code">Existing code</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label for="icd-source-column" class="form-label">Source column</label>
+                                            <select class="form-select" id="icd-source-column"></select>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3" id="icd-source-lang-group">
+                                            <label for="icd-source-lang" class="form-label">Source language (free text)</label>
+                                            <select class="form-select" id="icd-source-lang"></select>
+                                        </div>
+                                        <div class="col-md-6 mb-3 hidden" id="icd-source-system-group">
+                                            <label for="icd-source-system" class="form-label">Source code system</label>
+                                            <select class="form-select" id="icd-source-system">
+                                                <option value="mms" selected>ICD-11 MMS code</option>
+                                                <option value="icd10">ICD-10 code</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label for="icd-target-lang" class="form-label">Target language (ICD-11 term)</label>
+                                            <select class="form-select" id="icd-target-lang"></select>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label d-block">Output columns</label>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="icd-target-icd11" checked>
+                                            <label class="form-check-label" for="icd-target-icd11">ICD-11 term</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="icd-target-icd10">
+                                            <label class="form-check-label" for="icd-target-icd10">ICD-10 code + relationship</label>
+                                        </div>
+                                    </div>
+
+                                    <div id="icd-config-message" class="alert alert-success mt-3 hidden"></div>
+
+                                    <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-3">
+                                        <button type="button" class="btn btn-outline-secondary" id="icd-configure-back-btn">
+                                            <i class="bi bi-arrow-left"></i> Back
+                                        </button>
+                                        <div class="d-grid gap-2 d-md-flex">
+                                            <button id="run-icd-test-btn" class="btn btn-outline-success">
+                                                <i class="bi bi-lightning-charge"></i> Run Test (first 10 rows)
+                                            </button>
+                                            <button id="run-icd-btn" class="btn btn-primary">
+                                                <i class="bi bi-play-fill"></i> Translate All Rows
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- /icd-config -->
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            
+
             <!-- Step 5: Results -->
             <div class="step-content fade-in hidden" id="step-5">
+                <div id="analysis-results">
                 <div class="alert alert-success d-flex justify-content-between align-items-center" id="result-message">
                     <span><i class="bi bi-check-circle"></i> Analysis complete! Your results are ready.</span>
                     <span class="badge bg-primary"><i class="bi bi-chat-dots"></i> Chat available in bottom right</span>
@@ -1178,8 +1297,51 @@
                         </div>
                     </div>
                 </div>
+                </div>
+                <!-- /analysis-results -->
+
+                <!-- ICD-11 Translation Results (hidden unless appMode === 'icd') -->
+                <div id="icd-results" class="hidden">
+                    <div class="alert alert-success d-flex justify-content-between align-items-center" id="icd-result-message">
+                        <span><i class="bi bi-check-circle"></i> Translation complete! Your ICD mapping is ready.</span>
+                    </div>
+
+                    <div class="alert alert-warning small">
+                        <i class="bi bi-info-circle"></i> The <strong>ICD-10 Match</strong> (relationship) column is <strong>derived/advisory</strong> &mdash; it is computed by this tool, not an official WHO mapping stamp.
+                    </div>
+
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-table"></i> ICD Mapping Results</span>
+                                    <span id="icd-table-info" class="text-muted small"></span>
+                                </div>
+                                <div class="card-body">
+                                    <div id="icd-result-preview" class="table-container table-responsive" style="max-height: 600px; overflow-y: auto;">
+                                        <!-- ICD results table will be inserted here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+                                <button type="button" class="btn btn-outline-secondary" id="icd-results-back-btn">
+                                    <i class="bi bi-arrow-left"></i> Back to Configure
+                                </button>
+                                <a id="icd-download-link" href="#" class="btn btn-success">
+                                    <i class="bi bi-download"></i> Download ICD Mapping
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- /icd-results -->
             </div>
-            
+
             <!-- About Content (Hidden by Default) -->
             <div id="about-content" class="hidden">
                 <div class="row justify-content-center">
@@ -1452,7 +1614,352 @@
         let currentStep = 1;
         let resultChart = null;
         const API_KEY_STORAGE_KEY = 'excel_ai_insight_api_key';
-        
+        const ICD_CLIENT_ID_STORAGE_KEY = 'excel_ai_insight_icd_client_id';
+        const ICD_CLIENT_SECRET_STORAGE_KEY = 'excel_ai_insight_icd_client_secret';
+
+        // Application mode: 'analysis' (default AI analysis) | 'icd' (Medical Translation ICD-11)
+        let appMode = 'analysis';
+
+        // Holds the ICD translation dataset in memory: { sheetName, columns: [...], data: [...] }
+        let icdResult = null;
+
+        // ICD-11 language options (release 2026-01 MMS) shared by all language dropdowns.
+        const ICD_LANGUAGES = [
+            ['ar', 'Arabic'], ['zh', 'Chinese'], ['cs', 'Czech'], ['en', 'English'],
+            ['fr', 'French'], ['de', 'German'], ['kk', 'Kazakh'], ['la', 'Latin'],
+            ['pt', 'Portuguese'], ['ru', 'Russian'], ['sk', 'Slovak'], ['es', 'Spanish'],
+            ['sv', 'Swedish'], ['tr', 'Turkish'], ['uz', 'Uzbek']
+        ];
+
+        function icdLangOptionsHtml(defaultCode) {
+            return ICD_LANGUAGES.map(([code, name]) =>
+                `<option value="${code}"${code === defaultCode ? ' selected' : ''}>${name}</option>`
+            ).join('');
+        }
+
+        // Holds the analyzed dataset in memory: { sheetName, columns: [...], data: [...] }
+        let analyzedResult = null;
+        const ANALYZE_BATCH_SIZE = 20;     // rows per /analyze_batch request
+        const MAX_CHAT_ROWS = 5000;        // cap rows sent to /chat_with_data (Vercel body limit)
+
+        // Build the input text for one (row, config) cell, mirroring the server's
+        // previous process_row logic (single value, or "col: val" join for multi-column).
+        function buildAnalysisInput(row, config) {
+            const cols = (config.columns && config.columns.length) ? config.columns : [config.column];
+            const notEmpty = v => v !== null && v !== undefined && String(v).trim() !== '';
+            if (cols.length > 1) {
+                const parts = cols.filter(c => notEmpty(row[c])).map(c => `${c}: ${row[c]}`);
+                return parts.length ? parts.join('\n') : null;
+            }
+            return notEmpty(row[config.column]) ? String(row[config.column]) : null;
+        }
+
+        // Return { columns, rows } for the chat endpoint from the analyzed data if
+        // present, otherwise from the currently selected sheet of the uploaded file.
+        function getChatDataset() {
+            if (analyzedResult) {
+                return { columns: analyzedResult.columns, rows: analyzedResult.data.slice(0, MAX_CHAT_ROWS) };
+            }
+            if (fileData && fileData.sheets) {
+                const sel = document.getElementById('sheet-select');
+                const name = (sel && sel.value && fileData.sheets[sel.value])
+                    ? sel.value : Object.keys(fileData.sheets)[0];
+                const sd = fileData.sheets[name];
+                if (sd) return { columns: sd.columns, rows: sd.data.slice(0, MAX_CHAT_ROWS) };
+            }
+            return null;
+        }
+
+        // POST a chat question and consume the SSE stream. Calls onToken(fullText)
+        // as content arrives; resolves with the full accumulated answer.
+        async function streamChat(payload, onToken) {
+            const response = await fetch('/chat_with_data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const err = await readJson(response).catch(() => ({}));
+                throw new Error(err.error || `HTTP error! status: ${response.status}`);
+            }
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '', full = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed.startsWith('data:')) continue;
+                    let data;
+                    try { data = JSON.parse(trimmed.slice(5).trim()); } catch (e) { continue; }
+                    if (data.error) throw new Error(data.error);
+                    if (data.content) { full += data.content; if (onToken) onToken(full); }
+                }
+            }
+            return full;
+        }
+
+        // Build an .xlsx from the in-memory analyzed dataset and trigger a download.
+        function downloadAnalyzedFile() {
+            if (!analyzedResult) return;
+            const ws = XLSX.utils.json_to_sheet(analyzedResult.data, { header: analyzedResult.columns });
+            const wb = XLSX.utils.book_new();
+            const sheetName = (analyzedResult.sheetName || 'Sheet1').slice(0, 31);
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            const base = (fileData.filename || 'data').replace(/\.(xlsx|xls|csv)$/i, '');
+            XLSX.writeFile(wb, `analyzed_${base}.xlsx`);
+        }
+
+        // Build an .xlsx from the in-memory ICD mapping dataset and trigger a download.
+        function downloadIcdFile() {
+            if (!icdResult) return;
+            const ws = XLSX.utils.json_to_sheet(icdResult.data, { header: icdResult.columns });
+            const wb = XLSX.utils.book_new();
+            const sheetName = (icdResult.sheetName || 'Sheet1').slice(0, 31);
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            const base = (fileData.filename || 'data').replace(/\.(xlsx|xls|csv)$/i, '');
+            XLSX.writeFile(wb, `icd_mapped_${base}.xlsx`);
+        }
+
+        // Render the in-memory ICD mapping dataset into the #icd-result-preview table.
+        function renderIcdResults() {
+            const container = document.getElementById('icd-result-preview');
+            const info = document.getElementById('icd-table-info');
+            if (!container || !icdResult) return;
+
+            const esc = v => (v === null || v === undefined) ? '' :
+                String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+            let html = '<table class="table table-striped table-bordered"><thead class="table-light"><tr>';
+            icdResult.columns.forEach(col => { html += `<th>${esc(col)}</th>`; });
+            html += '</tr></thead><tbody>';
+            icdResult.data.forEach(row => {
+                html += '<tr>';
+                icdResult.columns.forEach(col => { html += `<td>${esc(row[col])}</td>`; });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+            if (info) info.textContent = `${icdResult.data.length} row(s)`;
+        }
+
+        // Run the Medical Translation (ICD-11) workflow. Mirrors analyzeColumns():
+        // validates credentials, fail-fast token check, batches rows to the backend,
+        // accumulates results by rowIndex, builds icdResult and renders step 5.
+        const ICD_TEST_ROWS = 10;
+
+        async function runIcdTranslation(isTestRun = false) {
+            const openaiApiKey = (document.getElementById('modal-api-key').value || '').trim() ||
+                                 (localStorage.getItem(API_KEY_STORAGE_KEY) || '').trim();
+            const clientId = (document.getElementById('modal-icd-client-id').value || '').trim() ||
+                             (localStorage.getItem(ICD_CLIENT_ID_STORAGE_KEY) || '').trim();
+            const clientSecret = (document.getElementById('modal-icd-client-secret').value || '').trim() ||
+                                 (localStorage.getItem(ICD_CLIENT_SECRET_STORAGE_KEY) || '').trim();
+
+            // WHO ICD credentials are mandatory.
+            if (!clientId || !clientSecret) {
+                showAlert('icd-config-message',
+                    'WHO ICD API credentials are required. Open API Settings (top navigation) to add your Client ID and Client Secret.',
+                    'danger');
+                return;
+            }
+
+            const inputType = document.querySelector('input[name="icd-input-type"]:checked').value; // text | code
+            const sourceSystem = document.getElementById('icd-source-system').value;                // mms | icd10
+            const sourceLang = document.getElementById('icd-source-lang').value;
+            const targetLang = document.getElementById('icd-target-lang').value;
+            const sourceColumn = document.getElementById('icd-source-column').value;
+
+            const wantIcd11 = document.getElementById('icd-target-icd11').checked;
+            const wantIcd10 = document.getElementById('icd-target-icd10').checked;
+            const targets = [];
+            if (wantIcd11) targets.push('icd11');
+            if (wantIcd10) targets.push('icd10');
+
+            if (!sourceColumn) {
+                showAlert('icd-config-message', 'Please choose a source column.', 'danger');
+                return;
+            }
+            if (targets.length === 0) {
+                showAlert('icd-config-message', 'Please select at least one output (ICD-11 term and/or ICD-10).', 'danger');
+                return;
+            }
+
+            const selectedSheet = document.getElementById('sheet-select').value;
+            const sheet = fileData.sheets[selectedSheet];
+            if (!sheet || !sheet.data) {
+                showAlert('icd-config-message', 'No data available for the selected sheet.', 'danger');
+                return;
+            }
+            const allRows = sheet.data;
+            const totalRows = allRows.length;
+            const rowCount = isTestRun ? Math.min(ICD_TEST_ROWS, totalRows) : totalRows;
+
+            showSpinner(true, 'Validating WHO ICD credentials...', false);
+
+            try {
+                // Fail-fast token exchange.
+                const validateResp = await fetch('/icd_validate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clientId: clientId, clientSecret: clientSecret })
+                });
+                const validateResult = await readJson(validateResp);
+                if (!validateResp.ok || !validateResult.ok) {
+                    showSpinner(false);
+                    showAlert('icd-config-message',
+                        `WHO ICD credential check failed: ${validateResult.error || ('HTTP ' + validateResp.status)}`,
+                        'danger');
+                    return;
+                }
+
+                // Batch translate.
+                showSpinner(true, isTestRun ? `Running test on first ${rowCount} rows...` : 'Translating to ICD-11...', true);
+                updateProgress(0, 0, rowCount, 'Starting translation...');
+
+                const resultsByIndex = {};
+                let totalErrors = 0;
+
+                for (let start = 0; start < rowCount; start += ANALYZE_BATCH_SIZE) {
+                    const end = Math.min(start + ANALYZE_BATCH_SIZE, rowCount);
+
+                    const batchRows = [];
+                    for (let i = start; i < end; i++) {
+                        const cell = allRows[i][sourceColumn];
+                        batchRows.push({ rowIndex: i, text: (cell === null || cell === undefined) ? '' : String(cell) });
+                    }
+
+                    const response = await fetch('/icd_translate_batch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            clientId: clientId,
+                            clientSecret: clientSecret,
+                            openaiApiKey: openaiApiKey || null,
+                            inputType: inputType,
+                            sourceSystem: sourceSystem,
+                            sourceLang: sourceLang,
+                            targetLang: targetLang,
+                            targets: targets,
+                            rows: batchRows
+                        })
+                    });
+
+                    const result = await readJson(response);
+                    if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
+                    if (result.error) throw new Error(result.error);
+
+                    totalErrors += result.errors || 0;
+                    (result.results || []).forEach(r => { resultsByIndex[r.rowIndex] = r; });
+
+                    const done = end;
+                    updateProgress(Math.round((done / rowCount) * 100), done, rowCount,
+                        `Translated ${done} of ${rowCount} rows...`);
+                }
+
+                // Build the output columns (original + added, in selection order).
+                const addedColumns = [];
+                if (wantIcd11) {
+                    addedColumns.push('ICD-11 Code');
+                    addedColumns.push(`ICD-11 Term (${targetLang.toUpperCase()})`);
+                }
+                if (wantIcd10) {
+                    addedColumns.push('ICD-10 Code');
+                    addedColumns.push('ICD-10 Match');
+                }
+                addedColumns.push('Type');
+                addedColumns.push('Source Term');
+                addedColumns.push('Confidence');
+                addedColumns.push('Source');
+                addedColumns.push('Notes');
+
+                // De-duplicate: if the source sheet already has any of these
+                // columns (e.g. a previously-exported file was re-uploaded, or a
+                // re-run), reuse them and overwrite the values in place instead of
+                // appending empty duplicate columns.
+                const outColumns = sheet.columns.slice();
+                addedColumns.forEach(c => { if (!outColumns.includes(c)) outColumns.push(c); });
+                // Explain, in plain language, why a row did not map to a clean ICD
+                // diagnosis code. Procedures/administrative entries are not codeable
+                // in ICD (which classifies diseases), and unverified LLM answers are
+                // flagged so the user knows to double-check them.
+                const deriveIcdNote = (r) => {
+                    const o = r.outputs || {};
+                    const hasCode = !!((o.icd11 && o.icd11.code) || (o.icd10 && o.icd10.code));
+                    const parts = [];
+                    if (r.kind === 'procedure') {
+                        parts.push('Procedure, not a diagnosis — ICD-11 classifies diseases, not interventions, so there is no true diagnosis code. Use the WHO ICHI classification for procedures.');
+                    } else if (r.kind === 'other') {
+                        parts.push('Not a codeable diagnosis (e.g. an administrative, symptom, or non-clinical entry).');
+                    }
+                    if (!hasCode) {
+                        parts.push(r.note || 'No ICD match found.');
+                    } else if (r.note) {
+                        // e.g. "Provided by LLM (not found in WHO API)".
+                        parts.push(r.note);
+                    }
+                    return parts.join(' ');
+                };
+                const outData = allRows.slice(0, rowCount).map((row, i) => {
+                    const out = Object.assign({}, row);
+                    const r = resultsByIndex[i] || {};
+                    const outputs = r.outputs || {};
+                    if (wantIcd11) {
+                        const o11 = outputs.icd11 || {};
+                        out['ICD-11 Code'] = o11.code || '';
+                        out[`ICD-11 Term (${targetLang.toUpperCase()})`] = o11.term || '';
+                    }
+                    if (wantIcd10) {
+                        const o10 = outputs.icd10 || {};
+                        out['ICD-10 Code'] = o10.code || '';
+                        out['ICD-10 Match'] = o10.relationship || '';
+                    }
+                    const kindLabel = {
+                        diagnosis: 'Diagnosis',
+                        procedure: 'Procedure (not codeable in ICD — see ICHI)',
+                        other: 'Other'
+                    }[r.kind] || (r.kind || '');
+                    out['Type'] = kindLabel;
+                    out['Source Term'] = r.sourceTitle || '';
+                    out['Confidence'] = r.confidence || '';
+                    out['Source'] = r.source || '';
+                    out['Notes'] = deriveIcdNote(r);
+                    return out;
+                });
+
+                icdResult = { sheetName: selectedSheet, columns: outColumns, data: outData, isTest: isTestRun };
+
+                const icdMsg = document.getElementById('icd-result-message');
+                if (icdMsg) {
+                    const errNote = totalErrors ? ` ${totalErrors} row(s) had no/low match.` : '';
+                    icdMsg.querySelector('span').innerHTML = isTestRun
+                        ? `<i class="bi bi-lightning-charge"></i> <strong>Test run</strong> on the first ${rowCount} of ${totalRows} row(s).${errNote} Review the results below, then go <strong>Back</strong> and click <strong>Translate All Rows</strong> to process everything.`
+                        : `<i class="bi bi-check-circle"></i> Translation complete! Mapped ${rowCount} row(s).${errNote}`;
+                }
+
+                renderIcdResults();
+
+                const dlLink = document.getElementById('icd-download-link');
+                if (dlLink) {
+                    // Hide the download for a test sample to avoid confusing it with the full output.
+                    dlLink.style.display = isTestRun ? 'none' : '';
+                    dlLink.href = '#';
+                    dlLink.onclick = (ev) => { ev.preventDefault(); downloadIcdFile(); };
+                }
+
+                goToStep(5);
+            } catch (error) {
+                showAlert('icd-config-message', `Error during translation: ${error.message}`, 'danger');
+            } finally {
+                updateProgress(100, rowCount, rowCount, 'Translation complete!');
+                setTimeout(() => showSpinner(false), 800);
+            }
+        }
+
         /* Utility functions */
         function showSpinner(show, message = 'Processing...', showProgress = false) {
             const spinner = document.getElementById('spinner-overlay');
@@ -1528,8 +2035,78 @@
                     el.classList.remove('active', 'completed');
                 }
             });
-            
+
+            // Branch the per-step panels based on the active application mode.
+            applyModePanels(step);
+
             currentStep = step;
+        }
+
+        // Show/hide the analysis vs ICD panels for the given step according to appMode.
+        function applyModePanels(step) {
+            const isIcd = (appMode === 'icd');
+            const setHidden = (id, hidden) => {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('hidden', hidden);
+            };
+
+            if (step === 1) {
+                setHidden('analysis-instructions-block', isIcd);
+                setHidden('icd-intro-block', !isIcd);
+            }
+
+            if (step === 4) {
+                setHidden('analysis-config', isIcd);
+                setHidden('icd-config', !isIcd);
+                if (isIcd) {
+                    populateIcdConfig();
+                }
+            }
+
+            if (step === 5) {
+                setHidden('analysis-results', isIcd);
+                setHidden('icd-results', !isIcd);
+            }
+        }
+
+        // Populate the ICD config controls (source column + language dropdowns) from
+        // the currently selected sheet. Called when entering step 4 in ICD mode.
+        function populateIcdConfig() {
+            const sheetSelect = document.getElementById('sheet-select');
+            const selectedSheet = sheetSelect ? sheetSelect.value : null;
+            const sheet = (fileData.sheets && selectedSheet) ? fileData.sheets[selectedSheet] : null;
+            const columns = (sheet && sheet.columns) ? sheet.columns : (availableColumns || []);
+
+            const colSelect = document.getElementById('icd-source-column');
+            if (colSelect) {
+                const prev = colSelect.value;
+                colSelect.innerHTML = '';
+                columns.forEach(col => {
+                    const opt = document.createElement('option');
+                    opt.value = col;
+                    opt.textContent = col;
+                    colSelect.appendChild(opt);
+                });
+                if (prev && columns.includes(prev)) colSelect.value = prev;
+            }
+
+            // Populate language dropdowns once (defaults: source es, target en).
+            const srcLang = document.getElementById('icd-source-lang');
+            if (srcLang && !srcLang.options.length) srcLang.innerHTML = icdLangOptionsHtml('es');
+            const tgtLang = document.getElementById('icd-target-lang');
+            if (tgtLang && !tgtLang.options.length) tgtLang.innerHTML = icdLangOptionsHtml('en');
+
+            updateIcdInputTypeToggle();
+        }
+
+        // Toggle the source-lang (free text) vs source-system (existing code) controls.
+        function updateIcdInputTypeToggle() {
+            const codeRadio = document.getElementById('icd-input-type-code');
+            const isCode = codeRadio ? codeRadio.checked : false;
+            const langGroup = document.getElementById('icd-source-lang-group');
+            const sysGroup = document.getElementById('icd-source-system-group');
+            if (langGroup) langGroup.classList.toggle('hidden', isCode);
+            if (sysGroup) sysGroup.classList.toggle('hidden', !isCode);
         }
         
         /* Theme toggle */
@@ -1656,6 +2233,17 @@
                     }
                 }
             }
+
+            // Load saved WHO ICD credentials (used by Medical Translation mode)
+            const savedIcdId = localStorage.getItem(ICD_CLIENT_ID_STORAGE_KEY);
+            const savedIcdSecret = localStorage.getItem(ICD_CLIENT_SECRET_STORAGE_KEY);
+            const icdIdField = document.getElementById('modal-icd-client-id');
+            const icdSecretField = document.getElementById('modal-icd-client-secret');
+            if (icdIdField && savedIcdId) icdIdField.value = savedIcdId;
+            if (icdSecretField && savedIcdSecret) icdSecretField.value = savedIcdSecret;
+            if ((savedIcdId || savedIcdSecret) && modalSaveKeyCheckbox) {
+                modalSaveKeyCheckbox.checked = true;
+            }
         }
         
         function toggleApiKeyVisibility() {
@@ -1713,76 +2301,98 @@
             }
         }
         
-        /* File Upload */
+        /* File handling helpers */
+
+        // Robust response reader: handles non-JSON / timeout responses gracefully
+        // instead of crashing on `response.json()` with "Unexpected token".
+        async function readJson(response) {
+            const text = await response.text();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                const snippet = text.slice(0, 200).trim();
+                throw new Error(response.ok
+                    ? `Unexpected non-JSON response: ${snippet}`
+                    : `Server error ${response.status}: ${snippet || 'request failed'}`);
+            }
+        }
+
+        // Read the uploaded File into an ArrayBuffer.
+        function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error('Could not read the file.'));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        /* File Upload — parsed entirely in the browser (no server round-trip). */
         async function uploadFile(e) {
             e.preventDefault();
-            
+
             const fileInput = document.getElementById('file');
             const progressBar = document.getElementById('upload-progress');
-            
+
             if (!fileInput.files.length) {
                 showAlert('upload-message', 'Please select a file to upload', 'danger');
                 return;
             }
-            
+
             // Show progress
             progressBar.classList.remove('hidden');
             progressBar.querySelector('.progress-bar').style.width = '0%';
-            
-            // Create form data
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
-            
+
             try {
-                // Show spinner with upload message
-                showSpinner(true, 'Uploading file...');
-                
-                // Simulate progress (since we don't have actual progress events)
-                let progress = 0;
-                const progressInterval = setInterval(() => {
-                    progress += 5;
-                    if (progress <= 90) {
-                        progressBar.querySelector('.progress-bar').style.width = `${progress}%`;
+                // Show spinner with parsing message
+                showSpinner(true, 'Reading file...');
+
+                const file = fileInput.files[0];
+                const buffer = await readFileAsArrayBuffer(file);
+                progressBar.querySelector('.progress-bar').style.width = '60%';
+
+                const workbook = XLSX.read(buffer, { type: 'array' });
+
+                // Build the same shape the rest of the UI consumes:
+                // fileData.sheets[name] = { columns: [...], data: [...all rows...] }
+                const sheets = {};
+                workbook.SheetNames.forEach(name => {
+                    const ws = workbook.Sheets[name];
+                    const rows = XLSX.utils.sheet_to_json(ws, { defval: null });
+                    // Derive the column order from the header row so empty-valued
+                    // columns are still represented.
+                    const header = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null })[0] || [];
+                    let columns = header.filter(h => h !== null && h !== undefined && String(h).trim() !== '').map(String);
+                    if (columns.length === 0 && rows.length > 0) {
+                        columns = Object.keys(rows[0]);
                     }
-                }, 100);
-                
-                // Upload the file
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
+                    sheets[name] = { columns: columns, data: rows };
                 });
-                
-                // Clear progress interval
-                clearInterval(progressInterval);
+
+                if (Object.keys(sheets).length === 0) {
+                    throw new Error('No sheets found in the file.');
+                }
+
+                fileData = { filename: file.name, sheets: sheets };
                 progressBar.querySelector('.progress-bar').style.width = '100%';
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error}`);
-                }
-                
-                fileData = await response.json();
-                if (fileData.error) {
-                    throw new Error(fileData.error);
-                }
-                
-                showAlert('upload-message', 'File uploaded successfully!', 'success');
-                
+
+                showAlert('upload-message', 'File loaded successfully!', 'success');
+
                 // Hide spinner
                 showSpinner(false);
-                
+
                 // Move to next step after a short delay
                 setTimeout(() => {
                     displayFilePreview();
                     goToStep(3);
-                }, 1000);
-                
+                }, 600);
+
             } catch (error) {
                 // Hide spinner
                 showSpinner(false);
-                
+
                 // Show error
-                showAlert('upload-message', `Error uploading file: ${error.message}`, 'danger');
+                showAlert('upload-message', `Error reading file: ${error.message}`, 'danger');
                 progressBar.classList.add('hidden');
             }
         }
@@ -1815,17 +2425,22 @@
             });
             tableHTML += '</tr></thead><tbody>';
             
-            sheetData.data.forEach(row => {
+            // Only render the first 10 rows for preview (data now holds ALL rows).
+            sheetData.data.slice(0, 10).forEach(row => {
                 tableHTML += '<tr>';
                 sheetData.columns.forEach(column => {
-                    tableHTML += `<td>${row[column]}</td>`;
+                    const cell = row[column];
+                    tableHTML += `<td>${cell === null || cell === undefined ? '' : cell}</td>`;
                 });
                 tableHTML += '</tr>';
             });
-            
+
             tableHTML += '</tbody></table>';
+            if (sheetData.data.length > 10) {
+                tableHTML += `<p class="text-muted small">Showing first 10 of ${sheetData.data.length} rows.</p>`;
+            }
             previewTable.innerHTML = tableHTML;
-            
+
             // Store the total row count for progress tracking
             const sheetSelect = document.getElementById('sheet-select');
             sheetSelect.dataset.rowCount = sheetData.data.length;
@@ -2035,29 +2650,33 @@
             
             // Show loading spinner
             showSpinner(true, 'Detecting patterns in your data...');
-            
+
             try {
+                // Sample non-empty values for this column from the in-memory data.
+                const rows = (fileData.sheets[selectedSheet] || {}).data || [];
+                const sampleValues = rows
+                    .map(r => r[column])
+                    .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
+                    .slice(0, 100);
+
                 const response = await fetch('/detect_patterns', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        filename: fileData.filename,
-                        sheetName: selectedSheet,
                         apiKey: apiKey,
                         column: column,
                         patternPrompt: patternPrompt,
-                        numCategories: parseInt(numCategories)
+                        numCategories: parseInt(numCategories),
+                        sampleValues: sampleValues
                     })
                 });
-                
+
+                const result = await readJson(response);
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error}`);
+                    throw new Error(result.error || `HTTP error! status: ${response.status}`);
                 }
-                
-                const result = await response.json();
                 if (result.error) {
                     throw new Error(result.error);
                 }
@@ -2197,85 +2816,106 @@
                 return;
             }
             
-            // Calculate total operations for progress tracking
-            const totalRows = isTestRun ? 5 : parseInt(document.getElementById('sheet-select').dataset.rowCount || 0);
-            const totalOperations = columnConfigs.length * (totalRows || 1);
-            
+            // Source rows from the in-memory sheet.
+            const sheet = fileData.sheets[selectedSheet];
+            if (!sheet || !sheet.data) {
+                showAlert('analyze-message', 'No data available for the selected sheet', 'danger');
+                return;
+            }
+            const allRows = sheet.data;
+            const rowCount = isTestRun ? Math.min(5, allRows.length) : allRows.length;
+
+            // Resolve each output column name once, ensuring uniqueness against
+            // existing columns (previously done per-row on the server).
+            const existing = new Set(sheet.columns);
+            columnConfigs.forEach(cfg => {
+                let name = cfg.outputColumnName || `${cfg.column}_analysis_${cfg.id}`;
+                const base = name;
+                let counter = 1;
+                while (existing.has(name)) { name = `${base}_${counter++}`; }
+                existing.add(name);
+                cfg.resolvedName = name;
+            });
+
             // Show spinner with progress bar
             showSpinner(true, isTestRun ? 'Running test analysis on 5 rows...' : 'Analyzing all data...', true);
-            updateProgress(0, 0, totalOperations, 'Starting analysis...');
-            
-            // Set up polling for progress updates
-            const progressCheckInterval = setInterval(() => {
-                fetch('/analysis_progress')
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.in_progress) {
-                            const percentage = Math.min(Math.round((data.progress.completed / data.progress.total) * 100), 99);
-                            updateProgress(
-                                percentage, 
-                                data.progress.completed, 
-                                data.progress.total, 
-                                `Analyzing ${data.progress.current_column || 'data'}...`
-                            );
-                        }
-                    })
-                    .catch(err => console.error('Error checking progress:', err));
-            }, 1000);
-            
+            updateProgress(0, 0, rowCount, 'Starting analysis...');
+
+            const serverConfigs = columnConfigs.map(c => ({
+                id: c.id, column: c.column, prompt: c.prompt, outputColumnName: c.resolvedName
+            }));
+
             try {
-                const response = await fetch('/analyze', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        filename: fileData.filename,
-                        sheetName: selectedSheet,
-                        apiKey: apiKey,
-                        generalInstructions: generalInstructions,
-                        columnConfigs: columnConfigs,
-                        isTestRun: isTestRun
-                    })
-                });
-                
-                // Clear the progress check interval
-                clearInterval(progressCheckInterval);
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error}`);
+                const analyzedRows = [];
+                let totalErrors = 0;
+
+                for (let start = 0; start < rowCount; start += ANALYZE_BATCH_SIZE) {
+                    const end = Math.min(start + ANALYZE_BATCH_SIZE, rowCount);
+
+                    const batchRows = [];
+                    for (let i = start; i < end; i++) {
+                        const inputs = {};
+                        columnConfigs.forEach(cfg => { inputs[cfg.id] = buildAnalysisInput(allRows[i], cfg); });
+                        batchRows.push({ rowIndex: i, inputs: inputs });
+                    }
+
+                    const response = await fetch('/analyze_batch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            apiKey: apiKey,
+                            generalInstructions: generalInstructions,
+                            isFirstBatch: start === 0,
+                            configs: serverConfigs,
+                            rows: batchRows
+                        })
+                    });
+
+                    const result = await readJson(response);
+                    if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
+                    if (result.error) throw new Error(result.error);
+
+                    totalErrors += result.errors || 0;
+                    const valuesByIndex = {};
+                    (result.results || []).forEach(r => { valuesByIndex[r.rowIndex] = r.values; });
+                    for (let i = start; i < end; i++) {
+                        analyzedRows.push(Object.assign({}, allRows[i], valuesByIndex[i] || {}));
+                    }
+
+                    const done = end;
+                    updateProgress(Math.round((done / rowCount) * 100), done, rowCount,
+                        `Analyzed ${done} of ${rowCount} rows...`);
                 }
-                
-                const result = await response.json();
-                if (result.error) {
-                    throw new Error(result.error);
-                }
-                
-                // Process results for both test runs and full analysis
-                document.getElementById('result-message').textContent = result.message;
-                document.getElementById('download-link').href = `/download/${result.filename}`;
+
+                // Store the analyzed dataset in memory for the viewer, chat, and download.
+                const outColumns = sheet.columns.concat(columnConfigs.map(c => c.resolvedName));
+                analyzedResult = { sheetName: selectedSheet, columns: outColumns, data: analyzedRows };
+
+                document.getElementById('result-message').textContent =
+                    `Analysis complete!${isTestRun ? ` (Test run on ${rowCount} rows)` : ''}` +
+                    (totalErrors ? ` ${totalErrors} cell(s) had errors.` : '');
+                const downloadLink = document.getElementById('download-link');
+                downloadLink.href = '#';
+                downloadLink.onclick = (ev) => { ev.preventDefault(); downloadAnalyzedFile(); };
 
                 if (isTestRun) {
-                    // For test runs, use the old preview method
-                    await previewAnalyzedData(result.filename, isTestRun);
+                    previewAnalyzedData(analyzedRows, true);
                     showAlert('analyze-message', 'Test run complete! Results shown in the preview panel. Click "Full View" to see complete results.', 'success');
                 } else {
-                    // For full analysis, load data into new results viewer and move to Step 5
-                    await loadAnalyzedDataFromBackend(result.filename);
+                    const dataObject = { sheets: { [selectedSheet]: { columns: outColumns, data: analyzedRows } } };
+                    window.loadAnalyzedDataFromBackend(dataObject);
                     goToStep(5);
                 }
             } catch (error) {
                 showAlert('analyze-message', `Error during analysis: ${error.message}`, 'danger');
             } finally {
-                clearInterval(progressCheckInterval);
                 // Show 100% progress briefly before closing
-                updateProgress(100, totalOperations, totalOperations, 'Analysis complete!');
-                setTimeout(() => showSpinner(false), 1000);
+                updateProgress(100, rowCount, rowCount, 'Analysis complete!');
+                setTimeout(() => showSpinner(false), 800);
             }
         }
-        
-        async function previewAnalyzedData(filename, isTestRun = false) {
+
+        function previewAnalyzedData(analyzedRows, isTestRun = false) {
             try {
                 // Clear any existing data first to ensure we display fresh results
                 const resultPreview = document.getElementById('result-preview');
@@ -2295,100 +2935,90 @@
                 if (resultPreview) resultPreview.innerHTML = '<div class="alert alert-info">Loading analysis results...</div>';
                 if (chartContent) chartContent.innerHTML = '<div class="alert alert-info">Preparing chart visualization...</div>';
                 if (chartColumnSelect) chartColumnSelect.innerHTML = '';
-                
-                const response = await fetch(`/download/${filename}`, { method: 'GET' });
-                const blob = await response.blob();
-                const fileReader = new FileReader();
-                
-                fileReader.onload = (e) => {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
-                    
-                    // Just get the top 10 rows for preview
-                    const previewData = jsonData.slice(0, 10);
-                    
-                    // Get the headers (columns)
-                    const headers = Object.keys(previewData[0] || {});
-                    
-                    // Create the table HTML
-                    let tableHTML = `
-                        <table class="table table-striped table-bordered table-hover">
-                            <thead class="table-light">
-                                <tr>
-                                    ${headers.map(h => `<th>${h}</th>`).join('')}
-                                </tr>
-                            </thead>
-                            <tbody>
-                    `;
-                    
-                    // Add the data rows
-                    previewData.forEach(row => {
-                        tableHTML += '<tr>';
-                        headers.forEach(header => {
-                            tableHTML += `<td>${row[header] || ''}</td>`;
-                        });
-                        tableHTML += '</tr>';
+
+                // Render directly from the in-memory analyzed rows (no server fetch).
+                const jsonData = analyzedRows || [];
+                const previewData = jsonData.slice(0, 10);
+                const headers = (analyzedResult && analyzedResult.columns) || Object.keys(previewData[0] || {});
+
+                // Create the table HTML
+                let tableHTML = `
+                    <table class="table table-striped table-bordered table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                ${headers.map(h => `<th>${h}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                // Add the data rows
+                previewData.forEach(row => {
+                    tableHTML += '<tr>';
+                    headers.forEach(header => {
+                        const cell = row[header];
+                        tableHTML += `<td>${cell === null || cell === undefined ? '' : cell}</td>`;
                     });
-                    
-                    tableHTML += '</tbody></table>';
-                    
-                    // Update the preview
-                    if (resultPreview) resultPreview.innerHTML = tableHTML;
-                    
-                    // Set up chart visualization
-                    setupChartVisualization(jsonData, headers);
-                    
-                    // If this is a test run, create a floating preview panel
-                    if (isTestRun) {
-                        // Create a floating preview panel for test run results
-                        const previewPanel = document.createElement('div');
-                        previewPanel.className = 'card position-fixed bottom-0 end-0 mb-4 me-4 shadow test-run-preview-panel';
-                        previewPanel.style.width = '90%';
-                        previewPanel.style.maxWidth = '800px';
-                        previewPanel.style.maxHeight = '70vh';
-                        previewPanel.style.overflow = 'auto';
-                        previewPanel.style.zIndex = '1050';
-                        previewPanel.innerHTML = `
-                            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                                <span><i class="bi bi-lightning"></i> Test Run Results (5 Rows)</span>
-                                <div>
-                                    <button class="btn btn-sm btn-outline-light me-2" id="go-to-results-btn">
-                                        <i class="bi bi-arrows-fullscreen"></i> Full View
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-light" id="close-preview-btn">
-                                        <i class="bi bi-x-lg"></i>
-                                    </button>
-                                </div>
+                    tableHTML += '</tr>';
+                });
+
+                tableHTML += '</tbody></table>';
+
+                // Update the preview
+                if (resultPreview) resultPreview.innerHTML = tableHTML;
+
+                // Set up chart visualization
+                setupChartVisualization(jsonData, headers);
+
+                // If this is a test run, create a floating preview panel
+                if (isTestRun) {
+                    // Create a floating preview panel for test run results
+                    const previewPanel = document.createElement('div');
+                    previewPanel.className = 'card position-fixed bottom-0 end-0 mb-4 me-4 shadow test-run-preview-panel';
+                    previewPanel.style.width = '90%';
+                    previewPanel.style.maxWidth = '800px';
+                    previewPanel.style.maxHeight = '70vh';
+                    previewPanel.style.overflow = 'auto';
+                    previewPanel.style.zIndex = '1050';
+                    previewPanel.innerHTML = `
+                        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-lightning"></i> Test Run Results (${previewData.length} Rows)</span>
+                            <div>
+                                <button class="btn btn-sm btn-outline-light me-2" id="go-to-results-btn">
+                                    <i class="bi bi-arrows-fullscreen"></i> Full View
+                                </button>
+                                <button class="btn btn-sm btn-outline-light" id="close-preview-btn">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
                             </div>
-                            <div class="card-body">
-                                <div class="test-result-preview overflow-auto" style="max-height: 50vh;">
-                                    ${tableHTML}
-                                </div>
-                                <div class="d-flex justify-content-end mt-3">
-                                    <a href="/download/${filename}" class="btn btn-sm btn-success">
-                                        <i class="bi bi-download"></i> Download Test Results
-                                    </a>
-                                </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="test-result-preview overflow-auto" style="max-height: 50vh;">
+                                ${tableHTML}
                             </div>
-                        `;
-                        document.body.appendChild(previewPanel);
-                        
-                        // Add event listeners to the preview panel buttons
-                        document.getElementById('close-preview-btn').addEventListener('click', () => {
-                            document.body.removeChild(previewPanel);
-                        });
-                        
-                        document.getElementById('go-to-results-btn').addEventListener('click', () => {
-                            document.body.removeChild(previewPanel);
-                            goToStep(5);
-                        });
-                    }
-                };
-                
-                fileReader.readAsArrayBuffer(blob);
+                            <div class="d-flex justify-content-end mt-3">
+                                <button type="button" class="btn btn-sm btn-success" id="download-test-results-btn">
+                                    <i class="bi bi-download"></i> Download Test Results
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(previewPanel);
+
+                    // Add event listeners to the preview panel buttons
+                    document.getElementById('close-preview-btn').addEventListener('click', () => {
+                        document.body.removeChild(previewPanel);
+                    });
+
+                    document.getElementById('go-to-results-btn').addEventListener('click', () => {
+                        document.body.removeChild(previewPanel);
+                        const dataObject = { sheets: { [analyzedResult.sheetName]: { columns: analyzedResult.columns, data: analyzedResult.data } } };
+                        window.loadAnalyzedDataFromBackend(dataObject);
+                        goToStep(5);
+                    });
+
+                    document.getElementById('download-test-results-btn').addEventListener('click', downloadAnalyzedFile);
+                }
             } catch (error) {
                 console.error('Error previewing analyzed data:', error);
             }
@@ -2563,8 +3193,64 @@
                     }
                 });
             }
-            
-            
+
+            // Persist WHO ICD credentials live while the save checkbox is ticked.
+            const modalIcdClientId = document.getElementById('modal-icd-client-id');
+            const modalIcdClientSecret = document.getElementById('modal-icd-client-secret');
+            const modalSaveCheckbox = document.getElementById('modal-save-api-key');
+            if (modalIcdClientId && modalSaveCheckbox) {
+                modalIcdClientId.addEventListener('input', function(e) {
+                    if (modalSaveCheckbox.checked) {
+                        localStorage.setItem(ICD_CLIENT_ID_STORAGE_KEY, e.target.value.trim());
+                    }
+                });
+            }
+            if (modalIcdClientSecret && modalSaveCheckbox) {
+                modalIcdClientSecret.addEventListener('input', function(e) {
+                    if (modalSaveCheckbox.checked) {
+                        localStorage.setItem(ICD_CLIENT_SECRET_STORAGE_KEY, e.target.value.trim());
+                    }
+                });
+            }
+
+            // Mode chooser (Step 1): AI Analysis vs Medical Translation (ICD-11).
+            function setAppMode(mode) {
+                appMode = (mode === 'icd') ? 'icd' : 'analysis';
+                const radio = document.getElementById(appMode === 'icd' ? 'mode-icd' : 'mode-analysis');
+                if (radio) radio.checked = true;
+                document.querySelectorAll('.mode-card').forEach(card => {
+                    card.classList.toggle('border-primary', card.dataset.mode === appMode);
+                });
+                applyModePanels(currentStep);
+            }
+            document.querySelectorAll('input[name="app-mode"]').forEach(r => {
+                r.addEventListener('change', function() { setAppMode(this.value); });
+            });
+            document.querySelectorAll('.mode-card').forEach(card => {
+                card.addEventListener('click', function() { setAppMode(this.dataset.mode); });
+            });
+            setAppMode('analysis');
+
+            // ICD config: toggle source-lang vs source-system on input-type change.
+            document.querySelectorAll('input[name="icd-input-type"]').forEach(r => {
+                r.addEventListener('change', updateIcdInputTypeToggle);
+            });
+
+            // ICD config / results navigation + run button.
+            const icdConfigureBackBtn = document.getElementById('icd-configure-back-btn');
+            const icdResultsBackBtn = document.getElementById('icd-results-back-btn');
+            const runIcdBtn = document.getElementById('run-icd-btn');
+            if (icdConfigureBackBtn) icdConfigureBackBtn.addEventListener('click', () => goToStep(3));
+            if (icdResultsBackBtn) icdResultsBackBtn.addEventListener('click', () => goToStep(4));
+            if (runIcdBtn && typeof runIcdTranslation === 'function') {
+                runIcdBtn.addEventListener('click', () => runIcdTranslation(false));
+            }
+            const runIcdTestBtn = document.getElementById('run-icd-test-btn');
+            if (runIcdTestBtn && typeof runIcdTranslation === 'function') {
+                runIcdTestBtn.addEventListener('click', () => runIcdTranslation(true));
+            }
+
+
             // Step navigation - with null checks
             const configNextBtn = document.getElementById('config-next-btn');
             const uploadBackBtn = document.getElementById('upload-back-btn');
@@ -2849,16 +3535,25 @@
                 saveApiSettings.addEventListener('click', function() {
                     const apiKey = modalApiKey.value.trim();
                     const saveKey = modalSaveApiKey.checked;
-                    
+
+                    // Read WHO ICD credentials (used by Medical Translation mode).
+                    const icdIdField = document.getElementById('modal-icd-client-id');
+                    const icdSecretField = document.getElementById('modal-icd-client-secret');
+                    const icdId = icdIdField ? icdIdField.value.trim() : '';
+                    const icdSecret = icdSecretField ? icdSecretField.value.trim() : '';
+
+                    if (!apiKey && !icdId && !icdSecret) {
+                        alert('Please enter your OpenAI API key and/or your WHO ICD credentials.');
+                        return;
+                    }
+
+                    // Persist (or clear) OpenAI key based on the save checkbox.
                     if (apiKey) {
-                        // Save to localStorage if checkbox is checked
                         if (saveKey) {
                             localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
                         } else {
                             localStorage.removeItem(API_KEY_STORAGE_KEY);
                         }
-                        
-                        // Update main form field if it exists
                         const apiKeyInput = document.getElementById('modal-api-key');
                         if (apiKeyInput) {
                             apiKeyInput.value = apiKey;
@@ -2867,14 +3562,21 @@
                                 saveKeyCheckbox.checked = saveKey;
                             }
                         }
-                        
-                        apiSettingsModal.hide();
-                        
-                        // Show success message
-                        alert('API key saved successfully!');
-                    } else {
-                        alert('Please enter a valid API key.');
                     }
+
+                    // Persist (or clear) WHO ICD credentials based on the same save checkbox.
+                    if (saveKey) {
+                        if (icdId) localStorage.setItem(ICD_CLIENT_ID_STORAGE_KEY, icdId);
+                        else localStorage.removeItem(ICD_CLIENT_ID_STORAGE_KEY);
+                        if (icdSecret) localStorage.setItem(ICD_CLIENT_SECRET_STORAGE_KEY, icdSecret);
+                        else localStorage.removeItem(ICD_CLIENT_SECRET_STORAGE_KEY);
+                    } else {
+                        localStorage.removeItem(ICD_CLIENT_ID_STORAGE_KEY);
+                        localStorage.removeItem(ICD_CLIENT_SECRET_STORAGE_KEY);
+                    }
+
+                    apiSettingsModal.hide();
+                    alert('API settings saved successfully!');
                 });
             }
             
@@ -2903,21 +3605,20 @@
             let currentAnalyzedData = null;
             let currentAnalyzedFilename = null;
 
-            // Load analyzed data from backend
-            async function loadAnalyzedDataFromBackend(filename) {
+            // Load analyzed data into the results viewer from an in-memory object
+            // of shape { sheets: { <name>: { columns, data } } }.
+            function loadAnalyzedDataFromBackend(data) {
                 try {
-                    const response = await fetch(`/get_analyzed_data/${filename}`);
-                    if (!response.ok) {
-                        throw new Error(`Failed to load data: ${response.statusText}`);
+                    if (!data || !data.sheets) {
+                        throw new Error('No analyzed data available');
                     }
-                    const data = await response.json();
                     currentAnalyzedData = data;
-                    currentAnalyzedFilename = filename;
+                    currentAnalyzedFilename = `analyzed_${(fileData.filename || 'data')}`;
 
                     // Populate all tabs with data
                     displayQuickInsights(data);
                     displayInteractiveDataTable(data);
-                    setupChatInterface(filename);
+                    setupChatInterface(currentAnalyzedFilename);
 
                     return data;
                 } catch (error) {
@@ -3199,39 +3900,29 @@
                         throw new Error('Please configure your API key first');
                     }
 
-                    // Send request to backend
-                    const response = await fetch('/chat_with_data', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            filename: filename,
-                            question: question,
-                            apiKey: apiKey
-                        })
-                    });
+                    const dataset = getChatDataset();
+                    if (!dataset) throw new Error('No data loaded. Please upload a file first.');
 
-                    // Remove loading indicator
+                    // Remove loading indicator and prepare a streaming target.
                     document.getElementById('chat-loading')?.remove();
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || 'Failed to get response');
-                    }
-
-                    const result = await response.json();
-
-                    // Add AI response to chat with markdown rendering
                     const aiMessageDiv = document.createElement('div');
                     aiMessageDiv.className = 'mb-3';
                     aiMessageDiv.innerHTML = `
                         <div class="d-inline-block bg-light rounded p-2" style="max-width: 70%;">
                             <strong>AI:</strong>
-                            <div class="markdown-content">${marked.parse(result.answer)}</div>
+                            <div class="markdown-content"></div>
                         </div>
                     `;
                     chatMessages.appendChild(aiMessageDiv);
+                    const contentEl = aiMessageDiv.querySelector('.markdown-content');
+
+                    await streamChat(
+                        { columns: dataset.columns, rows: dataset.rows, question: question, apiKey: apiKey },
+                        (full) => {
+                            contentEl.innerHTML = marked.parse(full);
+                            chatMessages.parentElement.scrollTop = chatMessages.parentElement.scrollHeight;
+                        }
+                    );
 
                 } catch (error) {
                     // Remove loading indicator
@@ -3336,39 +4027,29 @@
                         throw new Error('Please configure your API key in Settings first');
                     }
 
-                    // Send request to backend using the original uploaded filename
-                    const response = await fetch('/chat_with_data', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            filename: fileData.filename,
-                            question: question,
-                            apiKey: apiKey
-                        })
-                    });
+                    const dataset = getChatDataset();
+                    if (!dataset) throw new Error('No data loaded. Please upload a file first.');
 
-                    // Remove loading indicator
+                    // Remove loading indicator and prepare a streaming target.
                     document.getElementById('preview-chat-loading')?.remove();
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || 'Failed to get response');
-                    }
-
-                    const result = await response.json();
-
-                    // Add AI response to chat with markdown rendering
                     const aiMessageDiv = document.createElement('div');
                     aiMessageDiv.className = 'mb-3';
                     aiMessageDiv.innerHTML = `
                         <div class="d-inline-block bg-light rounded p-2" style="max-width: 70%;">
                             <strong>AI:</strong>
-                            <div class="markdown-content">${marked.parse(result.answer)}</div>
+                            <div class="markdown-content"></div>
                         </div>
                     `;
                     chatMessages.appendChild(aiMessageDiv);
+                    const contentEl = aiMessageDiv.querySelector('.markdown-content');
+
+                    await streamChat(
+                        { columns: dataset.columns, rows: dataset.rows, question: question, apiKey: apiKey },
+                        (full) => {
+                            contentEl.innerHTML = marked.parse(full);
+                            chatMessages.parentElement.scrollTop = chatMessages.parentElement.scrollHeight;
+                        }
+                    );
 
                 } catch (error) {
                     // Remove loading indicator
@@ -3529,6 +4210,9 @@
                 const contentDivId = aiMessageDiv.querySelector('.markdown-content').id;
 
                 try {
+                    const dataset = getChatDataset();
+                    if (!dataset) throw new Error('No data loaded. Please upload a file first.');
+
                     // Use fetch for streaming response
                     const response = await fetch('/chat_with_data', {
                         method: 'POST',
@@ -3536,14 +4220,16 @@
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
-                            filename: currentChatFilename,
+                            columns: dataset.columns,
+                            rows: dataset.rows,
                             question: question,
                             apiKey: apiKey
                         })
                     });
 
                     if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
+                        const errData = await readJson(response).catch(() => ({}));
+                        throw new Error(errData.error || `HTTP error! status: ${response.status}`);
                     }
 
                     // Check if response is SSE stream
@@ -3731,7 +4417,24 @@
                         </div>
                         <div class="form-text">Get your API key from <a href="https://platform.openai.com/account/api-keys" target="_blank">OpenAI's website</a></div>
                     </div>
-                    
+
+                    <hr>
+                    <div class="alert alert-info">
+                        <i class="bi bi-translate"></i> WHO ICD-11 API credentials are required for <strong>Medical Translation (ICD-11)</strong>. They are stored only in your browser and never on our servers.
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="modal-icd-client-id" class="form-label">WHO ICD Client ID</label>
+                        <input type="text" class="form-control" id="modal-icd-client-id" placeholder="Enter your WHO ICD Client ID">
+                        <div class="form-text">Register for free at the <a href="https://icd.who.int/icdapi" target="_blank">WHO ICD API portal</a> to obtain credentials.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="modal-icd-client-secret" class="form-label">WHO ICD Client Secret</label>
+                        <input type="password" class="form-control" id="modal-icd-client-secret" placeholder="Enter your WHO ICD Client Secret">
+                        <div class="form-text">Used together with the Client ID to authenticate with the WHO ICD-11 API.</div>
+                    </div>
+
                     <div class="form-check mt-3">
                         <input class="form-check-input" type="checkbox" id="modal-save-api-key">
                         <label class="form-check-label" for="modal-save-api-key">

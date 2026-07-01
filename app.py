@@ -1,64 +1,35 @@
-import os
-from flask import Flask, request, render_template, jsonify, send_file
+from flask import Flask, request, render_template, jsonify
 import pandas as pd
 from openai import OpenAI
-from openai.types.chat import ChatCompletion
 from openai import AuthenticationError, APIError, APIConnectionError
-from werkzeug.utils import secure_filename
 import time
+from concurrent.futures import ThreadPoolExecutor
+
+# Medical Translation (ICD-11) feature dependencies.
+import os
+import re
+import io
+import json
+import zipfile
+import pickle
+import tempfile
 import threading
+import requests
 
 app = Flask(__name__)
 
-# Global variables for progress tracking
-analysis_in_progress = False
-analysis_progress = {
-    "total": 0,
-    "completed": 0,
-    "current_column": None
-}
+# Maximum number of concurrent OpenAI calls per analyze batch.
+MAX_ANALYZE_WORKERS = 8
 
-# Lock for thread safety when updating progress
-progress_lock = threading.Lock()
+# ICD translation makes many WHO API calls per row (suggest -> verify -> autocode
+# -> search -> title). Keep concurrency low to respect WHO fair-use and avoid the
+# rate-limiting that otherwise causes intermittent blank rows.
+ICD_MAX_WORKERS = 4
 
-# Configure upload folder and allowed extensions
-# For Vercel compatibility, check if we're in production and use /tmp if so
-if os.environ.get('VERCEL') == '1' or os.environ.get('VERCEL_ENV') == 'production':
-    UPLOAD_FOLDER = '/tmp'
-else:
-    UPLOAD_FOLDER = 'uploads'
+# Model used for ICD normalization, disambiguation, and the LLM fallback. The
+# fallback's source attribution includes this name so the output is auditable.
+ICD_LLM_MODEL = "gpt-4o-mini"
 
-ALLOWED_EXTENSIONS = {'xlsx', 'xls', 'csv'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-# Ensure the upload folder exists
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def process_dataframe(df, sheet_name):
-    """Process a DataFrame to handle NaN values and convert to JSON-compatible format."""
-    # Check for NaN values and log a warning if found
-    if df.isnull().values.any():
-        app.logger.warning(f"Data in sheet '{sheet_name}' contains NaN values, handling them for proper display.")
-
-    # Replace Inf, -Inf values with None, and handle NaNs correctly
-    df.replace([float('inf'), float('-inf')], pd.NA, inplace=True)
-
-    # Convert DataFrame to use pandas NA type before filling
-    df = df.convert_dtypes()
-
-    # Now fill NaNs
-    df.fillna(value=pd.NA, inplace=True)
-
-    # Convert the cleaned DataFrame to JSON-compatible format
-    return {
-        sheet_name: {
-            "columns": df.columns.tolist(),
-            "data": df.to_dict('records')
-        }
-    }
 
 @app.route('/')
 def index():
@@ -72,83 +43,6 @@ def about():
 def how_it_works():
     return render_template('how-it-works.html')
 
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
-
-    file = request.files['file']
-
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
-
-    if file and allowed_file(file.filename):
-        try:
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-
-            # Debug info about file paths
-            app.logger.info(f"Upload folder: {UPLOAD_FOLDER}, File path: {filepath}")
-
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-
-            # Save the file
-            file.save(filepath)
-
-            # Verify file was saved
-            if not os.path.exists(filepath):
-                app.logger.error(f"File was not saved to {filepath}")
-                return jsonify({"error": "Failed to save file to server"}), 500
-
-            app.logger.info(f"File saved successfully to {filepath}")
-        except Exception as save_error:
-            app.logger.error(f"Error saving file: {str(save_error)}")
-            return jsonify({"error": f"Error saving file: {str(save_error)}"}), 500
-
-        try:
-            # 1. Read the file based on its extension
-            if filename.rsplit('.', 1)[1].lower() == 'csv':
-                app.logger.info("CSV file detected and being processed.")
-                df = pd.read_csv(filepath, nrows=10)  # Preview first 10 rows
-
-                # Process CSV as a single sheet
-                sheets = process_dataframe(df, "Sheet1")
-            else:
-                app.logger.info("Excel file detected and being processed.")
-
-                # Improved error handling for Excel files
-                try:
-                    xls = pd.ExcelFile(filepath)
-
-                    # Process each sheet in the Excel file
-                    sheets = {}
-                    for sheet_name in xls.sheet_names:
-                        try:
-                            df = pd.read_excel(filepath, sheet_name=sheet_name, nrows=10)  # Preview first 10 rows
-                            sheet_data = process_dataframe(df, sheet_name)
-                            sheets.update(sheet_data)
-                        except Exception as sheet_error:
-                            app.logger.error(f"Error processing sheet '{sheet_name}': {str(sheet_error)}")
-                            # Continue with other sheets if one fails
-                except Exception as excel_error:
-                    app.logger.error(f"Error opening Excel file: {str(excel_error)}")
-                    return jsonify({"error": f"Cannot open Excel file: {str(excel_error)}"}), 500
-
-                # Check if we successfully processed at least one sheet
-                if not sheets:
-                    return jsonify({"error": "Could not process any sheets in the Excel file"}), 500
-
-            # Return the JSON response
-            return jsonify({"filename": filename, "sheets": sheets})
-
-        except Exception as e:
-            app.logger.error(f"Error processing file: {str(e)}")
-            return jsonify({"error": f"Error processing file: {str(e)}"}), 500
-
-    return jsonify({"error": "Invalid file type"}), 400
-
-
 @app.route('/detect_patterns', methods=['POST'])
 def detect_patterns():
     try:
@@ -159,51 +53,30 @@ def detect_patterns():
         if not data:
             raise ValueError("No data received in request.")
 
-        # Extract and validate data from the request
-        filename = data.get('filename')
-        sheet_name = data.get('sheetName')
+        # Extract and validate data from the request. The browser parses the
+        # file locally and sends a sample of column values directly.
         api_key = data.get('apiKey')
         column = data.get('column')
         pattern_prompt = data.get('patternPrompt')
         num_categories = data.get('numCategories', 5)
+        sample_values = data.get('sampleValues')
 
         # Check if all necessary keys are present and not empty
-        if not all([filename, sheet_name, api_key, column, pattern_prompt]):
-            missing = [k for k in ['filename', 'sheetName', 'apiKey', 'column', 'patternPrompt']
+        if not all([api_key, column, pattern_prompt]):
+            missing = [k for k in ['apiKey', 'column', 'patternPrompt']
                       if not data.get(k)]
             return jsonify({"error": f"Missing required fields: {', '.join(missing)}"}), 400
+
+        if not sample_values:
+            return jsonify({"error": f"Column '{column}' contains no valid data."}), 400
 
         # Set the OpenAI API key
         client = OpenAI(api_key=api_key)
 
-        # Construct the full file path
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-
-        # Check if the file exists
-        if not os.path.exists(filepath):
-            return jsonify({"error": f"The file {filename} does not exist in the upload folder."}), 404
-
-        # Read the file based on its extension
-        try:
-            if filename.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(filepath, sheet_name=sheet_name)
-            else:
-                df = pd.read_csv(filepath)
-        except Exception as e:
-            return jsonify({"error": f"Error reading file {filename}: {e}"}), 500
-
-        # Check if the column exists in the DataFrame
-        if column not in df.columns:
-            return jsonify({"error": f"Column '{column}' not found in the file."}), 400
-
-        # Get a sample of the data (up to 100 values) for pattern detection
-        # Fix: Get non-null values first, then sample from those
-        non_null_values = df[column].dropna()
-        if len(non_null_values) == 0:
+        # Use up to 100 sample values for pattern detection
+        sample_values = [v for v in sample_values if v is not None and str(v).strip() != ''][:100]
+        if not sample_values:
             return jsonify({"error": f"Column '{column}' contains no valid data."}), 400
-
-        sample_size = min(100, len(non_null_values))
-        sample_values = non_null_values.sample(sample_size).tolist()
 
         # Format the sample values for the AI
         sample_text = "\n".join([f"- {str(val)}" for val in sample_values])
@@ -250,252 +123,109 @@ def detect_patterns():
         app.logger.error(f"Error in detect_patterns: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/analysis_progress')
-def get_analysis_progress():
-    """Return the current progress of analysis for client-side updates."""
-    with progress_lock:
-        return jsonify({
-            "in_progress": analysis_in_progress,
-            "progress": analysis_progress
-        })
+@app.route('/analyze_batch', methods=['POST'])
+def analyze_batch():
+    """Stateless analysis of a single batch of rows.
 
-@app.route('/analyze', methods=['POST'])
-def analyze():
+    The browser parses the file locally, pre-computes the input text for each
+    (row, column-config) cell, and sends batches here. We fan the OpenAI calls
+    out across a thread pool and return the results for this batch only. No
+    file state is kept on the server.
+
+    Expected JSON body:
+        {
+          "apiKey": str,
+          "generalInstructions": str,
+          "isFirstBatch": bool,          # validate the API key only on the first batch
+          "configs": [{"id": str, "prompt": str, "outputColumnName": str}],
+          "rows": [{"rowIndex": int, "inputs": {"<configId>": "text" | null}}]
+        }
+
+    Returns:
+        {"results": [{"rowIndex": int, "values": {"<outputColumnName>": str}}],
+         "errors": int}
+    """
     try:
-        app.logger.info("Analyze route called")
         data = request.json
-        app.logger.info(f"Received data: {data}")
-
-        # Initialize progress tracking
-        global analysis_in_progress, analysis_progress
-        with progress_lock:
-            analysis_in_progress = True
-            analysis_progress = {
-                "total": 0,
-                "completed": 0,
-                "current_column": None
-            }
-
-        # Validate incoming data
         if not data:
             raise ValueError("No data received in request.")
 
-        # Extract and validate data from the request
-        filename = data.get('filename')
-        sheet_name = data.get('sheetName')
         api_key = data.get('apiKey')
-        general_instructions = data.get('generalInstructions')
-        column_configs = data.get('columnConfigs')
-        is_test_run = data.get('isTestRun', False)
+        general_instructions = data.get('generalInstructions') or ''
+        configs = data.get('configs') or []
+        rows = data.get('rows') or []
+        is_first_batch = data.get('isFirstBatch', False)
 
-        # Check if all necessary keys are present and not empty
-        if not filename:
-            return jsonify({"error": "Missing 'filename' in the request data."}), 400
-        if not sheet_name:
-            return jsonify({"error": "Missing 'sheetName' in the request data."}), 400
         if not api_key:
             return jsonify({"error": "Missing 'apiKey' in the request data."}), 400
-        if not general_instructions:
-            return jsonify({"error": "Missing 'generalInstructions' in the request data."}), 400
-        if not column_configs or len(column_configs) == 0:
-            return jsonify({"error": "Missing 'columnConfigs' in the request data."}), 400
+        if not configs:
+            return jsonify({"error": "Missing 'configs' in the request data."}), 400
 
-        # Validate OpenAI API key before proceeding
-        try:
-            client = OpenAI(api_key=api_key)
-            # Make a small test request to verify the API key
-            client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": "Test"}],
-                max_tokens=5
-            )
-        except AuthenticationError:
-            return jsonify({"error": "Invalid OpenAI API key. Please check your API key and try again."}), 401
-        except Exception as e:
-            return jsonify({"error": f"Error connecting to OpenAI: {str(e)}"}), 500
+        client = OpenAI(api_key=api_key)
 
-        # Construct the full file path
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        # Validate the API key once (on the first batch) to fail fast with a
+        # clear message instead of erroring on every cell.
+        if is_first_batch:
+            try:
+                client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": "Test"}],
+                    max_tokens=5
+                )
+            except AuthenticationError:
+                return jsonify({"error": "Invalid OpenAI API key. Please check your API key and try again."}), 401
+            except Exception as e:
+                return jsonify({"error": f"Error connecting to OpenAI: {str(e)}"}), 500
 
-        # Check if the file exists
-        if not os.path.exists(filepath):
-            return jsonify({"error": f"The file {filename} does not exist in the upload folder."}), 404
+        # Pre-build the full prompt and resolved output column name per config.
+        config_by_id = {}
+        for i, config in enumerate(configs):
+            config_id = config.get('id', str(i))
+            output_name = config.get('outputColumnName') or f"{config.get('column', 'column')}_analysis_{config_id}"
+            config_by_id[config_id] = {
+                "output_name": output_name,
+                "full_prompt": f"{general_instructions}\n\nColumn-specific instructions: {config.get('prompt', '')}",
+            }
 
-        # Read the file based on its extension
-        try:
-            if filename.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(filepath, sheet_name=sheet_name)
-            else:
-                df = pd.read_csv(filepath)
-        except Exception as e:
-            return jsonify({"error": f"Error reading file {filename}: {e}"}), 500
+        # Build the work list of (rowIndex, configId, text) cells to analyze.
+        # A None/empty input is a no-op cell with a fixed placeholder result.
+        results_by_row = {}
+        tasks = []
+        for row in rows:
+            row_index = row.get('rowIndex')
+            results_by_row[row_index] = {}
+            for config_id, cfg in config_by_id.items():
+                text = (row.get('inputs') or {}).get(config_id)
+                if text is None or str(text).strip() == '':
+                    results_by_row[row_index][cfg["output_name"]] = "No data (empty cell)"
+                else:
+                    tasks.append((row_index, config_id, str(text)))
 
-        # Get row limit based on test mode
-        row_limit = 5 if is_test_run else len(df)
-
-        # Track progress for logging and UI updates
-        total_operations = len(column_configs) * min(row_limit, len(df))
-        operations_completed = 0
         error_count = 0
 
-        # Update progress tracking
-        with progress_lock:
-            analysis_progress["total"] = total_operations
-            analysis_progress["completed"] = 0
-
-        # Validate columns before processing
-        for config in column_configs:
-            column = config.get('column')
-            columns = config.get('columns', [column])
-
-            for col in columns:
-                if col not in df.columns:
-                    return jsonify({"error": f"Column '{col}' not found in the file."}), 400
-
-        # Process each column configuration
-        for i, config in enumerate(column_configs):
-            column = config.get('column')
-            prompt = config.get('prompt')
-            config_id = config.get('id', str(i))  # Get unique ID for each config or use index
-            output_column_name = config.get('outputColumnName')  # Get user-specified column name
-
-            # Update current column in progress tracking
-            with progress_lock:
-                analysis_progress["current_column"] = column
-
-            full_prompt = f"{general_instructions}\n\nColumn-specific instructions: {prompt}"
-
-            # Catch NaN and other potential data issues
+        def run_task(task):
+            row_index, config_id, text = task
+            cfg = config_by_id[config_id]
             try:
-                # Use custom name if provided, otherwise use auto-generated name
-                if output_column_name:
-                    analysis_column_name = output_column_name
-                    # Check if column name already exists and make it unique if needed
-                    counter = 1
-                    original_name = analysis_column_name
-                    while analysis_column_name in df.columns:
-                        analysis_column_name = f"{original_name}_{counter}"
-                        counter += 1
-                else:
-                    analysis_column_name = f'{column}_analysis_{config_id}'
-
-                # Check for multiple column analysis
-                columns = config.get('columns', [column])
-                multiple_columns = len(columns) > 1
-
-                # Function to process a single row with multiple columns
-                def process_row(row_idx):
-                    nonlocal operations_completed, error_count
-
-                    try:
-                        # Handle multiple columns if present
-                        if multiple_columns:
-                            # Combine the values from multiple columns
-                            combined_values = []
-                            column_headers = []
-
-                            for col in columns:
-                                if col in df.columns and pd.notna(df.at[row_idx, col]):
-                                    combined_values.append(str(df.at[row_idx, col]))
-                                    column_headers.append(col)
-
-                            if not combined_values:
-                                operations_completed += 1
-                                # Update progress tracking
-                                with progress_lock:
-                                    analysis_progress["completed"] = operations_completed
-                                return "No valid data in selected columns"
-
-                            # Create a formatted input with column headers
-                            formatted_input = "\n".join([f"{col}: {val}" for col, val in zip(column_headers, combined_values)])
-                            result = analyze_text(client, formatted_input, full_prompt)
-                            operations_completed += 1
-                            # Update progress tracking
-                            with progress_lock:
-                                analysis_progress["completed"] = operations_completed
-                            return result
-                        else:
-                            # Original single column processing
-                            value = df.at[row_idx, column]
-                            if pd.notna(value):
-                                result = analyze_text(client, str(value), full_prompt)
-                                operations_completed += 1
-                                # Update progress tracking
-                                with progress_lock:
-                                    analysis_progress["completed"] = operations_completed
-                                return result
-                            else:
-                                operations_completed += 1
-                                # Update progress tracking
-                                with progress_lock:
-                                    analysis_progress["completed"] = operations_completed
-                                return "No data (empty cell)"
-                    except Exception as e:
-                        error_count += 1
-                        operations_completed += 1
-                        # Update progress tracking
-                        with progress_lock:
-                            analysis_progress["completed"] = operations_completed
-                        app.logger.error(f"Error processing row {row_idx} for column '{column}': {str(e)}")
-                        return f"Error: {str(e)[:50]}..."
-
-                # Ensure the analysis column exists
-                if analysis_column_name not in df.columns:
-                    df[analysis_column_name] = pd.NA
-
-                # Process rows based on test mode
-                for idx in range(min(row_limit, len(df))):
-                    # Log progress for every 10% completion
-                    progress_percentage = int((operations_completed / total_operations) * 100) if total_operations > 0 else 0
-                    if progress_percentage % 10 == 0 and operations_completed > 0:
-                        app.logger.info(f"Analysis progress: {progress_percentage}%, errors: {error_count}")
-
-                    try:
-                        df.at[idx, analysis_column_name] = process_row(idx)
-                    except Exception as row_error:
-                        app.logger.error(f"Error processing row {idx}: {str(row_error)}")
-                        df.at[idx, analysis_column_name] = f"Error: {str(row_error)[:50]}..."
-                        error_count += 1
-
+                return row_index, cfg["output_name"], analyze_text(client, text, cfg["full_prompt"]), False
             except Exception as e:
-                app.logger.error(f"Error analyzing column '{column}': {str(e)}")
-                return jsonify({"error": f"Error analyzing column '{column}': {str(e)}"}), 500
+                app.logger.error(f"Error analyzing row {row_index}: {str(e)}")
+                return row_index, cfg["output_name"], f"Error: {str(e)[:50]}...", True
 
-        # Save the updated DataFrame
-        output_filename = f"analyzed_{filename}"
-        output_filepath = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
-        try:
-            if filename.endswith(('.xlsx', '.xls')):
-                with pd.ExcelWriter(output_filepath, engine='openpyxl') as writer:
-                    df.to_excel(writer, sheet_name=sheet_name, index=False)
-            else:
-                df.to_csv(output_filepath, index=False)
-        except Exception as e:
-            app.logger.error(f"Error saving the analyzed file: {str(e)}")
-            return jsonify({"error": f"Error saving the analyzed file: {str(e)}"}), 500
+        if tasks:
+            with ThreadPoolExecutor(max_workers=MAX_ANALYZE_WORKERS) as executor:
+                for row_index, output_name, value, is_error in executor.map(run_task, tasks):
+                    results_by_row[row_index][output_name] = value
+                    if is_error:
+                        error_count += 1
 
-        app.logger.info(f"Analysis complete. Processed {operations_completed} cells with {error_count} errors.")
-
-        # Reset progress tracking
-        with progress_lock:
-            analysis_in_progress = False
-            analysis_progress["completed"] = analysis_progress["total"]  # Ensure 100%
-
-        return jsonify({
-            "message": "Analysis complete!" + (" (Test run on 5 rows)" if is_test_run else ""),
-            "filename": output_filename,
-            "stats": {
-                "processed": operations_completed,
-                "errors": error_count
-            }
-        })
+        results = [{"rowIndex": idx, "values": vals} for idx, vals in results_by_row.items()]
+        return jsonify({"results": results, "errors": error_count})
 
     except Exception as e:
-        app.logger.error(f"Error in analyze: {str(e)}")
-        # Reset progress tracking on error
-        with progress_lock:
-            analysis_in_progress = False
+        app.logger.error(f"Error in analyze_batch: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
 
 def analyze_text(client, text, prompt):
     """Use OpenAI's API to analyze the text based on the given prompt."""
@@ -561,43 +291,6 @@ def analyze_text(client, text, prompt):
         app.logger.error(f"Unexpected error in analyze_text: {str(e)}")
         raise
 
-
-@app.route('/get_analyzed_data/<filename>')
-def get_analyzed_data(filename):
-    """Fetch analyzed file data as JSON for display in the results viewer."""
-    try:
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-
-        # Check if the file exists
-        if not os.path.exists(filepath):
-            return jsonify({"error": f"File {filename} not found"}), 404
-
-        # Read the file based on its extension
-        try:
-            if filename.endswith(('.xlsx', '.xls')):
-                # Read all sheets from Excel file
-                xls = pd.ExcelFile(filepath)
-                sheets_data = {}
-
-                for sheet_name in xls.sheet_names:
-                    df = pd.read_excel(filepath, sheet_name=sheet_name)
-                    # Process the dataframe to handle NaN values
-                    sheets_data.update(process_dataframe(df, sheet_name))
-
-                return jsonify({"sheets": sheets_data})
-            else:
-                # Read CSV file
-                df = pd.read_csv(filepath)
-                sheets_data = process_dataframe(df, "Sheet1")
-                return jsonify({"sheets": sheets_data})
-
-        except Exception as e:
-            app.logger.error(f"Error reading file {filename}: {str(e)}")
-            return jsonify({"error": f"Error reading file: {str(e)}"}), 500
-
-    except Exception as e:
-        app.logger.error(f"Error in get_analyzed_data: {str(e)}")
-        return jsonify({"error": str(e)}), 500
 
 def analyze_data_with_code(df, question):
     """
@@ -683,14 +376,16 @@ def chat_with_data():
         data = request.json
         app.logger.info(f"Chat request received: {data}")
 
-        # Extract request parameters
-        filename = data.get('filename')
+        # Extract request parameters. The browser holds the (analyzed) data and
+        # sends the rows directly, so chat is stateless on the server.
         question = data.get('question')
         api_key = data.get('apiKey')
+        rows = data.get('rows')
+        columns = data.get('columns')
 
         # Validate required fields
-        if not filename:
-            return jsonify({"error": "Missing 'filename' in the request data."}), 400
+        if not rows:
+            return jsonify({"error": "Missing 'rows' in the request data."}), 400
         if not question:
             return jsonify({"error": "Missing 'question' in the request data."}), 400
         if not api_key:
@@ -702,21 +397,15 @@ def chat_with_data():
         except Exception as e:
             return jsonify({"error": f"Invalid API key: {str(e)}"}), 401
 
-        # Load the analyzed file
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        if not os.path.exists(filepath):
-            return jsonify({"error": f"File {filename} not found"}), 404
-
         try:
-            # Read the file and prepare data context
-            if filename.endswith(('.xlsx', '.xls')):
-                xls = pd.ExcelFile(filepath)
-                # For simplicity, we'll focus on the first sheet for chat
-                # Future enhancement: allow users to specify which sheet
-                first_sheet = xls.sheet_names[0]
-                df = pd.read_excel(filepath, sheet_name=first_sheet)
-            else:
-                df = pd.read_csv(filepath)
+            # Build a DataFrame from the posted rows, preserving column order.
+            # JSON preserves numeric types from the browser, so pandas infers
+            # numeric dtypes automatically (statistics work as before).
+            df = pd.DataFrame(rows)
+            if columns:
+                ordered = [c for c in columns if c in df.columns]
+                if ordered:
+                    df = df[ordered]
 
             # Try to perform direct data analysis first
             analysis_result = analyze_data_with_code(df, question)
@@ -826,18 +515,1151 @@ Analyze the question and provide an appropriate answer. If it's asking for analy
                 }
             )
 
-        except Exception as file_error:
-            app.logger.error(f"Error reading file for chat: {str(file_error)}")
-            return jsonify({"error": f"Error reading file: {str(file_error)}"}), 500
+        except Exception as data_error:
+            app.logger.error(f"Error processing data for chat: {str(data_error)}")
+            return jsonify({"error": f"Error processing data: {str(data_error)}"}), 500
 
     except Exception as e:
         app.logger.error(f"Error in chat_with_data: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/download/<filename>')
-def download_file(filename):
-    return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename), as_attachment=True)
+# =====================================================================
+# Medical Translation (ICD-11) — Wave 1: core translation + ICD-10 mapping
+# =====================================================================
+
+ICD_RELEASE = "2026-01"
+TOKEN_URL = "https://icdaccessmanagement.who.int/connect/token"
+MAPPING_ZIP_URL = f"https://icdcdn.who.int/static/releasefiles/{ICD_RELEASE}/mapping.zip"
+
+# Base for the MMS linearization of the configured release.
+ICD_MMS_BASE = f"https://id.who.int/icd/release/11/{ICD_RELEASE}/mms"
+
+# Timeouts (seconds).
+ICD_HTTP_TIMEOUT = 30
+ICD_MAPPING_TIMEOUT = 60
+
+# ---------------------------------------------------------------------
+# Token cache
+# ---------------------------------------------------------------------
+_ICD_TOKEN_CACHE = {}              # (client_id, client_secret) -> {"token", "exp"}
+_ICD_TOKEN_LOCK = threading.Lock()
+
+
+def get_icd_token(client_id, client_secret):
+    """Return a (cached) OAuth2 access token for the WHO ICD API.
+
+    Tokens are cached per (client_id, client_secret) and refreshed when within
+    60 seconds of expiry. Raises on a failed token exchange (bad credentials).
+    """
+    key = (client_id, client_secret)
+    now = time.time()
+    cached = _ICD_TOKEN_CACHE.get(key)
+    if cached and (cached["exp"] - 60) > now:
+        return cached["token"]
+
+    with _ICD_TOKEN_LOCK:
+        cached = _ICD_TOKEN_CACHE.get(key)
+        if cached and (cached["exp"] - 60) > now:
+            return cached["token"]
+
+        resp = requests.post(
+            TOKEN_URL,
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "scope": "icdapi_access",
+                "grant_type": "client_credentials",
+            },
+            timeout=ICD_HTTP_TIMEOUT,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        token = payload["access_token"]
+        expires_in = payload.get("expires_in", 3600)
+        _ICD_TOKEN_CACHE[key] = {"token": token, "exp": now + float(expires_in)}
+        return token
+
+
+# ---------------------------------------------------------------------
+# ICD API helpers
+# ---------------------------------------------------------------------
+def strip_tags(s):
+    """Remove any HTML-ish tags (e.g. <em> search highlighting) from a string."""
+    return re.sub(r"<[^>]+>", "", s or "")
+
+
+def _icd_https(uri):
+    """Normalize an ICD identifier URI to https to avoid redirects that would
+    drop the Authorization header."""
+    if uri and uri.startswith("http://"):
+        return "https://" + uri[len("http://"):]
+    return uri
+
+
+def _icd_headers(token, lang):
+    """Standard headers required on every ICD API call."""
+    return {
+        "Authorization": f"Bearer {token}",
+        "API-Version": "v2",
+        "Accept": "application/json",
+        "Accept-Language": lang or "en",
+    }
+
+
+# Retry tuning for transient WHO API failures (rate limiting / timeouts).
+ICD_MAX_RETRIES = 4
+ICD_RETRY_BASE_DELAY = 0.6   # seconds; exponential backoff
+
+
+def _icd_get(url, token, lang, params=None, timeout=ICD_HTTP_TIMEOUT):
+    """GET an ICD API URL with retry + exponential backoff on transient errors.
+
+    Retries on HTTP 429 (rate limit), 5xx, and connection/timeout errors. A 404
+    is returned to the caller (some callers treat it as "not found"); other 4xx
+    are raised immediately (not transient). Returns the requests.Response."""
+    last_exc = None
+    for attempt in range(ICD_MAX_RETRIES):
+        try:
+            resp = requests.get(url, headers=_icd_headers(token, lang),
+                                 params=params, timeout=timeout)
+            if resp.status_code == 404:
+                return resp
+            if resp.status_code == 429 or resp.status_code >= 500:
+                # Transient: honor Retry-After if present, else back off.
+                if attempt < ICD_MAX_RETRIES - 1:
+                    retry_after = resp.headers.get("Retry-After")
+                    try:
+                        delay = float(retry_after) if retry_after else ICD_RETRY_BASE_DELAY * (2 ** attempt)
+                    except (TypeError, ValueError):
+                        delay = ICD_RETRY_BASE_DELAY * (2 ** attempt)
+                    time.sleep(min(delay, 8))
+                    continue
+            resp.raise_for_status()
+            return resp
+        except (requests.Timeout, requests.ConnectionError) as e:
+            last_exc = e
+            if attempt < ICD_MAX_RETRIES - 1:
+                time.sleep(ICD_RETRY_BASE_DELAY * (2 ** attempt))
+                continue
+            raise
+    if last_exc:
+        raise last_exc
+    # Exhausted retries on 429/5xx: raise the last response's status.
+    resp.raise_for_status()
+    return resp
+
+
+def _entity_id_from_uri(uri):
+    """Return the trailing numeric segment of an ICD entity/linearization URI.
+
+    Postcoordination clusters (``...&...``) and trailing modifiers are ignored;
+    the last all-digit path segment is returned (matches the Foundation id used
+    in the ICD-10 mapping tables)."""
+    if not uri:
+        return ""
+    base = uri.split("&")[0]
+    segments = [s for s in base.rstrip("/").split("/") if s]
+    for seg in reversed(segments):
+        if seg.isdigit():
+            return seg
+    return ""
+
+
+def _icd_stem_uri(uri):
+    """Reduce a (possibly postcoordinated) entity URI to its base MMS stem URI so
+    it can be fetched. Postcoordination clusters ("...X & ...Y") and trailing
+    non-id segments (e.g. "/unspecified") cannot be GET as a single entity."""
+    ent_id = _entity_id_from_uri(uri)
+    return f"{ICD_MMS_BASE}/{ent_id}" if ent_id else uri
+
+
+def icd_search(token, q, lang, limit=8):
+    """Flexisearch the MMS linearization. Returns up to ``limit`` candidates
+    [{code, title, uri, score}] keeping only entries with a non-empty code."""
+    if not q or not str(q).strip():
+        return []
+    url = f"{ICD_MMS_BASE}/search"
+    # NOTE: medicalCodingMode is already true by default and controls which
+    # properties are searched (titles + synonyms/index terms), so we do NOT pass
+    # propertiesToBeSearched — combining the two returns 400 Bad Request.
+    params = {
+        "q": q,
+        "flatResults": "true",
+        "useFlexisearch": "true",
+        "highlightingEnabled": "false",
+    }
+    resp = _icd_get(url, token, lang, params=params)
+    resp.raise_for_status()
+    data = resp.json()
+    out = []
+    for ent in (data.get("destinationEntities") or []):
+        code = ent.get("theCode") or ""
+        if not code:
+            continue
+        out.append({
+            "code": code,
+            "title": strip_tags(ent.get("title") or ""),
+            "uri": _icd_https(ent.get("id") or ""),
+            "score": ent.get("score") or 0,
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
+def icd_entity_title(token, uri, lang):
+    """Return the official title (``title.@value``) of an ICD entity in lang.
+
+    The URI is reduced to its stem entity first (postcoordinated clusters can't be
+    fetched). Returns "" if the entity can't be resolved (404) rather than raising,
+    so an odd/foundation-only URI yields a missing term instead of blanking the row."""
+    if not uri:
+        return ""
+    resp = _icd_get(_icd_https(_icd_stem_uri(uri)), token, lang)
+    if resp.status_code == 404:
+        return ""
+    resp.raise_for_status()
+    data = resp.json()
+    title = data.get("title")
+    if isinstance(title, dict):
+        return title.get("@value", "") or ""
+    return str(title) if title else ""
+
+
+def icd_codeinfo(token, code, lang):
+    """Resolve an ICD-11 MMS code to its entity (stem) URI. Returns '' if the
+    code cannot be resolved."""
+    if not code:
+        return ""
+    url = f"{ICD_MMS_BASE}/codeinfo"
+    resp = _icd_get(url, token, lang, params={"code": code})
+    if resp.status_code == 404:
+        return ""
+    resp.raise_for_status()
+    data = resp.json()
+    return _icd_https(data.get("stemId") or "")
+
+
+def icd_autocode(token, text, lang):
+    """WHO MMS autocode: map a free-text phrase to its single best ICD-11 code.
+
+    Purpose-built for whole free-text diagnoses. Returns a candidate dict
+    {code, title, uri, score} (title fetched in ``lang``) or None when there is
+    no match (empty theCode)."""
+    if not text or not str(text).strip():
+        return None
+    url = f"{ICD_MMS_BASE}/autocode"
+    resp = _icd_get(url, token, lang, params={"searchText": text})
+    if resp.status_code == 404:
+        return None
+    resp.raise_for_status()
+    data = resp.json()
+    code = data.get("theCode") or ""
+    if not code:
+        return None
+    uri = _icd_https(data.get("linearizationURI") or data.get("foundationURI") or "")
+    try:
+        title = icd_entity_title(token, uri, lang) if uri else (data.get("matchingText") or "")
+    except Exception:
+        title = data.get("matchingText") or ""
+    return {
+        "code": code,
+        "title": strip_tags(title),
+        "uri": uri,
+        "score": data.get("matchScore") or 0,
+    }
+
+
+# ---------------------------------------------------------------------
+# AI disambiguation
+# ---------------------------------------------------------------------
+def _score_confidence(score):
+    """Map a search score to a confidence bucket."""
+    try:
+        s = float(score or 0)
+    except (TypeError, ValueError):
+        s = 0.0
+    if s >= 0.7:
+        return "high"
+    if s >= 0.4:
+        return "medium"
+    return "low"
+
+
+def ai_pick_candidate(openai_key, text, candidates):
+    """Pick the best ICD-11 candidate for a free-text term.
+
+    Returns {"index": int (-1 if none), "confidence": "high|medium|low"}.
+    On a missing key or any failure, falls back to candidates[0] with a
+    score-derived confidence (or index -1 when there are no candidates)."""
+    if not candidates:
+        return {"index": -1, "confidence": "low"}
+
+    fallback = {"index": 0, "confidence": _score_confidence(candidates[0].get("score"))}
+
+    if not openai_key:
+        return fallback
+
+    try:
+        client = OpenAI(api_key=openai_key)
+        listing = "\n".join(
+            f"{i}: [{c.get('code', '')}] {c.get('title', '')}"
+            for i, c in enumerate(candidates)
+        )
+        prompt = (
+            f'A clinician entered the following diagnosis/term:\n"{text}"\n\n'
+            f"Here are candidate ICD-11 entities:\n{listing}\n\n"
+            "Pick the index of the candidate that best matches the clinical meaning "
+            "of the entered term. Account for spelling differences (British vs "
+            "American English, e.g. diarrhoea/diarrhea, oedema/edema, anaemia/anemia, "
+            "tumour/tumor), abbreviations, synonyms, and minor typos. Prefer the "
+            "closest clinically-equivalent candidate even if the wording is not "
+            "identical. Only use -1 if NONE of the candidates is clinically related "
+            "to the term at all.\n"
+            'Respond as JSON: {"index": <int>, "confidence": "high"|"medium"|"low"}'
+        )
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a medical coding assistant that maps clinical terms to ICD-11 entities."},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        parsed = json.loads(response.choices[0].message.content)
+        idx = int(parsed.get("index", 0))
+        conf = parsed.get("confidence", "medium")
+        if conf not in ("high", "medium", "low"):
+            conf = "medium"
+        if idx < -1 or idx >= len(candidates):
+            return fallback
+        return {"index": idx, "confidence": conf}
+    except Exception as e:
+        app.logger.warning(f"ai_pick_candidate falling back to top hit: {str(e)}")
+        return fallback
+
+
+# ---------------------------------------------------------------------
+# Free-text query normalization (recall improvement)
+# ---------------------------------------------------------------------
+# WHO ICD content is written in British English. American spellings, typos and
+# loose wording in user data otherwise return zero search hits. We search the
+# raw term plus normalized/variant queries and merge the candidates.
+
+# Common American -> British medical spelling fixes (applied as whole-word and
+# as substrings for the productive endings).
+_AM_TO_BR_WORDS = {
+    "diarrhea": "diarrhoea", "edema": "oedema", "anemia": "anaemia",
+    "ischemia": "ischaemia", "leukemia": "leukaemia", "septicemia": "septicaemia",
+    "bacteremia": "bacteraemia", "hypoxemia": "hypoxaemia", "uremia": "uraemia",
+    "hemorrhage": "haemorrhage", "hematoma": "haematoma", "hemophilia": "haemophilia",
+    "hematuria": "haematuria", "hemangioma": "haemangioma",
+    "tumor": "tumour", "labor": "labour", "behavior": "behaviour",
+    "pediatric": "paediatric", "orthopedic": "orthopaedic",
+    "esophagus": "oesophagus", "esophageal": "oesophageal",
+    "estrogen": "oestrogen", "celiac": "coeliac", "diarrhoea": "diarrhoea",
+    "gynecology": "gynaecology", "gynecological": "gynaecological",
+    "edematous": "oedematous", "anesthesia": "anaesthesia",
+    "hemoglobin": "haemoglobin", "hemolytic": "haemolytic", "fetal": "foetal",
+}
+
+
+def _spelling_variants(text):
+    """Return up to a couple of British-spelling variants of an American-spelled
+    term, plus generic ending fixes. Cheap, no network/AI. Empty list if no
+    substitution applies."""
+    if not text:
+        return []
+    lowered = text.lower()
+    variants = set()
+
+    # whole-word substitutions
+    swapped = lowered
+    for am, br in _AM_TO_BR_WORDS.items():
+        if am in swapped:
+            swapped = re.sub(rf"\b{re.escape(am)}\b", br, swapped)
+    if swapped != lowered:
+        variants.add(swapped)
+
+    # productive endings (-emia -> -aemia, -hemo -> -haemo)
+    ending = re.sub(r"([a-z])emia\b", r"\1aemia", lowered)
+    ending = re.sub(r"\bhemo", "haemo", ending)
+    ending = re.sub(r"\bhema", "haema", ending)
+    if ending != lowered:
+        variants.add(ending)
+
+    variants.discard(lowered)
+    return list(variants)
+
+
+def ai_suggest_icd(openai_key, text, source_lang):
+    """Use the LLM's medical knowledge to bridge the vocabulary gap between free
+    text and ICD terminology (the official title is often worded very differently
+    from how a clinician types it, e.g. "snake bite" -> "Toxic effect of venomous
+    snakes" / NE83 / T63.0).
+
+    Returns {"queries": [str], "icd11": [str], "icd10": [str], "kind": str} where
+    queries are official British-spelling search phrases, icd11/icd10 are the LLM's
+    best code guesses, and kind classifies the entry as "diagnosis", "procedure",
+    or "other". The CALLER verifies every code against the WHO API before trusting
+    it. Returns empty lists / kind "diagnosis" on a missing key or any failure."""
+    empty = {"queries": [], "icd11": [], "icd10": [], "kind": "diagnosis"}
+    if not openai_key or not text:
+        return empty
+    try:
+        client = OpenAI(api_key=openai_key)
+        prompt = (
+            f'A user entered this medical entry (language code "{source_lang}"):\n'
+            f'"{text}"\n\n'
+            "Help map it to the WHO ICD-11 classification. The official ICD title is "
+            "often worded differently from the entered term, so use your medical "
+            "knowledge. Provide:\n"
+            "1. kind: classify the entry as \"diagnosis\" (a disease/condition/injury), "
+            "\"procedure\" (a surgical/medical intervention, e.g. wound management, "
+            "reduction/fixation, episiotomy, removal of foreign body), or \"other\". "
+            "NOTE: ICD-11 codes diseases, NOT procedures.\n"
+            "2. queries: 1-3 official clinical search phrases (British English "
+            "spelling, e.g. diarrhoea/oedema/tumour) to look it up.\n"
+            "3. icd11: your best guess of the ICD-11 MMS stem code(s) for this "
+            "concept (e.g. NE83, 1A40, 8B11), most likely first. [] if unsure.\n"
+            "4. icd10: your best guess of the ICD-10 code(s) (e.g. T63.0). [] if unsure.\n"
+            "Only give codes you are reasonably confident about; each is verified "
+            "against the official API and discarded if invalid.\n"
+            'Respond as JSON: {"kind": "...", "queries": [...], "icd11": [...], "icd10": [...]}'
+        )
+        response = client.chat.completions.create(
+            model=ICD_LLM_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a medical coding assistant mapping clinical terms to ICD-11 and ICD-10."},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        parsed = json.loads(response.choices[0].message.content)
+
+        def _clean(key):
+            vals = parsed.get(key) or []
+            if not isinstance(vals, list):
+                vals = [vals]
+            return [str(v).strip() for v in vals if str(v).strip()][:3]
+
+        kind = str(parsed.get("kind", "diagnosis") or "diagnosis").strip().lower()
+        if kind not in ("diagnosis", "procedure", "other"):
+            kind = "diagnosis"
+
+        return {"queries": _clean("queries"), "icd11": _clean("icd11"),
+                "icd10": _clean("icd10"), "kind": kind}
+    except Exception as e:
+        app.logger.warning(f"ai_suggest_icd failed: {str(e)}")
+        return empty
+
+
+def resolve_text_anchor(token, text, source_lang, openai_key):
+    """Resolve a free-text term to a chosen ICD-11 anchor candidate.
+
+    Searches the raw term, cheap British-spelling variants, and (when an OpenAI
+    key is present) LLM-normalized queries; merges and de-dupes the candidates,
+    then lets ai_pick_candidate choose. Returns (chosen_candidate, confidence, kind)
+    where kind is "diagnosis"/"procedure"/"other"; chosen is None if nothing matches.
+    """
+    suggestions = ai_suggest_icd(openai_key, text, source_lang)
+    kind = suggestions.get("kind", "diagnosis")
+
+    queries = [text]
+    queries.extend(_spelling_variants(text))
+    for q in suggestions["queries"]:
+        if q.lower() not in {x.lower() for x in queries}:
+            queries.append(q)
+
+    merged = []
+    seen = set()
+
+    def _add(cand):
+        if not cand:
+            return
+        key = cand.get("uri") or cand.get("code")
+        if key and key not in seen:
+            seen.add(key)
+            merged.append(cand)
+
+    # 1. Verify AI-suggested ICD-11 codes against the API (codeinfo). This bridges
+    #    the vocabulary gap (e.g. "snake bite" -> NE83) that text search can't.
+    for code in suggestions["icd11"]:
+        try:
+            uri = icd_codeinfo(token, code, source_lang)
+            if uri:
+                _add({"code": code,
+                      "title": icd_entity_title(token, uri, source_lang),
+                      "uri": uri, "score": 0.95})
+        except Exception as e:
+            app.logger.warning(f"verify suggested ICD-11 '{code}' failed: {str(e)}")
+
+    # 2. Verify AI-suggested ICD-10 codes via the official mapping table, mapping
+    #    each to its ICD-11 anchor entity.
+    if suggestions["icd10"]:
+        try:
+            load_icd_maps()
+            for code in suggestions["icd10"]:
+                ent = ICD10_TO_ENTITY.get(code)
+                if not ent:
+                    continue
+                icd11_code = ent.get("icd11Code", "")
+                # Resolve via codeinfo on the ICD-11 code (the mapping table's
+                # numeric id is a foundation id and often 404s as an MMS URL).
+                uri = icd_codeinfo(token, icd11_code, source_lang) if icd11_code else ""
+                if not uri and ent.get("entityId"):
+                    uri = f"{ICD_MMS_BASE}/{ent['entityId']}"
+                if uri:
+                    _add({"code": icd11_code,
+                          "title": icd_entity_title(token, uri, source_lang),
+                          "uri": uri, "score": 0.9})
+        except Exception as e:
+            app.logger.warning(f"verify suggested ICD-10 codes failed: {str(e)}")
+
+    # 3. WHO autocode (purpose-built free-text -> best code) on raw + best query.
+    for q in queries[:2]:
+        try:
+            _add(icd_autocode(token, q, source_lang))
+        except Exception as e:
+            app.logger.warning(f"icd_autocode failed for '{q}': {str(e)}")
+
+    # 4. Flexisearch over all queries.
+    for q in queries:
+        try:
+            for c in icd_search(token, q, source_lang):
+                _add(c)
+        except Exception as e:
+            app.logger.warning(f"icd_search failed for '{q}': {str(e)}")
+        if len(merged) >= 12:
+            break
+
+    if not merged:
+        return None, None, kind
+
+    merged.sort(key=lambda c: c.get("score") or 0, reverse=True)
+    merged = merged[:12]
+    pick = ai_pick_candidate(openai_key, text, merged)
+    idx = pick.get("index", 0)
+    if idx is None or idx < 0 or idx >= len(merged):
+        return None, None, kind
+    return merged[idx], pick.get("confidence", "low"), kind
+
+
+# ---------------------------------------------------------------------
+# ICD-10 mapping tables (downloaded, lazy-loaded, cached)
+# ---------------------------------------------------------------------
+ENTITY_TO_ICD10 = {}   # numeric entity id -> {"icd10Code", "icd10Title"}
+ICD10_MULTI = set()    # icd10 codes that map to MULTIPLE ICD-11 categories
+ICD10_TO_ENTITY = {}   # icd10 code -> {"entityId", "icd11Code"}
+
+_ICD_MAPS_LOADED = False
+_ICD_MAPS_LOCK = threading.Lock()
+_ICD_MAPS_CACHE_FILE = os.path.join(tempfile.gettempdir(), f"icd_maps_{ICD_RELEASE}.pkl")
+
+
+def _read_zip_text(zf, suffix):
+    """Read a tab-separated member of the zip whose name ends with suffix and
+    return a list of split rows (BOM-stripped). Returns [] if not present."""
+    for name in zf.namelist():
+        if name.endswith(suffix):
+            raw = zf.read(name).decode("utf-8-sig")
+            return [line.split("\t") for line in raw.splitlines() if line.strip()]
+    return []
+
+
+def _find_col(header, *keywords):
+    """Return the index of the first header cell containing all keywords
+    (case/space-insensitive), else -1."""
+    for i, h in enumerate(header):
+        hl = h.strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+        if all(k in hl for k in keywords):
+            return i
+    return -1
+
+
+def _build_icd_maps_from_zip(content):
+    """Parse the three mapping files out of the mapping.zip bytes."""
+    entity_to_icd10 = {}
+    icd10_multi = set()
+    icd10_to_entity = {}
+
+    with zipfile.ZipFile(io.BytesIO(content)) as zf:
+        # --- foundation_11To10MapToOneCategory.txt ---
+        # header: Foundation URI | icd11Code | icd11Chapter | icd11Title |
+        #         icd10Code | icd10Title
+        rows = _read_zip_text(zf, "foundation_11To10MapToOneCategory.txt")
+        if rows:
+            header = rows[0]
+            uri_i = _find_col(header, "foundation", "uri")
+            if uri_i < 0:
+                uri_i = 0
+            code10_i = _find_col(header, "icd10", "code")
+            if code10_i < 0:
+                code10_i = 4
+            title10_i = _find_col(header, "icd10", "title")
+            if title10_i < 0:
+                title10_i = 5
+            for r in rows[1:]:
+                if len(r) <= max(uri_i, code10_i):
+                    continue
+                ent_id = _entity_id_from_uri(r[uri_i])
+                if not ent_id:
+                    continue
+                icd10_code = (r[code10_i] if len(r) > code10_i else "").strip()
+                icd10_title = (r[title10_i] if len(r) > title10_i else "").strip()
+                entity_to_icd10[ent_id] = {
+                    "icd10Code": icd10_code,
+                    "icd10Title": icd10_title,
+                }
+
+        # --- 10To11MapToMultipleCategories.txt ---
+        # ICD-10 codes that map to MULTIPLE ICD-11 categories (broader than each
+        # ICD-11 child).
+        rows = _read_zip_text(zf, "10To11MapToMultipleCategories.txt")
+        if rows:
+            header = rows[0]
+            code10_i = _find_col(header, "icd10", "code")
+            if code10_i < 0:
+                code10_i = 0
+            for r in rows[1:]:
+                if len(r) <= code10_i:
+                    continue
+                code = r[code10_i].strip()
+                if code:
+                    icd10_multi.add(code)
+
+        # --- 10To11MapToOneCategory.txt ---
+        # icd10 code -> entity id (+ icd11 code) for inputType=code/icd10.
+        rows = _read_zip_text(zf, "10To11MapToOneCategory.txt")
+        if rows:
+            header = rows[0]
+            code10_i = _find_col(header, "icd10", "code")
+            if code10_i < 0:
+                code10_i = 0
+            code11_i = _find_col(header, "icd11", "code")
+            uri_i = _find_col(header, "foundation", "uri")
+            if uri_i < 0:
+                uri_i = _find_col(header, "linearization", "releaseuri")
+            if uri_i < 0:
+                uri_i = _find_col(header, "releaseuri")
+            for r in rows[1:]:
+                if len(r) <= code10_i:
+                    continue
+                code = r[code10_i].strip()
+                if not code:
+                    continue
+                uri = r[uri_i].strip() if (uri_i >= 0 and len(r) > uri_i) else ""
+                ent_id = _entity_id_from_uri(uri)
+                icd11_code = (r[code11_i].strip()
+                              if (code11_i >= 0 and len(r) > code11_i) else "")
+                # First mapping wins (one-category table).
+                if code not in icd10_to_entity:
+                    icd10_to_entity[code] = {
+                        "entityId": ent_id,
+                        "icd11Code": icd11_code,
+                    }
+
+    return entity_to_icd10, icd10_multi, icd10_to_entity
+
+
+def load_icd_maps():
+    """Lazily load the ICD-10 mapping tables.
+
+    Loads from a temp-dir pickle cache if present (survives warm starts);
+    otherwise downloads mapping.zip once, parses it, populates the module-level
+    dicts, and best-effort writes the pickle cache. Thread-safe and cached for
+    the process lifetime. A read-only filesystem (e.g. Vercel) is tolerated by
+    catching write errors and keeping the in-memory cache."""
+    global ENTITY_TO_ICD10, ICD10_MULTI, ICD10_TO_ENTITY, _ICD_MAPS_LOADED
+
+    if _ICD_MAPS_LOADED:
+        return
+
+    with _ICD_MAPS_LOCK:
+        if _ICD_MAPS_LOADED:
+            return
+
+        # Try the temp-dir cache first.
+        try:
+            if os.path.exists(_ICD_MAPS_CACHE_FILE):
+                with open(_ICD_MAPS_CACHE_FILE, "rb") as f:
+                    cached = pickle.load(f)
+                ENTITY_TO_ICD10 = cached["entity_to_icd10"]
+                ICD10_MULTI = cached["icd10_multi"]
+                ICD10_TO_ENTITY = cached["icd10_to_entity"]
+                _ICD_MAPS_LOADED = True
+                app.logger.info("Loaded ICD-10 maps from cache file.")
+                return
+        except Exception as e:
+            app.logger.warning(f"Could not read ICD maps cache: {str(e)}")
+
+        # Download and parse.
+        app.logger.info("Downloading ICD-10 mapping tables...")
+        resp = requests.get(MAPPING_ZIP_URL, timeout=ICD_MAPPING_TIMEOUT)
+        resp.raise_for_status()
+        e2i, multi, i2e = _build_icd_maps_from_zip(resp.content)
+
+        ENTITY_TO_ICD10 = e2i
+        ICD10_MULTI = multi
+        ICD10_TO_ENTITY = i2e
+        _ICD_MAPS_LOADED = True
+        app.logger.info(
+            f"Loaded ICD-10 maps: {len(e2i)} entities, {len(multi)} multi-codes, "
+            f"{len(i2e)} icd10->entity."
+        )
+
+        # Best-effort write the cache for warm starts.
+        try:
+            with open(_ICD_MAPS_CACHE_FILE, "wb") as f:
+                pickle.dump({
+                    "entity_to_icd10": ENTITY_TO_ICD10,
+                    "icd10_multi": ICD10_MULTI,
+                    "icd10_to_entity": ICD10_TO_ENTITY,
+                }, f)
+        except Exception as e:
+            app.logger.warning(f"Could not write ICD maps cache (read-only fs?): {str(e)}")
+
+
+def derive_icd10(entity_id, icd11_code):
+    """Derive an ICD-10 mapping + advisory relationship for an ICD-11 entity.
+
+    Returns {"code", "title", "relationship"} where relationship is one of
+    same-as / broader-than / narrower-than / no-map."""
+    row = ENTITY_TO_ICD10.get(str(entity_id))
+    if not row or not row.get("icd10Code"):
+        return {"code": "", "title": "", "relationship": "no-map"}
+
+    code = row["icd10Code"]
+    if "&" in (icd11_code or ""):
+        relationship = "narrower-than"        # postcoordinated ICD-11 cluster
+    elif code in ICD10_MULTI:
+        relationship = "broader-than"         # ICD-10 broader than ICD-11
+    else:
+        relationship = "same-as"
+    return {"code": code, "title": row.get("icd10Title", ""), "relationship": relationship}
+
+
+# ---------------------------------------------------------------------
+# Per-row translation worker
+# ---------------------------------------------------------------------
+def _icd_no_match(row_index, note):
+    return {
+        "rowIndex": row_index,
+        "icd11Code": "",
+        "sourceTitle": "",
+        "entityUri": "",
+        "confidence": "none",
+        "note": note,
+        "outputs": {},
+        "source": "",
+        "kind": "diagnosis",
+    }
+
+
+def ai_fill_gaps(openai_key, text, icd11_code, anchor_title, source_lang,
+                 target_lang, need_term, need_icd10):
+    """Fill only the cells WHO left empty for an already-resolved ICD-11 code:
+    the target-language term and/or the ICD-10 code. Returns
+    {"term", "icd10Code", "relationship"} (missing keys blank). Best-effort."""
+    if not openai_key:
+        return {}
+    try:
+        client = OpenAI(api_key=openai_key)
+        wants = []
+        if need_term:
+            wants.append(f'"term": the official ICD-11 term for code {icd11_code} '
+                         f'translated into language code "{target_lang}"')
+        if need_icd10:
+            wants.append('"icd10Code": the best matching ICD-10 code, and '
+                         '"relationship": one of same-as|broader-than|narrower-than')
+        prompt = (
+            f'The WHO ICD-11 code for "{text}" is {icd11_code} ("{anchor_title}"), '
+            "but some fields are missing. Using your medical knowledge, provide:\n- "
+            + "\n- ".join(wants) + "\n"
+            'Respond as JSON: {"term": "", "icd10Code": "", "relationship": ""}'
+        )
+        response = client.chat.completions.create(
+            model=ICD_LLM_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a medical coding expert in ICD-10 and ICD-11."},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        parsed = json.loads(response.choices[0].message.content)
+        return {
+            "term": str(parsed.get("term", "") or "").strip(),
+            "icd10Code": str(parsed.get("icd10Code", "") or "").strip(),
+            "relationship": str(parsed.get("relationship", "") or "").strip(),
+        }
+    except Exception as e:
+        app.logger.warning(f"ai_fill_gaps failed: {str(e)}")
+        return {}
+
+
+def ai_full_icd(openai_key, text, source_lang, target_lang):
+    """Last-resort: ask the LLM directly for the ICD codes + translated term when
+    the WHO API found nothing. Returns a dict or None. The caller verifies the
+    code against WHO and attributes the source accordingly."""
+    if not openai_key or not text:
+        return None
+    try:
+        client = OpenAI(api_key=openai_key)
+        prompt = (
+            f'The WHO ICD API could not match this medical term:\n"{text}"\n\n'
+            "Using your medical knowledge, give the best ICD codes and the official "
+            f'term translated into language code "{target_lang}" (use British English '
+            "for any English text). Provide your best estimate even if uncertain.\n"
+            'Respond as JSON: {"icd11Code": "", "icd11Term": "<term in target language>", '
+            '"icd10Code": "", "relationship": "same-as|broader-than|narrower-than|no-map", '
+            '"sourceTitle": "<official English term>"}'
+        )
+        response = client.chat.completions.create(
+            model=ICD_LLM_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a medical coding expert in ICD-10 and ICD-11."},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        parsed = json.loads(response.choices[0].message.content)
+        return {
+            "icd11Code": str(parsed.get("icd11Code", "") or "").strip(),
+            "icd11Term": str(parsed.get("icd11Term", "") or "").strip(),
+            "icd10Code": str(parsed.get("icd10Code", "") or "").strip(),
+            "relationship": str(parsed.get("relationship", "") or "").strip(),
+            "sourceTitle": str(parsed.get("sourceTitle", "") or "").strip(),
+        }
+    except Exception as e:
+        app.logger.warning(f"ai_full_icd failed: {str(e)}")
+        return None
+
+
+def _icd_llm_fallback(token, row_index, text, source_lang, target_lang, targets,
+                      openai_key, kind="diagnosis"):
+    """Build a result from the LLM when WHO has no match. If the LLM's ICD-11 code
+    verifies against the WHO API, the result is upgraded to a WHO-sourced answer;
+    otherwise it is returned as-is and attributed to the model (auditable)."""
+    if not openai_key:
+        res = _icd_no_match(row_index, "No ICD match found")
+        res["kind"] = kind
+        return res
+    info = ai_full_icd(openai_key, text, source_lang, target_lang)
+    if not info or not (info.get("icd11Code") or info.get("icd10Code")):
+        res = _icd_no_match(row_index, "No ICD match found")
+        res["kind"] = kind
+        return res
+
+    icd11_code = info.get("icd11Code", "")
+    uri = ""
+    if icd11_code:
+        try:
+            uri = icd_codeinfo(token, icd11_code, source_lang)
+        except Exception:
+            uri = ""
+
+    outputs = {}
+    if uri:
+        # The LLM's code is real — WHO certifies it.
+        source = "WHO ICD-11 API"
+        confidence = "medium"
+        source_title = icd_entity_title(token, uri, source_lang) or info.get("sourceTitle", "")
+        entity_id = _entity_id_from_uri(uri)
+        if "icd11" in targets:
+            outputs["icd11"] = {"code": icd11_code,
+                                "term": icd_entity_title(token, uri, target_lang)}
+        if "icd10" in targets:
+            load_icd_maps()
+            d = derive_icd10(entity_id, icd11_code)
+            if not d.get("code") and info.get("icd10Code"):
+                d = {"code": info.get("icd10Code", ""), "title": "",
+                     "relationship": info.get("relationship", "") or "no-map"}
+            outputs["icd10"] = d
+        note = ""
+    else:
+        # Unverified — attribute the answer to the LLM.
+        source = f"LLM ({ICD_LLM_MODEL})"
+        confidence = "low"
+        source_title = info.get("sourceTitle", "")
+        if "icd11" in targets:
+            outputs["icd11"] = {"code": icd11_code, "term": info.get("icd11Term", "")}
+        if "icd10" in targets:
+            outputs["icd10"] = {"code": info.get("icd10Code", ""), "title": "",
+                                "relationship": info.get("relationship", "") or "no-map"}
+        note = "Provided by LLM (not found in WHO API)"
+
+    return {
+        "rowIndex": row_index,
+        "icd11Code": icd11_code,
+        "sourceTitle": source_title,
+        "entityUri": uri,
+        "confidence": confidence,
+        "note": note,
+        "outputs": outputs,
+        "source": source,
+        "kind": kind,
+    }
+
+
+def _icd_translate_row(row, token, params):
+    """Resolve a single row to an ICD-11 anchor and build the requested target
+    outputs. Never raises: any error becomes a no-match-style row."""
+    row_index = row.get("rowIndex")
+    try:
+        text = str(row.get("text") or "").strip()
+        if not text:
+            return _icd_no_match(row_index, "Empty input")
+
+        input_type = params["inputType"]
+        source_system = params["sourceSystem"]
+        source_lang = params["sourceLang"]
+        target_lang = params["targetLang"]
+        targets = params["targets"]
+        openai_key = params["openaiApiKey"]
+
+        anchor_code = ""
+        anchor_uri = ""
+        source_title = ""
+        confidence = "high"
+        note = ""
+        source = "WHO ICD-11 API"
+        kind = "diagnosis"
+
+        if input_type == "text":
+            chosen, chosen_conf, kind = resolve_text_anchor(
+                token, text, source_lang, openai_key)
+            if not chosen:
+                # WHO found nothing — fall back to the LLM (clearly attributed).
+                return _icd_llm_fallback(token, row_index, text, source_lang,
+                                         target_lang, targets, openai_key, kind)
+            anchor_code = chosen["code"]
+            anchor_uri = chosen["uri"]
+            source_title = chosen["title"]
+            confidence = chosen_conf or "low"
+
+        elif input_type == "code" and source_system == "mms":
+            anchor_uri = icd_codeinfo(token, text, source_lang)
+            if not anchor_uri:
+                return _icd_no_match(row_index, "ICD-11 code could not be resolved")
+            anchor_code = text
+            source_title = icd_entity_title(token, anchor_uri, source_lang)
+
+        elif input_type == "code" and source_system == "icd10":
+            load_icd_maps()
+            ent = ICD10_TO_ENTITY.get(text)
+            if not ent:
+                return _icd_no_match(row_index, "ICD-10 code not found in mapping table")
+            anchor_code = ent.get("icd11Code", "")
+            # Resolve via codeinfo on the ICD-11 code; fall back to the table id.
+            anchor_uri = icd_codeinfo(token, anchor_code, source_lang) if anchor_code else ""
+            if not anchor_uri and ent.get("entityId"):
+                anchor_uri = f"{ICD_MMS_BASE}/{ent['entityId']}"
+            if not anchor_uri:
+                return _icd_no_match(row_index, "ICD-10 code could not be resolved to ICD-11")
+            source_title = icd_entity_title(token, anchor_uri, source_lang)
+
+        else:
+            return _icd_no_match(row_index, "Unsupported input configuration")
+
+        entity_id = _entity_id_from_uri(anchor_uri)
+
+        outputs = {}
+        if "icd11" in targets:
+            outputs["icd11"] = {
+                "code": anchor_code,
+                "term": icd_entity_title(token, anchor_uri, target_lang),
+            }
+        if "icd10" in targets:
+            load_icd_maps()
+            outputs["icd10"] = derive_icd10(entity_id, anchor_code)
+
+        # Gap-fill: WHO resolved a code but left the target-language term and/or the
+        # ICD-10 mapping empty (common for postcoordinated codes, e.g. snake bite).
+        # Ask the LLM to fill only the missing cells, and note the LLM contribution.
+        need_term = "icd11" in targets and not (outputs.get("icd11", {}).get("term"))
+        need_icd10 = "icd10" in targets and not (outputs.get("icd10", {}).get("code"))
+        if openai_key and (need_term or need_icd10):
+            gaps = ai_fill_gaps(openai_key, text, anchor_code,
+                                source_title or text, source_lang, target_lang,
+                                need_term, need_icd10)
+            filled = []
+            if need_term and gaps.get("term"):
+                outputs["icd11"]["term"] = gaps["term"]
+                filled.append("term")
+            if need_icd10 and gaps.get("icd10Code"):
+                outputs["icd10"] = {"code": gaps["icd10Code"], "title": "",
+                                    "relationship": gaps.get("relationship") or "no-map"}
+                filled.append("ICD-10")
+            if filled:
+                source = f"{source} (+LLM: {', '.join(filled)})"
+
+        return {
+            "rowIndex": row_index,
+            "icd11Code": anchor_code,
+            "sourceTitle": source_title,
+            "entityUri": anchor_uri,
+            "confidence": confidence,
+            "note": note,
+            "outputs": outputs,
+            "source": source,
+            "kind": kind,
+        }
+    except Exception as e:
+        app.logger.error(f"Error translating ICD row {row_index}: {str(e)}")
+        return _icd_no_match(row_index, f"Error: {str(e)[:80]}")
+
+
+# ---------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------
+@app.route('/icd_validate', methods=['POST'])
+def icd_validate():
+    """Validate WHO ICD API credentials by performing a token exchange."""
+    try:
+        data = request.json or {}
+        client_id = data.get('clientId')
+        client_secret = data.get('clientSecret')
+        if not client_id or not client_secret:
+            return jsonify({"error": "Missing ICD API client credentials."}), 400
+        try:
+            get_icd_token(client_id, client_secret)
+        except Exception as e:
+            app.logger.warning(f"ICD credential validation failed: {str(e)}")
+            return jsonify({"error": "Invalid ICD API credentials. Please check your Client ID and Secret."}), 401
+        return jsonify({"ok": True})
+    except Exception as e:
+        app.logger.error(f"Error in icd_validate: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------
+# Per-input result cache (process lifetime). Keyed by (config, source text);
+# makes repeated terms consistent + fast. Only successful results are stored.
+# ---------------------------------------------------------------------
+_ICD_RESULT_CACHE = {}
+_ICD_RESULT_CACHE_LOCK = threading.Lock()
+_ICD_RESULT_CACHE_MAX = 5000
+
+
+def _icd_result_cache_get(key):
+    with _ICD_RESULT_CACHE_LOCK:
+        return _ICD_RESULT_CACHE.get(key)
+
+
+def _icd_result_cache_put(key, value):
+    with _ICD_RESULT_CACHE_LOCK:
+        if len(_ICD_RESULT_CACHE) >= _ICD_RESULT_CACHE_MAX:
+            _ICD_RESULT_CACHE.clear()   # simple bound; cheap and rare
+        _ICD_RESULT_CACHE[key] = dict(value)
+
+
+@app.route('/icd_translate_batch', methods=['POST'])
+def icd_translate_batch():
+    """Translate a batch of rows to ICD-11 (and optionally derived ICD-10).
+
+    Request body:
+        {
+          "clientId": str, "clientSecret": str,
+          "openaiApiKey": str | null,
+          "inputType": "text" | "code",
+          "sourceSystem": "mms" | "icd10",   # required when inputType == "code"
+          "sourceLang": str,
+          "targetLang": str,
+          "targets": ["icd11", "icd10"],     # subset
+          "rows": [{"rowIndex": int, "text": str}]
+        }
+    """
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data received in request."}), 400
+
+        client_id = data.get('clientId')
+        client_secret = data.get('clientSecret')
+        if not client_id or not client_secret:
+            return jsonify({"error": "Missing ICD API client credentials."}), 400
+
+        input_type = data.get('inputType', 'text')
+        if input_type not in ('text', 'code'):
+            return jsonify({"error": "inputType must be 'text' or 'code'."}), 400
+
+        source_system = data.get('sourceSystem', 'mms')
+        if input_type == 'code' and source_system not in ('mms', 'icd10'):
+            return jsonify({"error": "sourceSystem must be 'mms' or 'icd10' for code input."}), 400
+
+        targets = data.get('targets') or ['icd11']
+        targets = [t for t in targets if t in ('icd11', 'icd10')]
+        if not targets:
+            return jsonify({"error": "At least one valid target ('icd11' or 'icd10') is required."}), 400
+
+        rows = data.get('rows') or []
+        if not isinstance(rows, list):
+            return jsonify({"error": "'rows' must be a list."}), 400
+
+        # Acquire one shared token for the whole batch (also validates creds).
+        try:
+            token = get_icd_token(client_id, client_secret)
+        except Exception as e:
+            app.logger.warning(f"ICD token exchange failed: {str(e)}")
+            return jsonify({"error": "Invalid ICD API credentials."}), 401
+
+        params = {
+            "inputType": input_type,
+            "sourceSystem": source_system,
+            "sourceLang": data.get('sourceLang') or 'es',
+            "targetLang": data.get('targetLang') or 'en',
+            "targets": targets,
+            "openaiApiKey": data.get('openaiApiKey'),
+        }
+
+        results = []
+        error_count = 0
+
+        if rows:
+            # Cache key prefix for this request's configuration. Identical source
+            # text under the same config resolves once and stays consistent across
+            # rows AND across runs (process lifetime) — this both removes the
+            # intermittent-blank inconsistency and cuts WHO API calls.
+            cfg_key = (params["inputType"], params["sourceSystem"],
+                       params["sourceLang"], params["targetLang"],
+                       tuple(params["targets"]))
+
+            def run_row(row):
+                text_key = str(row.get("text") or "").strip().lower()
+                ckey = (cfg_key, text_key) if text_key else None
+                if ckey is not None:
+                    cached = _icd_result_cache_get(ckey)
+                    if cached is not None:
+                        res = dict(cached)
+                        res["rowIndex"] = row.get("rowIndex")
+                        return res
+                res = _icd_translate_row(row, token, params)
+                # Cache only successful resolutions; never cache a "none" result so
+                # a transient failure (rate limit/timeout) can still succeed later.
+                if ckey is not None and res.get("confidence") != "none":
+                    _icd_result_cache_put(ckey, res)
+                return res
+
+            with ThreadPoolExecutor(max_workers=ICD_MAX_WORKERS) as executor:
+                for res in executor.map(run_row, rows):
+                    results.append(res)
+                    if res.get("confidence") == "none":
+                        error_count += 1
+
+        return jsonify({"results": results, "errors": error_count})
+
+    except Exception as e:
+        app.logger.error(f"Error in icd_translate_batch: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # On WSL the working copy lives on the Windows mount (/mnt/c), where inotify
+    # does not fire — the default reloader silently misses edits. Force the
+    # polling ("stat") reloader so code changes are always picked up.
+    app.run(debug=True, reloader_type="stat")

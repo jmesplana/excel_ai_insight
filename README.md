@@ -13,6 +13,7 @@ Perfect for anyone drowning in Excel data: e-commerce managers analyzing custome
 - **AI-Powered Analysis**: Automatically analyze thousands of rows with GPT-4o-mini
 - **Sentiment Analysis**: Extract sentiment (Positive/Negative/Neutral) from customer feedback
 - **Translation Service**: Translate text to any language (English, Spanish, French, Japanese, etc.)
+- **Medical Coding & Translation (WHO ICD-11)**: Map free-text diagnoses (any language, even with typos) to official WHO ICD-11 codes and translated terms, plus an optional derived ICD-10 mapping with a relationship indicator (same-as / broader-than / narrower-than / no-map)
 - **Pattern Detection**: Discover categories and themes in your data automatically
 - **Multi-Column Analysis**: Analyze multiple columns together for deeper insights
 - **Test Mode**: Test your prompts on 5 rows before running full analysis
@@ -62,7 +63,12 @@ Perfect for anyone drowning in Excel data: e-commerce managers analyzing custome
 6. **Get your OpenAI API key:**
    - Sign up at [OpenAI Platform](https://platform.openai.com/)
    - Create an API key
-   - Enter it in the Settings tab
+   - Enter it in the API Settings dialog
+
+7. **(Optional) Get WHO ICD API credentials** — only for the Medical Translation (ICD-11) feature:
+   - Register for free at the [WHO ICD API portal](https://icd.who.int/icdapi)
+   - Copy your **Client ID** and **Client Secret**
+   - Enter both in the same API Settings dialog
 
 ## 💼 Use Cases
 
@@ -82,6 +88,10 @@ Perfect for anyone drowning in Excel data: e-commerce managers analyzing custome
 **Challenge**: Need to identify data inconsistencies and errors across thousands of entries
 **Solution**: AI checks for formatting errors, outliers, and missing information
 
+### Health Information Officer: Diagnosis Standardization
+**Challenge**: A register of free-text diagnoses in mixed languages and spellings needs official ICD codes
+**Solution**: The Medical Translation (ICD-11) mode maps each entry to a WHO ICD-11 code and translated term, with an optional ICD-10 mapping and relationship indicator
+
 ## 🎯 Features in Detail
 
 ### Sentiment Analysis (Concise)
@@ -98,6 +108,38 @@ Translate the following text to [TARGET_LANGUAGE]. Return ONLY the translation w
 additional commentary, notes, or explanations. If the text is already in [TARGET_LANGUAGE],
 return it unchanged.
 ```
+
+### Medical Coding & Translation (WHO ICD-11)
+Map a column of medical diagnoses to authoritative WHO ICD-11 codes and translated terms. This is a dedicated mode (select **Medical Translation (ICD-11)** on the Configuration step) and it uses a **hybrid** of OpenAI + the official [WHO ICD-11 API](https://icd.who.int/icdapi):
+
+- **OpenAI understands & selects** — it normalizes messy free text (typos, abbreviations, lay wording, and American vs. British spelling such as *diarrhea → diarrhoea*) into official search queries and disambiguates the best match.
+- **WHO certifies** — it supplies the actual ICD-11 code and the official term in your chosen target language. Codes and translations always come from WHO, never invented by the AI.
+
+Capabilities:
+- **Two input modes**: free text in any source language, **or** an existing code column (ICD-11 MMS or ICD-10).
+- **Any source/target language** from the WHO-supported set (English, Spanish, French, Arabic, Chinese, and more).
+- **Typo- and spelling-tolerant matching** via WHO flexisearch + autocode, synonym/index-term search, and AI normalization.
+- **Optional ICD-10 mapping** column with a *derived, advisory* relationship indicator: same-as / broader-than / narrower-than / no-map.
+
+#### Output columns
+
+The mapped file adds the following columns (ICD-11 / ICD-10 code columns appear only for the outputs you selected):
+
+| Column | Meaning | Example values |
+|---|---|---|
+| **ICD-11 Code** | The WHO ICD-11 (MMS) code the entry was matched to. | `NE83`, `5A11`, or blank |
+| **ICD-11 Term (XX)** | The official ICD-11 title for that code, translated into your target language (`XX` = language code). | Official term text |
+| **ICD-10 Code** | The corresponding ICD-10 code, derived from WHO's official crosswalk. | `T63.0`, `E11`, or blank |
+| **ICD-10 Match** | Relationship between the ICD-11 and ICD-10 code (they rarely line up 1:1). | `same-as`, `broader-than`, `narrower-than`, `no-map` |
+| **Type** | What the entry is — flags rows that are not true diagnoses. | `Diagnosis`, `Procedure (not codeable in ICD — see ICHI)`, `Other` |
+| **Source Term** | The official ICD title (source language) the input was matched to, for verification. | Official term text |
+| **Confidence** | How sure the tool is about the match. | `high`, `medium`, `low`, `none` |
+| **Source** | Where the answer came from — the WHO/AI audit trail. | `WHO ICD-11 API`, `WHO ICD-11 API (+LLM: term, ICD-10)`, `LLM (gpt-4o-mini)` |
+| **Notes** | Plain-language reason a row did not map to a clean diagnosis code. | `Procedure, not a diagnosis…`, `No ICD match found`, `Provided by LLM (not found in WHO API)`, or blank |
+
+> **Reading the results:** `Confidence` + `Source` together tell you how much to trust a row — a `high` / `WHO ICD-11 API` row is authoritative, while a `low` / `LLM (gpt-4o-mini)` row is the model's best guess and should be reviewed. `Notes` explains non-diagnosis entries, e.g. procedures, which ICD does not code (use the WHO ICHI classification instead).
+
+> ICD-11 is licensed by WHO under CC BY-ND 3.0 IGO. The ICD-10 mapping and relationship indicators are derived and provided for reference; verify before clinical or statistical use.
 
 ### Pattern Detection
 Discover categories automatically:
@@ -117,6 +159,7 @@ Analyze relationships across columns:
 
 - Python 3.7 or higher
 - [OpenAI API key](https://platform.openai.com/api-keys)
+- *(Optional)* [WHO ICD API credentials](https://icd.who.int/icdapi) (Client ID + Secret) — only for the Medical Translation (ICD-11) feature
 
 ### Local Development
 
@@ -171,6 +214,14 @@ Access the app at `http://127.0.0.1:5000/`
 ### Step 5: Download Results
 1. Once complete, click **Download Analyzed File**
 2. Open in Excel to see AI-generated insights in new columns
+
+### Alternative: Medical Translation (ICD-11)
+On the Configuration step, choose **Medical Translation (ICD-11)** instead of AI Analysis, then:
+1. Make sure your **WHO ICD Client ID + Secret** are set in API Settings (and your OpenAI key, for best matching)
+2. Upload your file and pick the **source column**
+3. Choose the **input type** — *Free text* (with a source language) or *Existing code* (ICD-11 MMS or ICD-10)
+4. Pick the **target language** and which outputs you want (ICD-11 term and/or ICD-10 code + relationship)
+5. Click **Run** and download the mapped file
 
 ## 📝 Prompt Templates
 
@@ -230,9 +281,9 @@ For production deployment, set:
 
 ## 🔒 Privacy & Security
 
-- **API keys stored locally**: Your OpenAI API key is stored in your browser's localStorage, never transmitted to our servers
-- **No data retention**: Uploaded files are processed temporarily and automatically deleted
-- **Client-side API calls**: OpenAI API calls are made directly from your browser to OpenAI
+- **API keys stored locally**: Your OpenAI API key and WHO ICD credentials are stored in your browser's localStorage, never on our servers
+- **No data retention**: Uploaded files are parsed in your browser and rows are sent to the server only transiently for processing—no files are stored
+- **Authoritative medical data**: ICD codes and translations come directly from the official WHO ICD-11 API; the AI only interprets input and selects matches, it never invents codes
 - **Full control**: You maintain complete control over your data and API usage
 
 ## 🐛 Troubleshooting
@@ -250,6 +301,14 @@ For production deployment, set:
 **Analysis is slow**
 - **Cause**: Processing many rows or complex prompts
 - **Solution**: Use Test Mode first, optimize prompts for conciseness
+
+**Error: "Invalid ICD API credentials" (Medical Translation mode)**
+- **Cause**: WHO ICD Client ID/Secret missing or incorrect
+- **Solution**: Register at the [WHO ICD API portal](https://icd.who.int/icdapi) and enter both the Client ID and Secret in API Settings
+
+**ICD rows come back blank**
+- **Cause**: Free-text terms that don't match WHO's (British English) terminology, or no OpenAI key for normalization
+- **Solution**: Add your OpenAI API key (it normalizes spelling/typos before lookup); for coded input, confirm the correct source classification (ICD-11 MMS vs ICD-10) is selected
 
 ## 🤝 Contributing
 
@@ -269,6 +328,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Built with [Flask](https://flask.palletsprojects.com/)
 - Powered by [OpenAI GPT-4o-mini](https://openai.com/)
+- Medical coding via the [WHO ICD-11 API](https://icd.who.int/icdapi) — ICD-11 © World Health Organization (CC BY-ND 3.0 IGO)
 - UI components from [Bootstrap 5](https://getbootstrap.com/)
 - Design system follows [Aidstack Brand Guidelines](aidstack-brand-guide.md)
 
