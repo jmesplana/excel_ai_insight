@@ -19,7 +19,7 @@ Perfect for anyone drowning in Excel data: e-commerce managers analyzing custome
 - **Test Mode**: Test your prompts on 5 rows before running full analysis
 - **Progress Tracking**: Real-time progress updates during analysis
 - **Dark Mode**: Easy on the eyes for long analysis sessions
-- **Privacy First**: API keys stored locally in your browser, never on our servers
+- **Privacy First**: Files parsed locally; selected rows and credentials pass through the server for processing
 
 ## 📋 Table of Contents
 
@@ -27,6 +27,7 @@ Perfect for anyone drowning in Excel data: e-commerce managers analyzing custome
 - [Use Cases](#use-cases)
 - [Features in Detail](#features-in-detail)
 - [Installation](#installation)
+- [AI Provider Configuration](#-ai-provider-configuration)
 - [Usage Guide](#usage-guide)
 - [Prompt Templates](#prompt-templates)
 - [Deployment](#deployment)
@@ -41,31 +42,32 @@ Perfect for anyone drowning in Excel data: e-commerce managers analyzing custome
    cd excel_ai_insight
    ```
 
-2. **Create a virtual environment:**
+2. **Start the app:**
+   ```bash
+   npm run dev
+   ```
+   This creates the Python virtual environment, installs dependencies, and starts
+   the server. No manual `venv` or `pip` steps are needed.
+
+   <details>
+   <summary>Prefer plain Python?</summary>
+
    ```bash
    python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies:**
-   ```bash
+   source venv/bin/activate    # On Windows: venv\Scripts\activate
    pip install -r requirements.txt
-   ```
-
-4. **Run the application:**
-   ```bash
    python app.py
    ```
+   </details>
 
-5. **Open your browser:**
-   Navigate to `http://127.0.0.1:5000/`
+3. **Open your browser:**
+   Navigate to `http://127.0.0.1:8080/`
 
-6. **Get your OpenAI API key:**
-   - Sign up at [OpenAI Platform](https://platform.openai.com/)
-   - Create an API key
-   - Enter it in the API Settings dialog
+4. **Configure your AI provider** in the API Settings dialog — either
+   [OpenAI](https://platform.openai.com/) or **Azure AI Foundry**
+   (see [AI Provider Configuration](#-ai-provider-configuration) below).
 
-7. **(Optional) Get WHO ICD API credentials** — only for the Medical Translation (ICD-11) feature:
+5. **(Optional) Get WHO ICD API credentials** — only for the Medical Translation (ICD-11) feature:
    - Register for free at the [WHO ICD API portal](https://icd.who.int/icdapi)
    - Copy your **Client ID** and **Client Secret**
    - Enter both in the same API Settings dialog
@@ -113,7 +115,7 @@ return it unchanged.
 Map a column of medical diagnoses to authoritative WHO ICD-11 codes and translated terms. This is a dedicated mode (select **Medical Translation (ICD-11)** on the Configuration step) and it uses a **hybrid** of OpenAI + the official [WHO ICD-11 API](https://icd.who.int/icdapi):
 
 - **OpenAI understands & selects** — it normalizes messy free text (typos, abbreviations, lay wording, and American vs. British spelling such as *diarrhea → diarrhoea*) into official search queries and disambiguates the best match.
-- **WHO certifies** — it supplies the actual ICD-11 code and the official term in your chosen target language. Codes and translations always come from WHO, never invented by the AI.
+- **WHO verifies code existence** — official lookups supply codes and terms. Model-generated fallback codes and gap-filled terms are suggestions, identified by per-field source columns and review status. A valid code does not establish that it correctly matches the input.
 
 Capabilities:
 - **Two input modes**: free text in any source language, **or** an existing code column (ICD-11 MMS or ICD-10).
@@ -137,7 +139,7 @@ The mapped file adds the following columns (ICD-11 / ICD-10 code columns appear 
 | **Source** | Where the answer came from — the WHO/AI audit trail. | `WHO ICD-11 API`, `WHO ICD-11 API (+LLM: term, ICD-10)`, `LLM (gpt-4o-mini)` |
 | **Notes** | Plain-language reason a row did not map to a clean diagnosis code. | `Procedure, not a diagnosis…`, `No ICD match found`, `Provided by LLM (not found in WHO API)`, or blank |
 
-> **Reading the results:** `Confidence` + `Source` together tell you how much to trust a row — a `high` / `WHO ICD-11 API` row is authoritative, while a `low` / `LLM (gpt-4o-mini)` row is the model's best guess and should be reviewed. `Notes` explains non-diagnosis entries, e.g. procedures, which ICD does not code (use the WHO ICHI classification instead).
+> **Reading the results:** `Confidence` + `Source` together tell you how much to trust a row — a `high` / `WHO ICD-11 API` row identifies a WHO code but still needs appropriate matching review, while a `low` / `LLM (gpt-4o-mini)` row is the model's best guess and should be reviewed. `Notes` explains non-diagnosis entries, e.g. procedures, which ICD does not code (use the WHO ICHI classification instead).
 
 > ICD-11 is licensed by WHO under CC BY-ND 3.0 IGO. The ICD-10 mapping and relationship indicators are derived and provided for reference; verify before clinical or statistical use.
 
@@ -158,39 +160,89 @@ Analyze relationships across columns:
 ### Prerequisites
 
 - Python 3.7 or higher
-- [OpenAI API key](https://platform.openai.com/api-keys)
+- Node.js 18+ *(only for the `npm run dev` launcher)*
+- An AI provider: an [OpenAI API key](https://platform.openai.com/api-keys) **or** an Azure AI Foundry deployment
 - *(Optional)* [WHO ICD API credentials](https://icd.who.int/icdapi) (Client ID + Secret) — only for the Medical Translation (ICD-11) feature
 
 ### Local Development
 
 ```bash
-# Clone repository
 git clone https://github.com/jmesplana/excel_ai_insight.git
 cd excel_ai_insight
-
-# Create virtual environment
-python3 -m venv venv
-
-# Activate virtual environment
-# On macOS/Linux:
-source venv/bin/activate
-# On Windows:
-venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-python app.py
+npm run dev
 ```
 
-Access the app at `http://127.0.0.1:5000/`
+`npm run dev` creates `./venv`, installs `requirements.txt` (only when it
+changes), and starts Flask with auto-reload. Access the app at
+`http://127.0.0.1:8080/`.
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Set up if needed, then run with auto-reload |
+| `npm start` | Run without the debug reloader |
+| `npm run setup` | Create the venv and install dependencies, then exit |
+| `npm run clean` | Remove `venv/` and Python caches |
+
+Override the port or host with environment variables:
+
+```bash
+PORT=3000 npm run dev
+```
+
+## 🤖 AI Provider Configuration
+
+The app works with **OpenAI** or a model deployed in your organization's
+**Azure AI Foundry** (Azure OpenAI) tenant. Configure it in either place:
+
+### Option A: In the browser (per user)
+
+Open **API Settings**, choose your provider, and fill in the fields. Use
+**Test Connection** to verify before running a whole file. Credentials are kept
+in your browser's `localStorage` when requested, and sent to the server for processing. WHO authentication is temporarily cached in server memory.
+
+For **Azure AI Foundry** you need three values from the Azure portal:
+
+| Field | Where to find it |
+|---|---|
+| **Azure Endpoint** | Your resource → *Keys and Endpoint* (e.g. `https://your-resource.openai.azure.com`) |
+| **Azure API Key** | Either key on that same page |
+| **Deployment Name** | *Model deployments* in Azure AI Foundry — the name **your organization chose**, which is often different from the model name |
+| **API Version** | Optional; defaults to `2024-10-21` |
+
+### Option B: Server-side (shared deployment)
+
+Set environment variables so users never have to enter credentials. Copy
+`.env.example` to `.env` and fill in:
+
+```bash
+LLM_PROVIDER=azure
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+AZURE_OPENAI_API_KEY=your-azure-key
+AZURE_OPENAI_DEPLOYMENT=your-deployment-name
+AZURE_OPENAI_API_VERSION=2024-10-21   # optional
+```
+
+Or for OpenAI:
+
+```bash
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini   # optional
+```
+
+> **Precedence:** values entered in the browser always win. Environment
+> variables are the fallback, so an organization can ship a working default
+> while still letting individuals use their own key.
+
+`.env` is gitignored — never commit real credentials.
 
 ## 📖 Usage Guide
 
 ### Step 1: Configuration
 1. Click the **Settings** button
-2. Enter your **OpenAI API key**
+2. Choose your **AI provider** (OpenAI or Azure AI Foundry) and enter its
+   credentials, then click **Test Connection**. You can skip this if the server
+   already has a provider configured.
 3. Add **General Instructions** (optional, applies to all analyses)
 4. Choose from suggested prompt templates or write your own
 
@@ -277,13 +329,16 @@ The `vercel.json` configuration is already included in the repository.
 
 For production deployment, set:
 - `VERCEL=1` (automatically set by Vercel)
-- No need to set OpenAI API key—users provide their own
+- AI credentials are optional — users can provide their own in the browser. To
+  ship a shared deployment instead, set `LLM_PROVIDER` plus the matching
+  `AZURE_OPENAI_*` or `OPENAI_*` variables in your Vercel project settings.
 
 ## 🔒 Privacy & Security
 
-- **API keys stored locally**: Your OpenAI API key and WHO ICD credentials are stored in your browser's localStorage, never on our servers
+- **API keys stored locally**: Your AI provider credentials (OpenAI or Azure) and WHO ICD credentials can be saved in browser storage. Credentials pass through the server; WHO tokens and credential cache keys are temporarily held in memory
+- **Bring your own model**: Point the app at your organization's Azure AI Foundry deployment so prompts stay inside your own Azure tenant
 - **No data retention**: Uploaded files are parsed in your browser and rows are sent to the server only transiently for processing—no files are stored
-- **Authoritative medical data**: ICD codes and translations come directly from the official WHO ICD-11 API; the AI only interprets input and selects matches, it never invents codes
+- **Medical provenance**: Results distinguish WHO lookups from model suggestions. Review suggested matches before use; confidence is not a verified measure of matching accuracy.
 - **Full control**: You maintain complete control over your data and API usage
 
 ## 🐛 Troubleshooting
@@ -340,3 +395,52 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Part of the Aidstack.ai ecosystem** | Visit [aidstack.ai](https://aidstack.ai) to explore more tools
+
+
+## Development structure
+
+- `app.py`: application factory, page routes, and feature registration.
+- `insights/analysis.py`: connection testing, pattern detection, and row analysis.
+- `insights/chat.py`: dataset statistics and streaming chat.
+- `insights/icd.py`: WHO lookups, mapping, and per-field provenance.
+- `insights/errors.py`: safe public error messages.
+- `static/js/app.js`: workflow orchestration and event wiring.
+- `static/js/results.js`: results tables and chat controls, initialized with explicit dependencies.
+- `static/js/provider-settings.js`: provider configuration and form visibility.
+- `static/js/batch-runner.js`: resumable in-memory batch execution.
+- `static/js/spreadsheet.js`: header validation, typed imports, and table export.
+- `static/js/rendering.js`: text escaping and sanitized Markdown.
+- `templates/partials/`: landing page, settings, and individual workflow steps.
+- `static/css/app.css`: application styles.
+
+Run regression tests after changing feature boundaries:
+
+```bash
+npm test
+npm run test:backend
+npm run test:browser
+```
+
+The browser suite uses Chrome, starts its own local server on port 8091, and
+mocks provider responses. Run `npm install` once to install the test dependency.
+
+Analysis runs can stop after the current batch, download completed rows, and
+resume from the last acknowledged batch using the original settings. Checkpoints
+stay in memory: keep the page open, or download partial results before leaving.
+Cell-level errors are retained in the export; resume retries an interrupted batch,
+not individual cells that already returned an error. A request whose response was
+lost may have incurred provider usage even though its batch must be retried.
+
+Exports are **results tables**, containing the selected sheet's values and new
+outputs. They do not preserve the original workbook's other sheets, formulas, or
+formatting. Duplicate or blank column headers must be corrected before import.
+
+Output length can be selected per analysis configuration. Oversized inputs and
+outputs that hit the response limit return explicit cell errors instead of silently
+truncated results. Medical exports include review status, WHO references, and
+separate sources for ICD-11 codes, translated terms, and ICD-10 mappings. The
+review filter changes the on-screen view; exports include every result row.
+
+DOMPurify is vendored at `static/vendor/purify.es.mjs` (version and license in its
+header). All AI Markdown must go through `renderMarkdown`; spreadsheet text and
+attribute values must use `escapeHtml` or DOM `textContent`.

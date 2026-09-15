@@ -1,0 +1,103 @@
+            <!-- Step 1: Configuration -->
+            <div class="step-content fade-in" id="step-1">
+                <div class="row justify-content-center">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span>Analysis Configuration</span>
+                                <i class="bi bi-sliders"></i>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i> Before starting your analysis, configure general instructions that will apply to all analyzed columns. Configure OpenAI or Azure in the <strong>API Settings</strong> button in the top navigation bar, unless your server already provides credentials.
+                                </div>
+
+                                <!-- Mode Chooser -->
+                                <div class="mb-4">
+                                    <label class="form-label">Choose a mode</label>
+                                    <div class="row g-3" id="mode-chooser">
+                                        <div class="col-md-6">
+                                            <div class="card h-100 mode-card border" id="mode-card-analysis" data-mode="analysis" style="cursor: pointer;">
+                                                <div class="card-body">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="app-mode" id="mode-analysis" value="analysis" checked>
+                                                        <label class="form-check-label fw-bold" for="mode-analysis">
+                                                            <i class="bi bi-robot"></i> AI Analysis
+                                                        </label>
+                                                    </div>
+                                                    <p class="small text-muted mb-0 mt-2">Analyze, summarize, classify or translate any column using your selected AI provider.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="card h-100 mode-card border" id="mode-card-icd" data-mode="icd" style="cursor: pointer;">
+                                                <div class="card-body">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="app-mode" id="mode-icd" value="icd">
+                                                        <label class="form-check-label fw-bold" for="mode-icd">
+                                                            <i class="bi bi-translate"></i> Medical Translation (ICD-11)
+                                                        </label>
+                                                    </div>
+                                                    <p class="small text-muted mb-0 mt-2">Map free-text diagnoses or codes to ICD-11 (and derived ICD-10). Requires WHO ICD API credentials.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- AI Analysis general instructions (hidden in ICD mode) -->
+                                <div id="analysis-instructions-block">
+                                <div class="mb-4">
+                                    <label for="general-instructions" class="form-label">
+                                        General Instructions
+                                        <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip" title="These instructions will apply to all column analyses. Be specific about what you want the AI to do."></i>
+                                    </label>
+                                    <textarea class="form-control" id="general-instructions" rows="4" placeholder="Enter general instructions for the analysis..."></textarea>
+                                </div>
+                                
+                                <div class="prompt-templates">
+                                    <h6>Suggested Templates <i class="bi bi-lightning-charge text-warning"></i></h6>
+
+                                    <div class="alert alert-warning small mb-3">
+                                        <i class="bi bi-lightbulb"></i> <strong>Prompt Writing Tip:</strong> For concise outputs (e.g., sentiment analysis), explicitly instruct the AI to provide ONLY the required value without explanations. Example: "Return only the sentiment (Positive/Negative/Neutral) without any additional text or explanation."
+                                    </div>
+
+                                    <div class="prompt-template" data-template="You are a business analyst helping to extract insights from company data. Be concise, factual, and focus on actionable business insights. Avoid fluff and marketing language. When possible, quantify your observations.">
+                                        <h6 class="mb-1">Business Analysis</h6>
+                                        <p class="small text-muted mb-0">Extract factual, actionable business insights from data</p>
+                                    </div>
+                                    <div class="prompt-template" data-template="You are a data quality specialist. Examine each entry for inconsistencies, formatting errors, outliers, or missing information. When you find issues, provide specific suggestions for improvement. Be thorough but concise.">
+                                        <h6 class="mb-1">Data Quality Check</h6>
+                                        <p class="small text-muted mb-0">Identify issues and provide suggestions for improvement</p>
+                                    </div>
+                                    <div class="prompt-template" data-template="Analyze the sentiment of this text. Return ONLY one word: Positive, Negative, or Neutral. Do not include any explanation, reasoning, or additional text.">
+                                        <h6 class="mb-1">Sentiment Analysis (Concise)</h6>
+                                        <p class="small text-muted mb-0">Get one-word sentiment without explanations</p>
+                                    </div>
+                                    <div class="prompt-template" data-template="You are analyzing customer feedback to improve products and services. Identify the sentiment (positive/negative/neutral), extract key issues or praise points, and suggest one concrete action that could address any concerns mentioned.">
+                                        <h6 class="mb-1">Customer Feedback Analysis (Detailed)</h6>
+                                        <p class="small text-muted mb-0">Analyze sentiment and extract key points from feedback</p>
+                                    </div>
+                                    <div class="prompt-template" data-template="Translate the following text to [TARGET_LANGUAGE]. Return ONLY the translation without any additional commentary, notes, or explanations. If the text is already in [TARGET_LANGUAGE], return it unchanged.">
+                                        <h6 class="mb-1">Translation Service</h6>
+                                        <p class="small text-muted mb-0">Replace [TARGET_LANGUAGE] with your desired language (e.g., English, Spanish, French, Japanese)</p>
+                                    </div>
+                                </div>
+                                </div>
+                                <!-- /analysis-instructions-block -->
+
+                                <div id="icd-intro-block" class="hidden">
+                                    <div class="alert alert-warning small">
+                                        <i class="bi bi-translate"></i> <strong>Medical Translation (ICD-11):</strong> map each row of a column to ICD-11 (and optionally a derived ICD-10 code). Make sure your <strong>WHO ICD Client ID &amp; Secret</strong> are set in <strong>API Settings</strong>. An OpenAI API key (optional) improves disambiguation of free-text input.
+                                    </div>
+                                </div>
+
+                                <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
+                                    <button class="btn btn-primary" id="config-next-btn">Next <i class="bi bi-arrow-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            

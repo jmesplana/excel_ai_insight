@@ -1,0 +1,2069 @@
+import { initResults } from './results.js';
+let resultsUI;
+import { API_KEY_STORAGE_KEY, PROVIDER_STORAGE_KEY, AZURE_ENDPOINT_STORAGE_KEY, AZURE_DEPLOYMENT_STORAGE_KEY, AZURE_API_VERSION_STORAGE_KEY, OPENAI_MODEL_STORAGE_KEY, getLLMConfig, hasLocalCredentials, syncProviderUI } from './provider-settings.js';
+import { escapeHtml, renderMarkdown } from './rendering.js';
+import { parseWorkbook, exportResults } from './spreadsheet.js';
+import { BatchRun } from './batch-runner.js';
+
+/* Global variables */
+let availableColumns = [];
+let fileData = {};
+let currentStep = 1;
+let resultChart = null;
+const ICD_CLIENT_ID_STORAGE_KEY = 'excel_ai_insight_icd_client_id';
+const ICD_CLIENT_SECRET_STORAGE_KEY = 'excel_ai_insight_icd_client_secret';
+
+// Application mode: 'analysis' (default AI analysis) | 'icd' (Medical Translation ICD-11)
+let appMode = 'analysis';
+
+// Holds the ICD translation dataset in memory: { sheetName, columns: [...], data: [...] }
+let icdResult = null;
+
+// ICD-11 language options (release 2026-01 MMS) shared by all language dropdowns.
+const ICD_LANGUAGES = [
+    ['ar', 'Arabic'], ['zh', 'Chinese'], ['cs', 'Czech'], ['en', 'English'],
+    ['fr', 'French'], ['de', 'German'], ['kk', 'Kazakh'], ['la', 'Latin'],
+    ['pt', 'Portuguese'], ['ru', 'Russian'], ['sk', 'Slovak'], ['es', 'Spanish'],
+    ['sv', 'Swedish'], ['tr', 'Turkish'], ['uz', 'Uzbek']
+];
+
+function icdLangOptionsHtml(defaultCode) {
+    return ICD_LANGUAGES.map(([code, name]) =>
+        `<option value="${code}"${code === defaultCode ? ' selected' : ''}>${name}</option>`
+    ).join('');
+}
+
+// Holds the analyzed dataset in memory: { sheetName, columns: [...], data: [...] }
+let analyzedResult = null;
+const ANALYZE_BATCH_SIZE = 20;     // rows per /analyze_batch request
+const MAX_CHAT_ROWS = 5000;        // cap rows sent to /chat_with_data (Vercel body limit)
+
+// Build the input text for one (row, config) cell, mirroring the server's
+// previous process_row logic (single value, or "col: val" join for multi-column).
+function buildAnalysisInput(row, config) {
+    const cols = (config.columns && config.columns.length) ? config.columns : [config.column];
+    const notEmpty = v => v !== null && v !== undefined && String(v).trim() !== '';
+    if (cols.length > 1) {
+        const parts = cols.filter(c => notEmpty(row[c])).map(c => `${c}: ${row[c]}`);
+        return parts.length ? parts.join('\n') : null;
+    }
+    return notEmpty(row[config.column]) ? String(row[config.column]) : null;
+}
+
+// Return { columns, rows } for the chat endpoint from the analyzed data if
+// present, otherwise from the currently selected sheet of the uploaded file.
+function getChatDataset() {
+    if (analyzedResult) {
+        return { columns: analyzedResult.columns, rows: analyzedResult.data.slice(0, MAX_CHAT_ROWS) };
+    }
+    if (fileData && fileData.sheets) {
+        const sel = document.getElementById('sheet-select');
+        const name = (sel && sel.value && fileData.sheets[sel.value])
+            ? sel.value : Object.keys(fileData.sheets)[0];
+        const sd = fileData.sheets[name];
+        if (sd) return { columns: sd.columns, rows: sd.data.slice(0, MAX_CHAT_ROWS) };
+    }
+    return null;
+}
+
+// POST a chat question and consume the SSE stream. Calls onToken(fullText)
+// as content arrives; resolves with the full accumulated answer.
+async function streamChat(payload, onToken) {
+    const response = await fetch('/chat_with_data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+        const err = await readJson(response).catch(() => ({}));
+        throw new Error(err.error || `HTTP error! status: ${response.status}`);
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '', full = '';
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data:')) continue;
+            let data;
+            try { data = JSON.parse(trimmed.slice(5).trim()); } catch (e) { continue; }
+            if (data.error) throw new Error(data.error);
+            if (data.content) { full += data.content; if (onToken) onToken(full); }
+        }
+    }
+    return full;
+}
+
+// Build an .xlsx from the in-memory analyzed dataset and trigger a download.
+function downloadAnalyzedFile() {
+    if (!analyzedResult) return;
+    exportResults(analyzedResult, fileData.filename || 'data', analyzedResult.partial ? 'partial' : 'analyzed');
+}
+
+function downloadIcdFile() {
+    exportResults(icdResult, fileData.filename || 'data', 'icd_mapped');
+}
+
+function renderIcdResults() {
+    const container = document.getElementById('icd-result-preview');
+    const info = document.getElementById('icd-table-info');
+    if (!container || !icdResult) return;
+
+    const esc = v => (v === null || v === undefined) ? '' :
+        String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    let html = '<table class="table table-striped table-bordered"><thead class="table-light"><tr>';
+    icdResult.columns.forEach(col => { html += `<th>${esc(col)}</th>`; });
+    html += '</tr></thead><tbody>';
+    const reviewOnly = document.getElementById('icd-review-only').checked;
+    const visibleRows = icdResult.data.filter(row => !reviewOnly || row['Review status'] !== 'WHO code found');
+    visibleRows.forEach(row => {
+        html += '<tr>';
+        icdResult.columns.forEach(col => { html += `<td>${esc(row[col])}</td>`; });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    if (info) info.textContent = `${visibleRows.length} of ${icdResult.data.length} row(s)`;
+}
+
+// Run the Medical Translation (ICD-11) workflow. Mirrors analyzeColumns():
+// validates credentials, fail-fast token check, batches rows to the backend,
+// accumulates results by rowIndex, builds icdResult and renders step 5.
+const ICD_TEST_ROWS = 10;
+
+async function runIcdTranslation(isTestRun = false) {
+    const openaiApiKey = (document.getElementById('modal-api-key').value || '').trim() ||
+                         (localStorage.getItem(API_KEY_STORAGE_KEY) || '').trim();
+    const clientId = (document.getElementById('modal-icd-client-id').value || '').trim() ||
+                     (localStorage.getItem(ICD_CLIENT_ID_STORAGE_KEY) || '').trim();
+    const clientSecret = (document.getElementById('modal-icd-client-secret').value || '').trim() ||
+                         (localStorage.getItem(ICD_CLIENT_SECRET_STORAGE_KEY) || '').trim();
+
+    // WHO ICD credentials are mandatory.
+    if (!clientId || !clientSecret) {
+        showAlert('icd-config-message',
+            'WHO ICD API credentials are required. Open API Settings (top navigation) to add your Client ID and Client Secret.',
+            'danger');
+        return;
+    }
+
+    const inputType = document.querySelector('input[name="icd-input-type"]:checked').value; // text | code
+    const sourceSystem = document.getElementById('icd-source-system').value;                // mms | icd10
+    const sourceLang = document.getElementById('icd-source-lang').value;
+    const targetLang = document.getElementById('icd-target-lang').value;
+    const sourceColumn = document.getElementById('icd-source-column').value;
+
+    const wantIcd11 = document.getElementById('icd-target-icd11').checked;
+    const wantIcd10 = document.getElementById('icd-target-icd10').checked;
+    const targets = [];
+    if (wantIcd11) targets.push('icd11');
+    if (wantIcd10) targets.push('icd10');
+
+    if (!sourceColumn) {
+        showAlert('icd-config-message', 'Please choose a source column.', 'danger');
+        return;
+    }
+    if (targets.length === 0) {
+        showAlert('icd-config-message', 'Please select at least one output (ICD-11 term and/or ICD-10).', 'danger');
+        return;
+    }
+
+    const selectedSheet = document.getElementById('sheet-select').value;
+    const sheet = fileData.sheets[selectedSheet];
+    if (!sheet || !sheet.data) {
+        showAlert('icd-config-message', 'No data available for the selected sheet.', 'danger');
+        return;
+    }
+    const allRows = sheet.data;
+    const totalRows = allRows.length;
+    const rowCount = isTestRun ? Math.min(ICD_TEST_ROWS, totalRows) : totalRows;
+
+    showSpinner(true, 'Validating WHO ICD credentials...', false);
+
+    try {
+        // Fail-fast token exchange.
+        const validateResp = await fetch('/icd_validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clientId: clientId, clientSecret: clientSecret })
+        });
+        const validateResult = await readJson(validateResp);
+        if (!validateResp.ok || !validateResult.ok) {
+            showSpinner(false);
+            showAlert('icd-config-message',
+                `WHO ICD credential check failed: ${validateResult.error || ('HTTP ' + validateResp.status)}`,
+                'danger');
+            return;
+        }
+
+        // Batch translate.
+        showSpinner(true, isTestRun ? `Running test on first ${rowCount} rows...` : 'Translating to ICD-11...', true);
+        updateProgress(0, 0, rowCount, 'Starting translation...');
+
+        const resultsByIndex = {};
+        let totalErrors = 0;
+
+        for (let start = 0; start < rowCount; start += ANALYZE_BATCH_SIZE) {
+            const end = Math.min(start + ANALYZE_BATCH_SIZE, rowCount);
+
+            const batchRows = [];
+            for (let i = start; i < end; i++) {
+                const cell = allRows[i][sourceColumn];
+                batchRows.push({ rowIndex: i, text: (cell === null || cell === undefined) ? '' : String(cell) });
+            }
+
+            const response = await fetch('/icd_translate_batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    clientId: clientId,
+                    clientSecret: clientSecret,
+                    ...getLLMConfig(),
+                    inputType: inputType,
+                    sourceSystem: sourceSystem,
+                    sourceLang: sourceLang,
+                    targetLang: targetLang,
+                    targets: targets,
+                    rows: batchRows
+                })
+            });
+
+            const result = await readJson(response);
+            if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
+            if (result.error) throw new Error(result.error);
+
+            totalErrors += result.errors || 0;
+            (result.results || []).forEach(r => { resultsByIndex[r.rowIndex] = r; });
+
+            const done = end;
+            updateProgress(Math.round((done / rowCount) * 100), done, rowCount,
+                `Translated ${done} of ${rowCount} rows...`);
+        }
+
+        // Build the output columns (original + added, in selection order).
+        const addedColumns = [];
+        if (wantIcd11) {
+            addedColumns.push('ICD-11 Code');
+            addedColumns.push(`ICD-11 Term (${targetLang.toUpperCase()})`);
+        }
+        if (wantIcd10) {
+            addedColumns.push('ICD-10 Code');
+            addedColumns.push('ICD-10 Match');
+        }
+        addedColumns.push('Type');
+        addedColumns.push('Source Term');
+        addedColumns.push('Confidence');
+        addedColumns.push('Source');
+        addedColumns.push('Notes', 'Review status', 'WHO reference', 'ICD-11 code source', 'ICD-11 term source', 'ICD-10 code source');
+
+        // De-duplicate: if the source sheet already has any of these
+        // columns (e.g. a previously-exported file was re-uploaded, or a
+        // re-run), reuse them and overwrite the values in place instead of
+        // appending empty duplicate columns.
+        const outColumns = sheet.columns.slice();
+        addedColumns.forEach(c => { if (!outColumns.includes(c)) outColumns.push(c); });
+        // Explain, in plain language, why a row did not map to a clean ICD
+        // diagnosis code. Procedures/administrative entries are not codeable
+        // in ICD (which classifies diseases), and unverified LLM answers are
+        // flagged so the user knows to double-check them.
+        const deriveIcdNote = (r) => {
+            const o = r.outputs || {};
+            const hasCode = !!((o.icd11 && o.icd11.code) || (o.icd10 && o.icd10.code));
+            const parts = [];
+            if (r.kind === 'procedure') {
+                parts.push('Procedure, not a diagnosis — ICD-11 classifies diseases, not interventions, so there is no true diagnosis code. Use the WHO ICHI classification for procedures.');
+            } else if (r.kind === 'other') {
+                parts.push('Not a codeable diagnosis (e.g. an administrative, symptom, or non-clinical entry).');
+            }
+            if (!hasCode) {
+                parts.push(r.note || 'No ICD match found.');
+            } else if (r.note) {
+                // e.g. "Provided by LLM (not found in WHO API)".
+                parts.push(r.note);
+            }
+            return parts.join(' ');
+        };
+        const outData = allRows.slice(0, rowCount).map((row, i) => {
+            const out = Object.assign({}, row);
+            const r = resultsByIndex[i] || {};
+            const outputs = r.outputs || {};
+            if (wantIcd11) {
+                const o11 = outputs.icd11 || {};
+                out['ICD-11 Code'] = o11.code || '';
+                out[`ICD-11 Term (${targetLang.toUpperCase()})`] = o11.term || '';
+            }
+            if (wantIcd10) {
+                const o10 = outputs.icd10 || {};
+                out['ICD-10 Code'] = o10.code || '';
+                out['ICD-10 Match'] = o10.relationship || '';
+            }
+            const kindLabel = {
+                diagnosis: 'Diagnosis',
+                procedure: 'Procedure (not codeable in ICD — see ICHI)',
+                other: 'Other'
+            }[r.kind] || (r.kind || '');
+            out['Type'] = kindLabel;
+            out['Source Term'] = r.sourceTitle || '';
+            out['Confidence'] = r.confidence || '';
+            out['Source'] = r.source || '';
+            out['Notes'] = deriveIcdNote(r);
+            out['Review status'] = !r.entityUri ? 'Unverified / unmatched' :
+                r.confidence !== 'high' || (r.source || '').includes('LLM') ? 'Needs review' : 'WHO code found';
+            out['WHO reference'] = r.entityUri || '';
+            out['ICD-11 code source'] = outputs.icd11?.codeSource || '';
+            out['ICD-11 term source'] = outputs.icd11?.termSource || '';
+            out['ICD-10 code source'] = outputs.icd10?.codeSource || '';
+            return out;
+        });
+
+        icdResult = { sheetName: selectedSheet, columns: outColumns, data: outData, isTest: isTestRun };
+
+        const icdMsg = document.getElementById('icd-result-message');
+        if (icdMsg) {
+            const errNote = totalErrors ? ` ${totalErrors} row(s) had no/low match.` : '';
+            icdMsg.querySelector('span').innerHTML = isTestRun
+                ? `<i class="bi bi-lightning-charge"></i> <strong>Test run</strong> on the first ${rowCount} of ${totalRows} row(s).${errNote} Review the results below, then go <strong>Back</strong> and click <strong>Translate All Rows</strong> to process everything.`
+                : `<i class="bi bi-check-circle"></i> Translation complete! Mapped ${rowCount} row(s).${errNote}`;
+        }
+
+        document.getElementById('icd-review-only').onchange = renderIcdResults;
+        renderIcdResults();
+
+        const dlLink = document.getElementById('icd-download-link');
+        if (dlLink) {
+            // Hide the download for a test sample to avoid confusing it with the full output.
+            dlLink.style.display = isTestRun ? 'none' : '';
+            dlLink.href = '#';
+            dlLink.onclick = (ev) => { ev.preventDefault(); downloadIcdFile(); };
+        }
+
+        goToStep(5);
+    } catch (error) {
+        showAlert('icd-config-message', `Error during translation: ${error.message}`, 'danger');
+    } finally {
+        showSpinner(false);
+    }
+}
+
+/* Utility functions */
+function showSpinner(show, message = 'Processing...', showProgress = false) {
+    const spinner = document.getElementById('spinner-overlay');
+    const progressContainer = document.getElementById('progress-container');
+    
+    document.getElementById('spinner-message').textContent = message;
+    
+    if (show) {
+        spinner.classList.remove('hidden');
+        
+        // Show or hide progress tracking UI
+        if (showProgress) {
+            progressContainer.classList.remove('hidden');
+            resetProgress();
+        } else {
+            progressContainer.classList.add('hidden');
+        }
+    } else {
+        spinner.classList.add('hidden');
+        progressContainer.classList.add('hidden');
+    }
+}
+
+function resetProgress() {
+    document.getElementById('progress-percentage').textContent = '0%';
+    document.getElementById('operations-count').textContent = '0/0';
+    document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('current-operation').textContent = 'Initializing...';
+}
+
+function updateProgress(percentage, completedOperations, totalOperations, currentOperation = null) {
+    document.getElementById('progress-percentage').textContent = `${percentage}%`;
+    document.getElementById('operations-count').textContent = `${completedOperations}/${totalOperations}`;
+    document.getElementById('progress-bar').style.width = `${percentage}%`;
+    
+    if (currentOperation) {
+        document.getElementById('current-operation').textContent = currentOperation;
+    }
+}
+
+function showAlert(id, message, type = 'success') {
+    const alertElement = document.getElementById(id);
+    alertElement.textContent = message;
+    alertElement.className = `alert alert-${type} mt-3`;
+    alertElement.classList.remove('hidden');
+    
+    // Auto-hide success messages after 5 seconds
+    if (type === 'success') {
+        setTimeout(() => {
+            alertElement.classList.add('hidden');
+        }, 5000);
+    }
+}
+
+function goToStep(step) {
+    resultsUI?.onStep(step);
+    // Hide all steps
+    document.querySelectorAll('.step-content').forEach(el => el.classList.add('hidden'));
+    
+    // Show the target step
+    document.getElementById(`step-${step}`).classList.remove('hidden');
+    
+    // Update the stepper
+    document.querySelectorAll('.stepper-item').forEach(el => {
+        const stepNum = parseInt(el.dataset.step);
+        
+        if (stepNum < step) {
+            el.classList.add('completed');
+            el.classList.remove('active');
+        } else if (stepNum === step) {
+            el.classList.add('active');
+            el.classList.remove('completed');
+        } else {
+            el.classList.remove('active', 'completed');
+        }
+    });
+
+    // Branch the per-step panels based on the active application mode.
+    applyModePanels(step);
+
+    currentStep = step;
+}
+
+// Show/hide the analysis vs ICD panels for the given step according to appMode.
+function applyModePanels(step) {
+    const isIcd = (appMode === 'icd');
+    const setHidden = (id, hidden) => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('hidden', hidden);
+    };
+
+    if (step === 1) {
+        setHidden('analysis-instructions-block', isIcd);
+        setHidden('icd-intro-block', !isIcd);
+    }
+
+    if (step === 4) {
+        setHidden('analysis-config', isIcd);
+        setHidden('icd-config', !isIcd);
+        if (isIcd) {
+            populateIcdConfig();
+        }
+    }
+
+    if (step === 5) {
+        setHidden('analysis-results', isIcd);
+        setHidden('icd-results', !isIcd);
+    }
+}
+
+// Populate the ICD config controls (source column + language dropdowns) from
+// the currently selected sheet. Called when entering step 4 in ICD mode.
+function populateIcdConfig() {
+    const sheetSelect = document.getElementById('sheet-select');
+    const selectedSheet = sheetSelect ? sheetSelect.value : null;
+    const sheet = (fileData.sheets && selectedSheet) ? fileData.sheets[selectedSheet] : null;
+    const columns = (sheet && sheet.columns) ? sheet.columns : (availableColumns || []);
+
+    const colSelect = document.getElementById('icd-source-column');
+    if (colSelect) {
+        const prev = colSelect.value;
+        colSelect.innerHTML = '';
+        columns.forEach(col => {
+            const opt = document.createElement('option');
+            opt.value = col;
+            opt.textContent = col;
+            colSelect.appendChild(opt);
+        });
+        if (prev && columns.includes(prev)) colSelect.value = prev;
+    }
+
+    // Populate language dropdowns once (defaults: source es, target en).
+    const srcLang = document.getElementById('icd-source-lang');
+    if (srcLang && !srcLang.options.length) srcLang.innerHTML = icdLangOptionsHtml('es');
+    const tgtLang = document.getElementById('icd-target-lang');
+    if (tgtLang && !tgtLang.options.length) tgtLang.innerHTML = icdLangOptionsHtml('en');
+
+    updateIcdInputTypeToggle();
+}
+
+// Toggle the source-lang (free text) vs source-system (existing code) controls.
+function updateIcdInputTypeToggle() {
+    const codeRadio = document.getElementById('icd-input-type-code');
+    const isCode = codeRadio ? codeRadio.checked : false;
+    const langGroup = document.getElementById('icd-source-lang-group');
+    const sysGroup = document.getElementById('icd-source-system-group');
+    if (langGroup) langGroup.classList.toggle('hidden', isCode);
+    if (sysGroup) sysGroup.classList.toggle('hidden', !isCode);
+}
+
+/* Theme toggle */
+function toggleDarkMode() {
+    const body = document.body;
+    const themeIcon = document.querySelector('#theme-toggle i');
+    
+    body.classList.toggle('dark-mode');
+    
+    if (body.classList.contains('dark-mode')) {
+        themeIcon.classList.remove('bi-sun-fill');
+        themeIcon.classList.add('bi-moon-fill');
+        localStorage.setItem('theme', 'dark');
+    } else {
+        themeIcon.classList.remove('bi-moon-fill');
+        themeIcon.classList.add('bi-sun-fill');
+        localStorage.setItem('theme', 'light');
+    }
+}
+
+/* Initialize tooltips */
+function initTooltips() {
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+}
+
+/* Navigation between main content and about page */
+function showMainContent() {
+    document.getElementById('main-content').classList.remove('hidden');
+    document.getElementById('about-content').classList.add('hidden');
+}
+
+function showAbout() {
+    document.getElementById('main-content').classList.add('hidden');
+    document.getElementById('about-content').classList.remove('hidden');
+}
+
+/* Chart initialization */
+function initResultChart(data, labels, columnName) {
+    // Ensure resultChart is declared
+    if (typeof resultChart === 'undefined') {
+        window.resultChart = null;
+    }
+    
+    // Destroy existing chart if it exists
+    if (resultChart) {
+        resultChart.destroy();
+        resultChart = null;
+    }
+    
+    // Create a simple bar chart showing frequency of analysis results
+    const ctx = document.getElementById('result-chart').getContext('2d');
+    
+    // Count occurrences of each result category
+    const counts = {};
+    data.forEach(item => {
+        if (!counts[item]) {
+            counts[item] = 1;
+        } else {
+            counts[item]++;
+        }
+    });
+    
+    // Prepare data for chart
+    const chartLabels = Object.keys(counts);
+    const chartData = Object.values(counts);
+    
+    // Create chart
+    resultChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: chartLabels,
+            datasets: [{
+                label: `Analysis Results: ${columnName}`,
+                data: chartData,
+                backgroundColor: 'rgba(76, 175, 80, 0.6)',
+                borderColor: 'rgba(76, 175, 80, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Frequency'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Categories'
+                    }
+                }
+            }
+        }
+    });
+}
+
+/* API Key Management */
+function loadSavedApiKey() {
+    const savedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
+    if (savedKey) {
+        // Update main form field if it exists
+        const apiKeyInput = document.getElementById('modal-api-key');
+        if (apiKeyInput) {
+            apiKeyInput.value = savedKey;
+            const saveKeyCheckbox = document.getElementById('save-api-key');
+            if (saveKeyCheckbox) {
+                saveKeyCheckbox.checked = true;
+            }
+        }
+        
+        // Update modal fields if they exist
+        const modalApiKeyField = document.getElementById('modal-api-key');
+        const modalSaveKeyCheckbox = document.getElementById('modal-save-api-key');
+        if (modalApiKeyField) {
+            modalApiKeyField.value = savedKey;
+            if (modalSaveKeyCheckbox) {
+                modalSaveKeyCheckbox.checked = true;
+            }
+        }
+    }
+
+    // Load saved WHO ICD credentials (used by Medical Translation mode)
+    const savedIcdId = localStorage.getItem(ICD_CLIENT_ID_STORAGE_KEY);
+    const savedIcdSecret = localStorage.getItem(ICD_CLIENT_SECRET_STORAGE_KEY);
+    const icdIdField = document.getElementById('modal-icd-client-id');
+    const icdSecretField = document.getElementById('modal-icd-client-secret');
+    if (icdIdField && savedIcdId) icdIdField.value = savedIcdId;
+    if (icdSecretField && savedIcdSecret) icdSecretField.value = savedIcdSecret;
+    if ((savedIcdId || savedIcdSecret) && modalSaveKeyCheckbox) {
+        modalSaveKeyCheckbox.checked = true;
+    }
+}
+
+function toggleApiKeyVisibility() {
+    const apiKeyInput = document.getElementById('modal-api-key');
+    const toggleBtn = document.getElementById('toggle-api-key');
+    
+    if (apiKeyInput && toggleBtn) {
+        const iconElement = toggleBtn.querySelector('i');
+        
+        if (apiKeyInput.type === 'password') {
+            apiKeyInput.type = 'text';
+            if (iconElement) {
+                iconElement.classList.remove('bi-eye');
+                iconElement.classList.add('bi-eye-slash');
+            }
+        } else {
+            apiKeyInput.type = 'password';
+            if (iconElement) {
+                iconElement.classList.remove('bi-eye-slash');
+                iconElement.classList.add('bi-eye');
+            }
+        }
+    }
+}
+
+function handleSaveApiKeyChange(e) {
+    if (e && e.target) {
+        if (e.target.checked) {
+            const apiKeyInput = document.getElementById('modal-api-key');
+            if (apiKeyInput && apiKeyInput.value) {
+                localStorage.setItem(API_KEY_STORAGE_KEY, apiKeyInput.value);
+            }
+        } else {
+            // Use the local function to avoid reference errors
+            localStorage.removeItem(API_KEY_STORAGE_KEY);
+            const saveApiKeyCheckbox = document.getElementById('save-api-key');
+            if (saveApiKeyCheckbox) {
+                saveApiKeyCheckbox.checked = false;
+            }
+        }
+    }
+}
+
+function clearSavedApiKey() {
+    localStorage.removeItem(API_KEY_STORAGE_KEY);
+    const saveApiKeyCheckbox = document.getElementById('save-api-key');
+    if (saveApiKeyCheckbox) {
+        saveApiKeyCheckbox.checked = false;
+    }
+    
+    // Also clear the modal fields if they exist
+    const modalSaveApiKeyCheckbox = document.getElementById('modal-save-api-key');
+    if (modalSaveApiKeyCheckbox) {
+        modalSaveApiKeyCheckbox.checked = false;
+    }
+}
+
+/* File handling helpers */
+
+// Robust response reader: handles non-JSON / timeout responses gracefully
+// instead of crashing on `response.json()` with "Unexpected token".
+async function readJson(response) {
+    const text = await response.text();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        const snippet = text.slice(0, 200).trim();
+        throw new Error(response.ok
+            ? `Unexpected non-JSON response: ${snippet}`
+            : `Server error ${response.status}: ${snippet || 'request failed'}`);
+    }
+}
+
+// Read the uploaded File into an ArrayBuffer.
+function readFileAsArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Could not read the file.'));
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+/* File Upload — parsed entirely in the browser (no server round-trip). */
+async function uploadFile(e) {
+    e.preventDefault();
+
+    const fileInput = document.getElementById('file');
+    const progressBar = document.getElementById('upload-progress');
+
+    if (!fileInput.files.length) {
+        showAlert('upload-message', 'Please select a file to upload', 'danger');
+        return;
+    }
+
+    // Show progress
+    progressBar.classList.remove('hidden');
+    progressBar.querySelector('.progress-bar').style.width = '0%';
+
+    try {
+        // Show spinner with parsing message
+        showSpinner(true, 'Reading file...');
+
+        const file = fileInput.files[0];
+        const buffer = await readFileAsArrayBuffer(file);
+        progressBar.querySelector('.progress-bar').style.width = '60%';
+
+        const workbook = XLSX.read(buffer, { type: 'array' });
+
+        const sheets = parseWorkbook(workbook);
+
+        fileData = { filename: file.name, sheets: sheets };
+        activeAnalysis = null;
+        analyzedResult = null;
+        icdResult = null;
+        document.getElementById('analysis-recovery').classList.add('hidden');
+        progressBar.querySelector('.progress-bar').style.width = '100%';
+
+        showAlert('upload-message', 'File loaded successfully!', 'success');
+
+        // Hide spinner
+        showSpinner(false);
+
+        // Move to next step after a short delay
+        setTimeout(() => {
+            displayFilePreview();
+            goToStep(3);
+        }, 600);
+
+    } catch (error) {
+        // Hide spinner
+        showSpinner(false);
+
+        // Show error
+        showAlert('upload-message', `Error reading file: ${error.message}`, 'danger');
+        progressBar.classList.add('hidden');
+    }
+}
+
+/* Display File Preview */
+function displayFilePreview() {
+    const sheetSelect = document.getElementById('sheet-select');
+    sheetSelect.innerHTML = '';
+    
+    Object.keys(fileData.sheets).forEach(sheet => {
+        const option = document.createElement('option');
+        option.value = sheet;
+        option.textContent = sheet;
+        sheetSelect.appendChild(option);
+    });
+    
+    sheetSelect.onchange = () => updatePreviewTable(sheetSelect.value);
+    updatePreviewTable(sheetSelect.value);
+}
+
+function updatePreviewTable(sheetName) {
+    const previewTable = document.getElementById('preview-table');
+    const sheetData = fileData.sheets[sheetName];
+    availableColumns = sheetData.columns;
+    
+    // Create Bootstrap table
+    let tableHTML = '<table class="table table-striped table-bordered"><thead class="table-light"><tr>';
+    sheetData.columns.forEach(column => {
+        tableHTML += `<th>${escapeHtml(column)}</th>`;
+    });
+    tableHTML += '</tr></thead><tbody>';
+    
+    // Only render the first 10 rows for preview (data now holds ALL rows).
+    sheetData.data.slice(0, 10).forEach(row => {
+        tableHTML += '<tr>';
+        sheetData.columns.forEach(column => {
+            const cell = row[column];
+            tableHTML += `<td>${escapeHtml(cell === null || cell === undefined ? '' : cell)}</td>`;
+        });
+        tableHTML += '</tr>';
+    });
+
+    tableHTML += '</tbody></table>';
+    if (sheetData.data.length > 10) {
+        tableHTML += `<p class="text-muted small">Showing first 10 of ${sheetData.data.length} rows.</p>`;
+    }
+    previewTable.innerHTML = tableHTML;
+
+    // Store the total row count for progress tracking
+    const sheetSelect = document.getElementById('sheet-select');
+    sheetSelect.dataset.rowCount = sheetData.data.length;
+    
+    // Update column selection in pattern detection
+    const patternColumnSelect = document.getElementById('pattern-column');
+    patternColumnSelect.innerHTML = '';
+    availableColumns.forEach(column => {
+        const option = document.createElement('option');
+        option.value = column;
+        option.textContent = column;
+        patternColumnSelect.appendChild(option);
+    });
+    
+    updateColumnConfigs();
+}
+
+/* Column Configuration */
+function updateColumnConfigs() {
+    const columnConfigs = document.getElementById('column-configs');
+    columnConfigs.innerHTML = '';
+    addColumnConfig();
+}
+
+function addColumnConfig() {
+    const columnConfigs = document.getElementById('column-configs');
+    const configId = crypto.randomUUID();
+    
+    // Create column config card
+    const configCard = document.createElement('div');
+    configCard.className = 'column-selection-container mb-3';
+    configCard.dataset.id = configId;
+    
+    // Create column selection
+    const columnSelectionHTML = `
+        <div class="row mb-2">
+            <div class="col-md-10">
+                <label class="form-label">Select Columns to Analyze</label>
+                <div class="main-column-selector">
+                    <select class="form-select main-column" name="column">
+                        <option value="">Select a column</option>
+                        ${availableColumns.map(col => `<option value="${escapeHtml(col)}">${escapeHtml(col)}</option>`).join('')}
+                    </select>
+                    <button type="button" class="btn btn-sm btn-success add-column-btn-small ms-2">
+                        <i class="bi bi-plus"></i>
+                    </button>
+                </div>
+                <div class="additional-columns">
+                    <!-- Additional columns will be added here -->
+                </div>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="button" class="btn btn-sm btn-outline-danger remove-config-btn mb-2">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Result Column Name
+                <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
+                   title="Name for the new column that will contain analysis results. E.g., 'Sentiment Score', 'Category', 'Translation'"></i>
+            </label>
+            <input type="text" class="form-control" name="output-column-name"
+                   placeholder="E.g., Sentiment Score, Category, Translation...">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Output length
+                <select class="form-select" name="max-output-tokens">
+                    <option value="256">Short labels (256 tokens)</option>
+                    <option value="1024" selected>Standard (1,024 tokens)</option>
+                    <option value="4096">Long translations (4,096 tokens)</option>
+                </select>
+            </label>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Analysis Instructions
+                <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
+                   title="Specific instructions for analyzing this column. Be clear about what insights you want."></i>
+            </label>
+            <div class="input-group">
+                <input type="text" class="form-control" name="prompt"
+                       placeholder="Enter specific instructions for analyzing this column...">
+                <button class="btn btn-outline-secondary instruction-template-btn" type="button">
+                    <i class="bi bi-lightning"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    configCard.innerHTML = columnSelectionHTML;
+    
+    // Add event listeners for the buttons
+    const addColumnBtn = configCard.querySelector('.add-column-btn-small');
+    addColumnBtn.addEventListener('click', function() {
+        addAdditionalColumn(configCard);
+    });
+    
+    const removeConfigBtn = configCard.querySelector('.remove-config-btn');
+    removeConfigBtn.addEventListener('click', function() {
+        if (document.querySelectorAll('.column-selection-container').length > 1) {
+            configCard.remove();
+        } else {
+            // Don't remove if it's the only config
+            showAlert('analyze-message', 'You need at least one column configuration', 'warning');
+        }
+    });
+    
+    // Add event listener for the instruction template button
+    const templateBtn = configCard.querySelector('.instruction-template-btn');
+    templateBtn.addEventListener('click', function() {
+        // Create dropdown menu for common templates
+        const menu = document.createElement('div');
+        menu.className = 'dropdown-menu p-2 shadow';
+        menu.style.width = '300px';
+        menu.innerHTML = `
+            <h6 class="dropdown-header">Quick Templates</h6>
+            <button class="dropdown-item" data-template="Analyze this column and provide a sentiment score (1-5) where 1 is very negative and 5 is very positive. Explain your reasoning.">
+                Sentiment Analysis (1-5)
+            </button>
+            <button class="dropdown-item" data-template="Categorize this data into one of these types: [type1, type2, type3]. Explain your classification.">
+                Categorization Template
+            </button>
+            <button class="dropdown-item" data-template="Identify any errors, inconsistencies, or unusual values in this data. If issues are found, suggest corrections.">
+                Data Quality Check
+            </button>
+            <button class="dropdown-item" data-template="Extract key entities (people, organizations, locations, dates) mentioned in this text.">
+                Entity Extraction
+            </button>
+            <button class="dropdown-item" data-template="Provide a concise 1-2 sentence summary of the key points in this text.">
+                Text Summarization
+            </button>
+        `;
+        
+        // Position the menu
+        menu.style.position = 'absolute';
+        menu.style.zIndex = '1000';
+        
+        // Add event listeners to template items
+        menu.querySelectorAll('.dropdown-item').forEach(item => {
+            item.addEventListener('click', function() {
+                const template = this.dataset.template;
+                configCard.querySelector('input[name="prompt"]').value = template;
+                document.body.removeChild(menu);
+            });
+        });
+        
+        // Add to document body, position, and show
+        document.body.appendChild(menu);
+        const rect = templateBtn.getBoundingClientRect();
+        menu.style.top = `${rect.bottom + 5}px`;
+        menu.style.left = `${rect.left - 250}px`;
+        
+        // Close when clicking outside
+        document.addEventListener('click', function closeMenu(e) {
+            if (!menu.contains(e.target) && e.target !== templateBtn) {
+                if (document.body.contains(menu)) {
+                    document.body.removeChild(menu);
+                }
+                document.removeEventListener('click', closeMenu);
+            }
+        });
+    });
+    
+    columnConfigs.appendChild(configCard);
+    initTooltips();
+}
+
+function addAdditionalColumn(configCard) {
+    const additionalColumnsDiv = configCard.querySelector('.additional-columns');
+    
+    const columnDiv = document.createElement('div');
+    columnDiv.className = 'additional-column d-flex align-items-center mt-2';
+    columnDiv.innerHTML = `
+        <select class="form-select form-select-sm" name="additional-column">
+            <option value="">Select additional column</option>
+            ${availableColumns.map(col => `<option value="${escapeHtml(col)}">${escapeHtml(col)}</option>`).join('')}
+        </select>
+        <button type="button" class="btn btn-sm btn-danger remove-column-btn-small ms-2">
+            <i class="bi bi-dash"></i>
+        </button>
+    `;
+    
+    // Add event listener for remove button
+    columnDiv.querySelector('.remove-column-btn-small').addEventListener('click', function() {
+        columnDiv.remove();
+    });
+    
+    additionalColumnsDiv.appendChild(columnDiv);
+}
+
+/* Pattern Detection */
+function togglePatternDetection() {
+    const patternDetection = document.getElementById('pattern-detection');
+    const toggleBtn = document.getElementById('toggle-pattern-btn');
+    
+    if (patternDetection.classList.contains('hidden')) {
+        patternDetection.classList.remove('hidden');
+        toggleBtn.innerHTML = '<i class="bi bi-eye-slash"></i> Hide Pattern Detection';
+    } else {
+        patternDetection.classList.add('hidden');
+        toggleBtn.innerHTML = '<i class="bi bi-search"></i> Detect Patterns';
+    }
+}
+
+async function detectPatterns() {
+    const column = document.getElementById('pattern-column').value;
+    const numCategories = document.getElementById('num-categories').value;
+    const patternPrompt = document.getElementById('pattern-prompt').value;
+    const selectedSheet = document.getElementById('sheet-select').value;
+    
+    if (!column || !patternPrompt) {
+        showAlert('pattern-message', 'Please fill in all required fields for pattern detection', 'warning');
+        return;
+    }
+    
+    // Show loading spinner
+    showSpinner(true, 'Detecting patterns in your data...');
+
+    try {
+        // Sample non-empty values for this column from the in-memory data.
+        const rows = (fileData.sheets[selectedSheet] || {}).data || [];
+        const sampleValues = rows
+            .map(r => r[column])
+            .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
+            .slice(0, 100);
+
+        const response = await fetch('/detect_patterns', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                ...getLLMConfig(),
+                column: column,
+                patternPrompt: patternPrompt,
+                numCategories: parseInt(numCategories),
+                sampleValues: sampleValues
+            })
+        });
+
+        const result = await readJson(response);
+        if (!response.ok) {
+            throw new Error(result.error || `HTTP error! status: ${response.status}`);
+        }
+        if (result.error) {
+            throw new Error(result.error);
+        }
+        
+        // Parse the JSON string returned
+        const categoriesData = JSON.parse(result.result);
+        displayCategories(categoriesData);
+        
+        showAlert('pattern-message', 'Categories detected successfully!', 'success');
+    } catch (error) {
+        showAlert('pattern-message', `Error detecting patterns: ${error.message}`, 'danger');
+    } finally {
+        showSpinner(false);
+    }
+}
+
+function displayCategories(data) {
+    const categoriesList = document.getElementById('categories-list');
+    const explanation = document.getElementById('explanation');
+    
+    // Generate category items
+    categoriesList.innerHTML = data.categories.map(category => 
+        `<span class="category-item">${escapeHtml(category)}</span>`
+    ).join(' ');
+    
+    // Display explanation
+    explanation.textContent = data.explanation;
+    
+    // Show results section
+    document.getElementById('pattern-results').classList.remove('hidden');
+}
+
+function copyCategoriesToClipboard() {
+    const categoriesList = document.getElementById('categories-list');
+    const categories = Array.from(categoriesList.querySelectorAll('.category-item'))
+        .map(item => item.textContent)
+        .join(', ');
+        
+    // Create temporary element for copying
+    const tempInput = document.createElement('textarea');
+    tempInput.value = categories;
+    document.body.appendChild(tempInput);
+    tempInput.select();
+    document.execCommand('copy');
+    document.body.removeChild(tempInput);
+    
+    showAlert('pattern-message', 'Categories copied to clipboard!', 'success');
+}
+
+function useCategoriesInPrompt() {
+    const categories = Array.from(document.querySelectorAll('.category-item'))
+        .map(item => item.textContent)
+        .join(', ');
+        
+    // Find an empty config or create a new one
+    const configs = document.querySelectorAll('.column-selection-container');
+    let targetConfig = null;
+    
+    // Find an empty config to use
+    for (const config of configs) {
+        const promptInput = config.querySelector('input[name="prompt"]');
+        if (!promptInput.value) {
+            targetConfig = config;
+            break;
+        }
+    }
+    
+    // If no empty config found, create a new one
+    if (!targetConfig) {
+        addColumnConfig();
+        targetConfig = document.querySelector('.column-selection-container:last-child');
+    }
+    
+    // Set the same column as was used for pattern detection
+    const columnSelect = targetConfig.querySelector('select[name="column"]');
+    columnSelect.value = document.getElementById('pattern-column').value;
+    
+    // Set the prompt with categories
+    const promptInput = targetConfig.querySelector('input[name="prompt"]');
+    promptInput.value = `Categorize each item into one of these categories: ${categories}. Explain the reason for your categorization.`;
+    
+    // Hide pattern detection
+    togglePatternDetection();
+    
+    showAlert('analyze-message', 'Categories added to analysis prompt!', 'success');
+}
+
+/* Column Analysis */
+async function analyzeColumns(isTestRun = false) {
+    if (activeAnalysis?.running) return;
+    // Clear previous results before starting a new analysis, but only if elements exist
+    const resultPreview = document.getElementById('result-preview');
+    const chartContent = document.getElementById('chart-content');
+    const chartColumnSelect = document.getElementById('chart-column-select');
+    
+    if (resultPreview) resultPreview.innerHTML = '<div class="alert alert-info">Processing your data...</div>';
+    if (chartContent) chartContent.innerHTML = '<div class="alert alert-info">Chart will appear after analysis is complete.</div>';
+    if (chartColumnSelect) chartColumnSelect.innerHTML = '';
+    
+    const generalInstructions = document.getElementById('general-instructions').value;
+    const selectedSheet = document.getElementById('sheet-select').value;
+    
+    // Validate inputs
+    // Credentials may also come from the server's environment, so only
+    // warn when nothing is configured locally; the server has the final say.
+    if (!hasLocalCredentials()) {
+        showAlert('analyze-message',
+            'No AI credentials configured locally — attempting to use the server configuration. Open API Settings if this fails.',
+            'info');
+    }
+    
+    // Get column configurations
+    const columnConfigs = Array.from(document.querySelectorAll('.column-selection-container')).map(config => {
+        // Get the main column
+        const mainColumn = config.querySelector('select[name="column"]').value;
+
+        // Get any additional columns
+        const additionalColumns = Array.from(config.querySelectorAll('.additional-column select'))
+            .map(select => select.value)
+            .filter(col => col !== "");
+
+        // Combine main column with additional columns
+        const columns = [mainColumn, ...additionalColumns].filter(col => col !== "");
+
+        // Get the output column name (custom name user specified)
+        const outputColumnName = config.querySelector('input[name="output-column-name"]').value.trim();
+
+        return {
+            column: mainColumn,
+            columns: columns,
+            prompt: config.querySelector('input[name="prompt"]').value,
+            maxOutputTokens: Number(config.querySelector('[name="max-output-tokens"]').value),
+            outputColumnName: outputColumnName || null, // Use null if not provided
+            id: config.dataset.id || Date.now().toString()
+        };
+    }).filter(config => config.column && config.prompt);
+    
+    // Check if we have valid configurations
+    if (columnConfigs.length === 0) {
+        showAlert('analyze-message', 'Please configure at least one column for analysis', 'danger');
+        return;
+    }
+    
+    // Source rows from the in-memory sheet.
+    const sheet = fileData.sheets[selectedSheet];
+    if (!sheet || !sheet.data) {
+        showAlert('analyze-message', 'No data available for the selected sheet', 'danger');
+        return;
+    }
+    const allRows = sheet.data;
+    const rowCount = isTestRun ? Math.min(5, allRows.length) : allRows.length;
+
+    if (!rowCount) { showAlert('analyze-message', 'This sheet has no data rows.', 'warning'); return; }
+
+    // Resolve each output column name once, ensuring uniqueness against
+    // existing columns (previously done per-row on the server).
+    const existing = new Set(sheet.columns);
+    columnConfigs.forEach(cfg => {
+        let name = cfg.outputColumnName || `${cfg.column}_analysis_${cfg.id}`;
+        const base = name;
+        let counter = 1;
+        while (existing.has(name)) { name = `${base}_${counter++}`; }
+        existing.add(name);
+        cfg.resolvedName = name;
+    });
+
+    const serverConfigs = columnConfigs.map(c => ({
+        id: c.id, column: c.column, prompt: c.prompt, outputColumnName: c.resolvedName, maxOutputTokens: c.maxOutputTokens
+    }));
+    const providerConfig = getLLMConfig();
+    const outColumns = sheet.columns.concat(columnConfigs.map(c => c.resolvedName));
+    activeAnalysis = new BatchRun({
+        rows: allRows.slice(0, rowCount), batchSize: ANALYZE_BATCH_SIZE,
+        processBatch: async (batch, start) => {
+            const rows = batch.map((row, offset) => ({ rowIndex: start + offset,
+                inputs: Object.fromEntries(columnConfigs.map(cfg => [cfg.id, buildAnalysisInput(row, cfg)])) }));
+            const response = await fetch('/analyze_batch', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...providerConfig, generalInstructions,
+                    isFirstBatch: start === 0, configs: serverConfigs, rows })
+            });
+            const result = await readJson(response);
+            if (!response.ok || result.error) throw new Error(result.error || 'Analysis failed.');
+            const values = new Map((result.results || []).map(r => [r.rowIndex, r.values]));
+            if (rows.some(row => !values.has(row.rowIndex))) throw new Error('Incomplete batch response. Resume to retry.');
+            return { rows: batch.map((row, i) => ({ ...row, ...values.get(start + i) })), errors: result.errors };
+        },
+        onProgress: run => {
+            analyzedResult = { sheetName: selectedSheet, columns: outColumns,
+                data: run.results, partial: !run.complete, outputColumns: serverConfigs.map(c => c.outputColumnName) };
+            updateProgress(Math.round(run.cursor / rowCount * 100), run.cursor, rowCount,
+                `Analyzed ${run.cursor} of ${rowCount} rows`);
+        }
+    });
+    activeAnalysis.isTestRun = isTestRun;
+    analyzedResult = null;
+    await continueAnalysis();
+}
+
+let activeAnalysis = null;
+async function continueAnalysis() {
+    const run = activeAnalysis;
+    if (!run || run.running) return;
+    document.querySelectorAll('.test-run-preview-panel').forEach(panel => panel.remove());
+    showSpinner(true, 'Analyzing rows…', true);
+    const stopButton = document.getElementById('stop-analysis-btn');
+    stopButton.classList.remove('hidden');
+    stopButton.disabled = false;
+    stopButton.textContent = 'Stop after current batch';
+    stopButton.onclick = () => { run.stop(); stopButton.disabled = true; stopButton.textContent = 'Stopping after current batch…'; };
+    document.getElementById('analysis-recovery').classList.add('hidden');
+    let failure = null;
+    try { await run.run(); } catch (error) { failure = error; }
+    finally { showSpinner(false); stopButton.classList.add('hidden'); }
+    const message = `${run.complete ? 'Analysis complete' : 'Analysis paused'}: ${run.cursor} of ${run.rows.length} rows. ${run.errors} cell(s) had errors.`;
+    showAlert('analyze-message', failure ? `${message} ${failure.message}` : message,
+        failure ? 'danger' : run.complete ? 'success' : 'info');
+    const recovery = document.getElementById('analysis-recovery');
+    recovery.classList.toggle('hidden', run.complete);
+    document.getElementById('partial-download-btn').disabled = !run.cursor;
+    document.getElementById('resume-analysis-btn').onclick = continueAnalysis;
+    document.getElementById('partial-download-btn').onclick = downloadAnalyzedFile;
+    if (!analyzedResult) return;
+    document.getElementById('result-message').textContent = message;
+    const downloadLink = document.getElementById('download-link');
+    downloadLink.href = '#';
+    downloadLink.onclick = event => { event.preventDefault(); downloadAnalyzedFile(); };
+    if (run.isTestRun && run.complete) previewAnalyzedData(run.results, true);
+    else if (run.complete) {
+        resultsUI.load({ sheets: { [analyzedResult.sheetName]: analyzedResult } });
+        goToStep(5);
+    }
+}
+
+function previewAnalyzedData(analyzedRows, isTestRun = false) {
+    try {
+        // Clear any existing data first to ensure we display fresh results
+        const resultPreview = document.getElementById('result-preview');
+        const chartContent = document.getElementById('chart-content');
+        const chartColumnSelect = document.getElementById('chart-column-select');
+        
+        // Remove any existing test run panels
+        const existingPanels = document.querySelectorAll('.test-run-preview-panel');
+        existingPanels.forEach(panel => {
+            try {
+                document.body.removeChild(panel);
+            } catch (e) {
+                console.error('Error removing panel:', e);
+            }
+        });
+        
+        if (resultPreview) resultPreview.innerHTML = '<div class="alert alert-info">Loading analysis results...</div>';
+        if (chartContent) chartContent.innerHTML = '<div class="alert alert-info">Preparing chart visualization...</div>';
+        if (chartColumnSelect) chartColumnSelect.innerHTML = '';
+
+        // Render directly from the in-memory analyzed rows (no server fetch).
+        const jsonData = analyzedRows || [];
+        const previewData = jsonData.slice(0, 10);
+        const headers = (analyzedResult && analyzedResult.columns) || Object.keys(previewData[0] || {});
+
+        // Create the table HTML
+        let tableHTML = `
+            <table class="table table-striped table-bordered table-hover">
+                <thead class="table-light">
+                    <tr>
+                        ${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        // Add the data rows
+        previewData.forEach(row => {
+            tableHTML += '<tr>';
+            headers.forEach(header => {
+                const cell = row[header];
+                tableHTML += `<td>${escapeHtml(cell === null || cell === undefined ? '' : cell)}</td>`;
+            });
+            tableHTML += '</tr>';
+        });
+
+        tableHTML += '</tbody></table>';
+
+        // Update the preview
+        if (resultPreview) resultPreview.innerHTML = tableHTML;
+
+        // Set up chart visualization
+        setupChartVisualization(jsonData, headers);
+
+        // If this is a test run, create a floating preview panel
+        if (isTestRun) {
+            // Create a floating preview panel for test run results
+            const previewPanel = document.createElement('div');
+            previewPanel.className = 'card position-fixed bottom-0 end-0 mb-4 me-4 shadow test-run-preview-panel';
+            previewPanel.style.width = '90%';
+            previewPanel.style.maxWidth = '800px';
+            previewPanel.style.maxHeight = '70vh';
+            previewPanel.style.overflow = 'auto';
+            previewPanel.style.zIndex = '1050';
+            previewPanel.innerHTML = `
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-lightning"></i> Test Run Results (${previewData.length} Rows)</span>
+                    <div>
+                        <button class="btn btn-sm btn-outline-light me-2" id="go-to-results-btn">
+                            <i class="bi bi-arrows-fullscreen"></i> Full View
+                        </button>
+                        <button class="btn btn-sm btn-outline-light" id="close-preview-btn">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="test-result-preview overflow-auto" style="max-height: 50vh;">
+                        ${tableHTML}
+                    </div>
+                    <div class="d-flex justify-content-end mt-3">
+                        <button type="button" class="btn btn-sm btn-success" id="download-test-results-btn">
+                            <i class="bi bi-download"></i> Download Test Results
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(previewPanel);
+
+            // Add event listeners to the preview panel buttons
+            document.getElementById('close-preview-btn').addEventListener('click', () => {
+                document.body.removeChild(previewPanel);
+            });
+
+            document.getElementById('go-to-results-btn').addEventListener('click', () => {
+                document.body.removeChild(previewPanel);
+                const dataObject = { sheets: { [analyzedResult.sheetName]: analyzedResult } };
+                resultsUI.load(dataObject);
+                goToStep(5);
+            });
+
+            document.getElementById('download-test-results-btn').addEventListener('click', downloadAnalyzedFile);
+        }
+    } catch (error) {
+        console.error('Error previewing analyzed data:', error);
+    }
+}
+
+function setupChartVisualization(data, headers) {
+    // Get references to chart elements
+    const chartContent = document.getElementById('chart-content');
+    const chartColumnSelect = document.getElementById('chart-column-select');
+    const chartContainer = chartContent ? chartContent.querySelector('.chart-container') : null;
+    
+    // Clear the select options but keep the chart container structure
+    if (chartColumnSelect) chartColumnSelect.innerHTML = '';
+    
+    // Filter headers to only include analysis columns
+    const analysisColumns = headers.filter(h => h.includes('_analysis_'));
+    
+    if (analysisColumns.length === 0) {
+        if (chartContainer) chartContainer.innerHTML = '<div class="alert alert-info">No analysis columns found for visualization.</div>';
+        return;
+    }
+    
+    // Always recreate the canvas element to ensure a fresh chart
+    if (chartContainer) {
+        // Remove existing canvas if it exists
+        const existingCanvas = chartContainer.querySelector('canvas');
+        if (existingCanvas) {
+            chartContainer.removeChild(existingCanvas);
+        }
+        
+        // Create a new canvas element
+        const canvas = document.createElement('canvas');
+        canvas.id = 'result-chart';
+        chartContainer.appendChild(canvas);
+    }
+    
+    // Already have a reference to chartColumnSelect
+    // Just ensure it exists before manipulating it
+    if (chartColumnSelect) {
+        // Clear again to be safe
+        chartColumnSelect.innerHTML = '';
+        
+        analysisColumns.forEach(column => {
+            const option = document.createElement('option');
+            option.value = column;
+            
+            // Try to get a more user-friendly name
+            const originalColName = column.split('_analysis_')[0];
+            option.textContent = `Analysis of ${originalColName}`;
+            
+            chartColumnSelect.appendChild(option);
+        });
+    }
+    
+    // Set up event listener for chart selection
+    if (chartColumnSelect) {
+        chartColumnSelect.addEventListener('change', function() {
+            const selectedColumn = this.value;
+            if (selectedColumn) {
+                // Extract data for the selected column
+                const chartData = data.map(row => row[selectedColumn]);
+                initResultChart(chartData, data.map(row => ''), selectedColumn);
+            }
+        });
+        
+        // Initialize with first column
+        if (analysisColumns.length > 0) {
+            chartColumnSelect.value = analysisColumns[0];
+            const chartData = data.map(row => row[analysisColumns[0]]);
+            initResultChart(chartData, data.map(row => ''), analysisColumns[0]);
+        }
+    }
+}
+
+/* Document Ready */
+document.addEventListener('DOMContentLoaded', function() {
+    // Load saved API key
+    loadSavedApiKey();
+    
+    // Initialize tooltips
+    initTooltips();
+    
+    // Load theme preference
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+        toggleDarkMode();
+    }
+    
+    
+    // Initialize UI state - show landing page, hide workflow
+    const landingPageEl = document.getElementById('landing-page');
+    const workflowStepperEl = document.getElementById('workflow-stepper');
+    
+    if (landingPageEl && workflowStepperEl) {
+        // Show landing page, hide workflow stepper
+        landingPageEl.classList.remove('hidden');
+        workflowStepperEl.classList.add('hidden');
+        
+        // Hide all step content except step 1 (since we want that visible if user clicks "Get Started")
+        const stepContents = document.querySelectorAll('.step-content');
+        stepContents.forEach(content => {
+            if (content.id !== 'step-1') {
+                content.classList.add('hidden');
+            }
+        });
+    }
+    
+    // Set up event listeners
+    
+    // Theme toggle
+    const themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle && typeof toggleDarkMode === 'function') {
+        themeToggle.addEventListener('click', toggleDarkMode);
+    }
+    
+    // Navigation
+    const homeLink = document.getElementById('home-link');
+    const aboutLink = document.getElementById('about-link');
+    const backToAppLink = document.getElementById('back-to-app');
+    
+    if (homeLink && typeof showHome === 'function') {
+        homeLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            showHome();
+        });
+    }
+    
+    if (aboutLink && typeof showAbout === 'function') {
+        aboutLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            showAbout();
+        });
+    }
+    
+    if (backToAppLink) {
+        backToAppLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            // Use appropriate function if it exists, otherwise fallback
+            if (typeof showMainContent === 'function') {
+                showMainContent();
+            } else if (typeof goToStep === 'function') {
+                goToStep(1);
+            }
+        });
+    }
+    
+    // API key management - check if elements exist first (we've moved these to modal)
+    const toggleApiKey = document.getElementById('toggle-api-key');
+    const saveApiKey = document.getElementById('save-api-key');
+    const clearSavedKey = document.getElementById('clear-saved-key');
+    const apiKey = document.getElementById('modal-api-key');
+    
+    if (toggleApiKey && typeof toggleApiKeyVisibility === 'function') {
+        toggleApiKey.addEventListener('click', toggleApiKeyVisibility);
+    }
+    
+    if (saveApiKey && typeof handleSaveApiKeyChange === 'function') {
+        saveApiKey.addEventListener('change', handleSaveApiKeyChange);
+    }
+    
+    if (clearSavedKey) {
+        clearSavedKey.addEventListener('click', function() {
+            localStorage.removeItem(API_KEY_STORAGE_KEY);
+            if (saveApiKey) saveApiKey.checked = false;
+        });
+    }
+    
+    if (apiKey && saveApiKey) {
+        apiKey.addEventListener('input', function(e) {
+            if (saveApiKey.checked) {
+                localStorage.setItem(API_KEY_STORAGE_KEY, e.target.value);
+            }
+        });
+    }
+
+    // Persist WHO ICD credentials live while the save checkbox is ticked.
+    const modalIcdClientId = document.getElementById('modal-icd-client-id');
+    const modalIcdClientSecret = document.getElementById('modal-icd-client-secret');
+    const modalSaveCheckbox = document.getElementById('modal-save-api-key');
+    if (modalIcdClientId && modalSaveCheckbox) {
+        modalIcdClientId.addEventListener('input', function(e) {
+            if (modalSaveCheckbox.checked) {
+                localStorage.setItem(ICD_CLIENT_ID_STORAGE_KEY, e.target.value.trim());
+            }
+        });
+    }
+    if (modalIcdClientSecret && modalSaveCheckbox) {
+        modalIcdClientSecret.addEventListener('input', function(e) {
+            if (modalSaveCheckbox.checked) {
+                localStorage.setItem(ICD_CLIENT_SECRET_STORAGE_KEY, e.target.value.trim());
+            }
+        });
+    }
+
+    // Mode chooser (Step 1): AI Analysis vs Medical Translation (ICD-11).
+    function setAppMode(mode) {
+        appMode = (mode === 'icd') ? 'icd' : 'analysis';
+        const radio = document.getElementById(appMode === 'icd' ? 'mode-icd' : 'mode-analysis');
+        if (radio) radio.checked = true;
+        document.querySelectorAll('.mode-card').forEach(card => {
+            card.classList.toggle('border-primary', card.dataset.mode === appMode);
+        });
+        applyModePanels(currentStep);
+    }
+    document.querySelectorAll('input[name="app-mode"]').forEach(r => {
+        r.addEventListener('change', function() { setAppMode(this.value); });
+    });
+    document.querySelectorAll('.mode-card').forEach(card => {
+        card.addEventListener('click', function() { setAppMode(this.dataset.mode); });
+    });
+    setAppMode('analysis');
+
+    // ICD config: toggle source-lang vs source-system on input-type change.
+    document.querySelectorAll('input[name="icd-input-type"]').forEach(r => {
+        r.addEventListener('change', updateIcdInputTypeToggle);
+    });
+
+    // ICD config / results navigation + run button.
+    const icdConfigureBackBtn = document.getElementById('icd-configure-back-btn');
+    const icdResultsBackBtn = document.getElementById('icd-results-back-btn');
+    const runIcdBtn = document.getElementById('run-icd-btn');
+    if (icdConfigureBackBtn) icdConfigureBackBtn.addEventListener('click', () => goToStep(3));
+    if (icdResultsBackBtn) icdResultsBackBtn.addEventListener('click', () => goToStep(4));
+    if (runIcdBtn && typeof runIcdTranslation === 'function') {
+        runIcdBtn.addEventListener('click', () => runIcdTranslation(false));
+    }
+    const runIcdTestBtn = document.getElementById('run-icd-test-btn');
+    if (runIcdTestBtn && typeof runIcdTranslation === 'function') {
+        runIcdTestBtn.addEventListener('click', () => runIcdTranslation(true));
+    }
+
+
+    // Step navigation - with null checks
+    const configNextBtn = document.getElementById('config-next-btn');
+    const uploadBackBtn = document.getElementById('upload-back-btn');
+    const previewBackBtn = document.getElementById('preview-back-btn');
+    const previewNextBtn = document.getElementById('preview-next-btn');
+    const configureBackBtn = document.getElementById('configure-back-btn');
+    const resultsBackBtn = document.getElementById('results-back-btn');
+    
+    if (configNextBtn && typeof goToStep === 'function') configNextBtn.addEventListener('click', () => goToStep(2));
+    if (uploadBackBtn && typeof goToStep === 'function') uploadBackBtn.addEventListener('click', () => goToStep(1));
+    if (previewBackBtn && typeof goToStep === 'function') previewBackBtn.addEventListener('click', () => goToStep(2));
+    if (previewNextBtn && typeof goToStep === 'function') previewNextBtn.addEventListener('click', () => goToStep(4));
+    if (configureBackBtn && typeof goToStep === 'function') configureBackBtn.addEventListener('click', () => goToStep(3));
+    if (resultsBackBtn && typeof goToStep === 'function') resultsBackBtn.addEventListener('click', () => goToStep(4));
+    
+    // File upload
+    const uploadForm = document.getElementById('upload-form');
+    if (uploadForm && typeof uploadFile === 'function') {
+        uploadForm.addEventListener('submit', uploadFile);
+    }
+    
+    // Analysis workflow - with null checks
+    const addColumnBtn = document.getElementById('add-column-btn');
+    const togglePatternBtn = document.getElementById('toggle-pattern-btn');
+    const detectPatternsBtn = document.getElementById('detect-patterns-btn');
+    const copyCategoriesBtn = document.getElementById('copy-categories-btn');
+    const useCategoriesBtn = document.getElementById('use-categories-btn');
+    const testRunBtn = document.getElementById('test-run-btn');
+    const analyzeBtn = document.getElementById('analyze-btn');
+    
+    if (addColumnBtn && typeof addColumnConfig === 'function') {
+        addColumnBtn.addEventListener('click', addColumnConfig);
+    }
+    
+    if (togglePatternBtn && typeof togglePatternDetection === 'function') {
+        togglePatternBtn.addEventListener('click', togglePatternDetection);
+    }
+    
+    if (detectPatternsBtn && typeof detectPatterns === 'function') {
+        detectPatternsBtn.addEventListener('click', detectPatterns);
+    }
+    
+    if (copyCategoriesBtn && typeof copyCategoriesToClipboard === 'function') {
+        copyCategoriesBtn.addEventListener('click', copyCategoriesToClipboard);
+    }
+    
+    if (useCategoriesBtn && typeof useCategoriesInPrompt === 'function') {
+        useCategoriesBtn.addEventListener('click', useCategoriesInPrompt);
+    }
+    
+    if (testRunBtn && typeof analyzeColumns === 'function') {
+        testRunBtn.addEventListener('click', () => analyzeColumns(true));
+    }
+    
+    if (analyzeBtn && typeof analyzeColumns === 'function') {
+        analyzeBtn.addEventListener('click', () => analyzeColumns(false));
+    }
+    
+    // Template selection with null check
+    document.querySelectorAll('.prompt-template').forEach(template => {
+        template.addEventListener('click', function() {
+            const generalInstructions = document.getElementById('general-instructions');
+            if (generalInstructions && this.dataset.template) {
+                generalInstructions.value = this.dataset.template;
+            }
+        });
+    });
+    
+    // Landing page functionality
+    // These variables are already defined in the DOMContentLoaded event listener
+    // Remove the duplicate window.addEventListener('DOMContentLoaded') that was causing issues
+    
+    function startAnalysis() {
+        const landingPage = document.getElementById('landing-page');
+        const workflowStepper = document.getElementById('workflow-stepper');
+        landingPage.classList.add('hidden');
+        workflowStepper.classList.remove('hidden');
+        goToStep(1);
+    }
+    
+    function showHome() {
+        const landingPage = document.getElementById('landing-page');
+        const workflowStepper = document.getElementById('workflow-stepper');
+        landingPage.classList.remove('hidden');
+        workflowStepper.classList.add('hidden');
+    }
+    
+    function showAbout() {
+        // Create a modal to display the About information
+        const aboutModal = new bootstrap.Modal(document.createElement('div'));
+        aboutModal.element.innerHTML = `
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">About Aidstack Insights</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center mb-4 mb-md-0">
+                            <img src="/static/excel_ai_insight_logo.webp" alt="Aidstack Insights" class="img-fluid" style="max-height: 180px;">
+                        </div>
+                        <div class="col-md-8">
+                            <h4>Turn Spreadsheets into Insights in Minutes</h4>
+                            <p>Aidstack Insights is a powerful tool that leverages advanced AI to analyze Excel and CSV data, automatically extracting insights that would take hours to find manually.</p>
+                            <p>Our mission is to make data analysis accessible to everyone, regardless of technical expertise.</p>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <h5>Key Features</h5>
+                    <ul>
+                        <li><strong>AI-Powered Analysis:</strong> Generate meaningful insights from your data in seconds</li>
+                        <li><strong>Pattern Detection:</strong> Automatically identify patterns and categorize data</li>
+                        <li><strong>Custom Instructions:</strong> Tailor the analysis to your specific needs</li>
+                        <li><strong>Multi-Column Analysis:</strong> Analyze relationships between different data points</li>
+                        <li><strong>Privacy-First:</strong> All processing happens on secure AI servers, no data storage</li>
+                    </ul>
+                    
+                    <h5 class="mt-4">Use Cases</h5>
+                    <ul>
+                        <li><strong>Business Intelligence:</strong> Extract actionable insights from sales, marketing, or financial data</li>
+                        <li><strong>Data Cleaning:</strong> Identify inconsistencies and errors in your datasets</li>
+                        <li><strong>Customer Analysis:</strong> Understand patterns in customer feedback and behavior</li>
+                        <li><strong>Research Analysis:</strong> Quickly process and extract meaning from research data</li>
+                        <li><strong>Report Generation:</strong> Create summaries and highlights from large data sets</li>
+                    </ul>
+
+                    <h5 class="mt-4"><i class="bi bi-question-circle"></i> Frequently Asked Questions</h5>
+                    <div class="accordion" id="modalFaqAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#modalOfflineCollapse">
+                                    Can I use it offline?
+                                </button>
+                            </h2>
+                            <div id="modalOfflineCollapse" class="accordion-collapse collapse" data-bs-parent="#modalFaqAccordion">
+                                <div class="accordion-body">
+                                    <p><strong>Short answer:</strong> Partially, but it requires technical setup.</p>
+                                    <p><strong>For offline LLM processing:</strong><br>
+                                    Yes, if you have a powerful machine and are comfortable setting up tools like <a href="https://ollama.ai" target="_blank">Ollama</a> to run local LLMs.</p>
+                                    <div class="alert alert-info">
+                                        <strong><i class="bi bi-shield-check"></i> OpenAI API Data Privacy:</strong>
+                                        <ul class="mb-0 mt-2 small">
+                                            <li>✅ <strong>Not used for training</strong> - Your data is NOT used to train or improve their models</li>
+                                            <li>⏰ <strong>30-day retention</strong> - Retained for abuse monitoring only</li>
+                                            <li>🗑️ <strong>Auto-deleted</strong> - Deleted after 30 days</li>
+                                            <li>📄 <a href="https://openai.com/policies/api-data-usage-policies" target="_blank">Full Policy</a></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#modalCostCollapse">
+                                    How much does it cost?
+                                </button>
+                            </h2>
+                            <div id="modalCostCollapse" class="accordion-collapse collapse" data-bs-parent="#modalFaqAccordion">
+                                <div class="accordion-body">
+                                    <p><strong>The tool is free.</strong> You only pay for OpenAI API usage (typically cents for hundreds of rows). <a href="https://openai.com/api/pricing/" target="_blank">View Pricing</a></p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#modalDataCollapse">
+                                    Do you store my data?
+                                </button>
+                            </h2>
+                            <div id="modalDataCollapse" class="accordion-collapse collapse" data-bs-parent="#modalFaqAccordion">
+                                <div class="accordion-body">
+                                    <p><strong>No.</strong> Your API key is stored locally in your browser only. Files are processed temporarily and automatically deleted.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+        `;
+        
+        aboutModal.element.classList.add('modal', 'fade');
+        document.body.appendChild(aboutModal.element);
+        aboutModal.show();
+        
+        // Clean up modal after it's hidden
+        aboutModal.element.addEventListener('hidden.bs.modal', function() {
+            document.body.removeChild(aboutModal.element);
+        });
+    }
+    
+    // Button handlers
+    const getStartedBtn = document.getElementById('get-started-btn');
+    const startAnalyzingBtn = document.getElementById('start-analyzing-btn');
+
+    if (getStartedBtn) {
+        getStartedBtn.addEventListener('click', startAnalysis);
+    }
+
+    if (startAnalyzingBtn) {
+        startAnalyzingBtn.addEventListener('click', startAnalysis);
+    }
+
+    
+    // Load saved API key from localStorage if available
+    function loadSavedApiKey() {
+        const savedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
+        if (savedKey) {
+            // Update modal fields - need to get fresh references here
+            const modalApiKeyField = document.getElementById('modal-api-key');
+            const modalSaveKeyCheckbox = document.getElementById('modal-save-api-key');
+            
+            if (modalApiKeyField) {
+                modalApiKeyField.value = savedKey;
+                if (modalSaveKeyCheckbox) {
+                    modalSaveKeyCheckbox.checked = true;
+                }
+            }
+            
+            // Update main form field if it exists 
+            // (we've removed it from UI but keeping compatibility with old code)
+            const apiKeyInput = document.getElementById('modal-api-key');
+            if (apiKeyInput) {
+                apiKeyInput.value = savedKey;
+                const saveKeyCheckbox = document.getElementById('save-api-key');
+                if (saveKeyCheckbox) {
+                    saveKeyCheckbox.checked = true;
+                }
+            }
+        }
+    }
+    
+    // Clear saved API key
+    function clearSavedApiKey() {
+        localStorage.removeItem(API_KEY_STORAGE_KEY);
+        const modalSaveKeyCheckbox = document.getElementById('modal-save-api-key');
+        if (modalSaveKeyCheckbox) {
+            modalSaveKeyCheckbox.checked = false;
+        }
+    }
+    
+    // API Settings Modal functionality
+    const apiSettingsBtn = document.getElementById('api-settings-btn');
+    const modalApiKey = document.getElementById('modal-api-key');
+    const modalToggleApiKey = document.getElementById('modal-toggle-api-key');
+    const modalSaveApiKey = document.getElementById('modal-save-api-key');
+    const saveApiSettings = document.getElementById('save-api-settings');
+    
+    // Initialize Modal
+    const apiSettingsModal = new bootstrap.Modal(document.getElementById('api-settings-modal'));
+
+    /** Restore provider choice and Azure/model fields into the modal. */
+    function loadSavedProviderSettings() {
+        const provider = localStorage.getItem(PROVIDER_STORAGE_KEY) || 'openai';
+        const radio = document.getElementById(
+            provider === 'azure' ? 'provider-azure' : 'provider-openai');
+        if (radio) radio.checked = true;
+
+        const restore = (id, key) => {
+            const el = document.getElementById(id);
+            if (el) el.value = localStorage.getItem(key) || '';
+        };
+        restore('modal-azure-endpoint', AZURE_ENDPOINT_STORAGE_KEY);
+        restore('modal-azure-deployment', AZURE_DEPLOYMENT_STORAGE_KEY);
+        restore('modal-azure-api-version', AZURE_API_VERSION_STORAGE_KEY);
+        restore('modal-openai-model', OPENAI_MODEL_STORAGE_KEY);
+
+        syncProviderUI();
+    }
+
+    // Switch the visible fields when the provider changes.
+    document.querySelectorAll('input[name="llm-provider"]').forEach(radio => {
+        radio.addEventListener('change', syncProviderUI);
+    });
+
+    // Test Connection: verify credentials before running a whole file.
+    const testConnBtn = document.getElementById('test-connection-btn');
+    if (testConnBtn) {
+        testConnBtn.addEventListener('click', async function() {
+            const out = document.getElementById('test-connection-result');
+            testConnBtn.disabled = true;
+            out.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass-split"></i> Testing connection...</span>';
+            try {
+                const response = await fetch('/test_connection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(getLLMConfig())
+                });
+                const result = await response.json();
+                if (response.ok && result.ok) {
+                    out.innerHTML = '<span class="text-success"><i class="bi bi-check-circle-fill"></i> '
+                        + 'Connected to ' + result.provider + ' (model: ' + result.model + ')</span>';
+                } else {
+                    out.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle-fill"></i> '
+                        + escapeHtml(result.error || 'Connection failed') + '</span>';
+                }
+            } catch (e) {
+                out.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle-fill"></i> ' + escapeHtml(e.message) + '</span>';
+            } finally {
+                testConnBtn.disabled = false;
+            }
+        });
+    }
+    
+    // Add event listeners with null checks
+    if (apiSettingsBtn) {
+        apiSettingsBtn.addEventListener('click', function() {
+            // Load current API key from localStorage if available
+            loadSavedApiKey();
+            loadSavedProviderSettings();
+            apiSettingsModal.show();
+        });
+    }
+    
+    // Toggle API key visibility in modal
+    if (modalToggleApiKey && modalApiKey) {
+        modalToggleApiKey.addEventListener('click', function() {
+            if (modalApiKey.type === 'password') {
+                modalApiKey.type = 'text';
+                modalToggleApiKey.innerHTML = '<i class="bi bi-eye-slash"></i>';
+            } else {
+                modalApiKey.type = 'password';
+                modalToggleApiKey.innerHTML = '<i class="bi bi-eye"></i>';
+            }
+        });
+    }
+    
+    // Save API settings
+    if (saveApiSettings && modalApiKey && modalSaveApiKey) {
+        saveApiSettings.addEventListener('click', function() {
+            const apiKey = modalApiKey.value.trim();
+            const saveKey = modalSaveApiKey.checked;
+
+            // Read WHO ICD credentials (used by Medical Translation mode).
+            const icdIdField = document.getElementById('modal-icd-client-id');
+            const icdSecretField = document.getElementById('modal-icd-client-secret');
+            const icdId = icdIdField ? icdIdField.value.trim() : '';
+            const icdSecret = icdSecretField ? icdSecretField.value.trim() : '';
+
+            // Read provider + Azure fields.
+            const providerEl = document.querySelector('input[name="llm-provider"]:checked');
+            const provider = (providerEl && providerEl.value) || 'openai';
+            const fieldVal = (id) => {
+                const el = document.getElementById(id);
+                return el ? el.value.trim() : '';
+            };
+            const azureEndpoint = fieldVal('modal-azure-endpoint');
+            const azureDeployment = fieldVal('modal-azure-deployment');
+            const azureApiVersion = fieldVal('modal-azure-api-version');
+            const openaiModel = fieldVal('modal-openai-model');
+
+            if (!apiKey && !icdId && !icdSecret && !azureEndpoint && !azureDeployment) {
+                alert('Please enter your AI provider credentials and/or your WHO ICD credentials.');
+                return;
+            }
+
+            // Azure needs all three parts to work; warn early rather than
+            // failing on the first analysis request.
+            if (provider === 'azure' && apiKey && !(azureEndpoint && azureDeployment)) {
+                alert('Azure AI Foundry requires an Endpoint and a Deployment Name in addition to the API key.');
+                return;
+            }
+
+            // The provider choice itself is always remembered.
+            localStorage.setItem(PROVIDER_STORAGE_KEY, provider);
+
+            // Persist (or clear) provider details based on the save checkbox.
+            const persist = (key, value) => {
+                if (saveKey && value) localStorage.setItem(key, value);
+                else localStorage.removeItem(key);
+            };
+            persist(AZURE_ENDPOINT_STORAGE_KEY, azureEndpoint);
+            persist(AZURE_DEPLOYMENT_STORAGE_KEY, azureDeployment);
+            persist(AZURE_API_VERSION_STORAGE_KEY, azureApiVersion);
+            persist(OPENAI_MODEL_STORAGE_KEY, openaiModel);
+
+            // Persist (or clear) OpenAI key based on the save checkbox.
+            if (apiKey) {
+                if (saveKey) {
+                    localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+                } else {
+                    localStorage.removeItem(API_KEY_STORAGE_KEY);
+                }
+                const apiKeyInput = document.getElementById('modal-api-key');
+                if (apiKeyInput) {
+                    apiKeyInput.value = apiKey;
+                    const saveKeyCheckbox = document.getElementById('save-api-key');
+                    if (saveKeyCheckbox) {
+                        saveKeyCheckbox.checked = saveKey;
+                    }
+                }
+            }
+
+            // Persist (or clear) WHO ICD credentials based on the same save checkbox.
+            if (saveKey) {
+                if (icdId) localStorage.setItem(ICD_CLIENT_ID_STORAGE_KEY, icdId);
+                else localStorage.removeItem(ICD_CLIENT_ID_STORAGE_KEY);
+                if (icdSecret) localStorage.setItem(ICD_CLIENT_SECRET_STORAGE_KEY, icdSecret);
+                else localStorage.removeItem(ICD_CLIENT_SECRET_STORAGE_KEY);
+            } else {
+                localStorage.removeItem(ICD_CLIENT_ID_STORAGE_KEY);
+                localStorage.removeItem(ICD_CLIENT_SECRET_STORAGE_KEY);
+            }
+
+            apiSettingsModal.hide();
+            alert('API settings saved successfully!');
+        });
+    }
+    
+    // Handle the old toggle-api-key button (which we've removed from UI)
+    const oldToggleBtn = document.getElementById('toggle-api-key');
+    if (oldToggleBtn) {
+        oldToggleBtn.addEventListener('click', function() {
+            const apiKeyInput = document.getElementById('modal-api-key');
+            if (apiKeyInput) {
+                if (apiKeyInput.type === 'password') {
+                    apiKeyInput.type = 'text';
+                    this.innerHTML = '<i class="bi bi-eye-slash"></i>';
+                } else {
+                    apiKeyInput.type = 'password';
+                    this.innerHTML = '<i class="bi bi-eye"></i>';
+                }
+            }
+        });
+    }
+
+    resultsUI = initResults({ getFileData: () => fileData, getChatDataset, streamChat, getLLMConfig, showAlert });
+});

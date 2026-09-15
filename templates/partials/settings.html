@@ -1,0 +1,109 @@
+    <!-- API Settings Modal -->
+    <div class="modal fade" id="api-settings-modal" tabindex="-1" aria-labelledby="api-settings-modal-label" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="api-settings-modal-label"><i class="bi bi-gear"></i> API Settings</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Saved credentials stay in your browser and are sent to the server for processing. WHO authentication is cached temporarily in server memory. If your administrator has configured a server-side deployment, you may leave these blank.
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">AI Provider</label>
+                        <div class="btn-group w-100" role="group" aria-label="AI provider">
+                            <input type="radio" class="btn-check" name="llm-provider" id="provider-openai" value="openai" checked>
+                            <label class="btn btn-outline-primary" for="provider-openai">
+                                <i class="bi bi-stars"></i> OpenAI
+                            </label>
+                            <input type="radio" class="btn-check" name="llm-provider" id="provider-azure" value="azure">
+                            <label class="btn btn-outline-primary" for="provider-azure">
+                                <i class="bi bi-cloud"></i> Azure AI Foundry
+                            </label>
+                        </div>
+                        <div class="form-text">Choose Azure AI Foundry to use a model deployed in your organization's Azure tenant.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="modal-api-key" class="form-label">
+                            <span class="provider-openai-only">OpenAI API Key</span>
+                            <span class="provider-azure-only d-none">Azure API Key</span>
+                        </label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="modal-api-key" placeholder="Enter your API Key">
+                            <button class="btn btn-outline-secondary" type="button" id="modal-toggle-api-key">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text provider-openai-only">Get your API key from <a href="https://platform.openai.com/account/api-keys" target="_blank">OpenAI's website</a></div>
+                        <div class="form-text provider-azure-only d-none">Found under <strong>Keys and Endpoint</strong> in your Azure OpenAI / AI Foundry resource.</div>
+                    </div>
+
+                    <!-- Azure-specific configuration -->
+                    <div id="azure-settings" class="d-none">
+                        <div class="mb-3">
+                            <label for="modal-azure-endpoint" class="form-label">Azure Endpoint</label>
+                            <input type="text" class="form-control" id="modal-azure-endpoint" placeholder="https://your-resource.openai.azure.com">
+                            <div class="form-text">The base endpoint URL of your Azure resource (without a trailing path).</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="modal-azure-deployment" class="form-label">Deployment Name</label>
+                            <input type="text" class="form-control" id="modal-azure-deployment" placeholder="e.g. gpt-4o-mini">
+                            <div class="form-text">The <strong>deployment</strong> name you chose in Azure &mdash; this is often different from the underlying model name.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="modal-azure-api-version" class="form-label">API Version</label>
+                            <input type="text" class="form-control" id="modal-azure-api-version" placeholder="2024-10-21">
+                            <div class="form-text">Leave blank to use the default (2024-10-21).</div>
+                        </div>
+                    </div>
+
+                    <!-- OpenAI-specific model override -->
+                    <div id="openai-model-settings" class="mb-3">
+                        <label for="modal-openai-model" class="form-label">Model <span class="text-muted">(optional)</span></label>
+                        <input type="text" class="form-control" id="modal-openai-model" placeholder="gpt-4o-mini">
+                        <div class="form-text">Leave blank to use the default (gpt-4o-mini).</div>
+                    </div>
+
+                    <div class="d-grid mb-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="test-connection-btn">
+                            <i class="bi bi-plug"></i> Test Connection
+                        </button>
+                    </div>
+                    <div id="test-connection-result" class="small mb-2"></div>
+
+                    <hr>
+                    <div class="alert alert-info">
+                        <i class="bi bi-translate"></i> WHO ICD-11 API credentials are required for <strong>Medical Translation (ICD-11)</strong>. Saved credentials stay in this browser and are sent to the server for authentication. WHO access tokens and credential cache keys are held temporarily in server memory.
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="modal-icd-client-id" class="form-label">WHO ICD Client ID</label>
+                        <input type="text" class="form-control" id="modal-icd-client-id" placeholder="Enter your WHO ICD Client ID">
+                        <div class="form-text">Register for free at the <a href="https://icd.who.int/icdapi" target="_blank">WHO ICD API portal</a> to obtain credentials.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="modal-icd-client-secret" class="form-label">WHO ICD Client Secret</label>
+                        <input type="password" class="form-control" id="modal-icd-client-secret" placeholder="Enter your WHO ICD Client Secret">
+                        <div class="form-text">Used together with the Client ID to authenticate with the WHO ICD-11 API.</div>
+                    </div>
+
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox" id="modal-save-api-key">
+                        <label class="form-check-label" for="modal-save-api-key">
+                            Save these settings in this browser
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="save-api-settings">Save Settings</button>
+                </div>
+            </div>
+        </div>
+    </div>

@@ -1,0 +1,177 @@
+            <!-- Step 4: Configure Column Analysis -->
+            <div class="step-content fade-in hidden" id="step-4">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span>Configure Analysis</span>
+                                <i class="bi bi-sliders"></i>
+                            </div>
+                            <div class="card-body">
+                                <div id="analysis-config">
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i> Select columns to analyze and provide specific instructions for each. You can combine multiple columns for more complex analysis.
+                                </div>
+
+                                <!-- Pattern Detection Section (Initially Hidden) -->
+                                <div id="pattern-detection" class="card mb-4 hidden">
+                                    <div class="card-header bg-info bg-opacity-10">
+                                        <i class="bi bi-search"></i> Detect Categories in Data
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="small">Find common patterns or categories in your data before analysis.</p>
+                                        
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="pattern-column" class="form-label">Select Column</label>
+                                                    <select class="form-select" id="pattern-column"></select>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="num-categories" class="form-label">Number of Categories</label>
+                                                    <input type="number" class="form-control" id="num-categories" min="2" max="20" value="5">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="pattern-prompt" class="form-label">Instructions for Categorization</label>
+                                            <textarea class="form-control" id="pattern-prompt" rows="2" placeholder="Describe how you want the data categorized. Example: 'Find common themes in these customer reviews'"></textarea>
+                                        </div>
+                                        
+                                        <button id="detect-patterns-btn" class="btn btn-info">
+                                            <i class="bi bi-search"></i> Detect Categories
+                                        </button>
+                                        
+                                        <div id="pattern-results" class="mt-3 hidden">
+                                            <h6>Detected Categories</h6>
+                                            <div id="categories-list" class="py-2"></div>
+                                            <div id="explanation" class="small fst-italic bg-light p-2 rounded"></div>
+                                            <div class="mt-2">
+                                                <button id="copy-categories-btn" class="btn btn-sm btn-outline-secondary">
+                                                    <i class="bi bi-clipboard"></i> Copy
+                                                </button>
+                                                <button id="use-categories-btn" class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-check2-circle"></i> Use in Analysis
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="column-configs">
+                                    <!-- Column configurations will be inserted here -->
+                                </div>
+                                
+                                <div class="d-flex flex-wrap gap-2 mb-3">
+                                    <button id="add-column-btn" class="btn btn-outline-primary">
+                                        <i class="bi bi-plus-circle"></i> Add Column
+                                    </button>
+                                    <button id="toggle-pattern-btn" class="btn btn-outline-info">
+                                        <i class="bi bi-search"></i> Detect Patterns
+                                    </button>
+                                </div>
+                                
+                                <div id="analysis-recovery" class="alert alert-info hidden" role="status">
+                                    <p>Completed batches are available while this page stays open. Resume uses the original settings.</p>
+                                    <button type="button" id="resume-analysis-btn" class="btn btn-primary">Resume analysis</button>
+                                    <button type="button" id="partial-download-btn" class="btn btn-outline-primary">Download completed rows</button>
+                                </div>
+                                <div id="analyze-message" class="alert alert-success mt-3 hidden"></div>
+                                <div id="pattern-message" class="alert alert-info mt-3 hidden"></div>
+                                
+                                <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-3">
+                                    <button type="button" class="btn btn-outline-secondary" id="configure-back-btn">
+                                        <i class="bi bi-arrow-left"></i> Back
+                                    </button>
+                                    <div>
+                                        <button id="test-run-btn" class="btn btn-outline-success me-2">
+                                            <i class="bi bi-lightning"></i> Test Run (5 Rows)
+                                        </button>
+                                        <button id="analyze-btn" class="btn btn-primary">
+                                            <i class="bi bi-play-fill"></i> Analyze All Rows
+                                        </button>
+                                    </div>
+                                </div>
+                                </div>
+                                <!-- /analysis-config -->
+
+                                <!-- ICD-11 Translation Config (hidden unless appMode === 'icd') -->
+                                <div id="icd-config" class="hidden">
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-translate"></i> Configure how the selected column is mapped to ICD-11. Each row is resolved to an ICD-11 MMS anchor entity, then the chosen output columns are produced.
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label d-block">Input type</label>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="radio" name="icd-input-type" id="icd-input-type-text" value="text" checked>
+                                                <label class="form-check-label" for="icd-input-type-text">Free text</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="radio" name="icd-input-type" id="icd-input-type-code" value="code">
+                                                <label class="form-check-label" for="icd-input-type-code">Existing code</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label for="icd-source-column" class="form-label">Source column</label>
+                                            <select class="form-select" id="icd-source-column"></select>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3" id="icd-source-lang-group">
+                                            <label for="icd-source-lang" class="form-label">Source language (free text)</label>
+                                            <select class="form-select" id="icd-source-lang"></select>
+                                        </div>
+                                        <div class="col-md-6 mb-3 hidden" id="icd-source-system-group">
+                                            <label for="icd-source-system" class="form-label">Source code system</label>
+                                            <select class="form-select" id="icd-source-system">
+                                                <option value="mms" selected>ICD-11 MMS code</option>
+                                                <option value="icd10">ICD-10 code</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label for="icd-target-lang" class="form-label">Target language (ICD-11 term)</label>
+                                            <select class="form-select" id="icd-target-lang"></select>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label d-block">Output columns</label>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="icd-target-icd11" checked>
+                                            <label class="form-check-label" for="icd-target-icd11">ICD-11 term</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="icd-target-icd10">
+                                            <label class="form-check-label" for="icd-target-icd10">ICD-10 code + relationship</label>
+                                        </div>
+                                    </div>
+
+                                    <div id="icd-config-message" class="alert alert-success mt-3 hidden"></div>
+
+                                    <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-3">
+                                        <button type="button" class="btn btn-outline-secondary" id="icd-configure-back-btn">
+                                            <i class="bi bi-arrow-left"></i> Back
+                                        </button>
+                                        <div class="d-grid gap-2 d-md-flex">
+                                            <button id="run-icd-test-btn" class="btn btn-outline-success">
+                                                <i class="bi bi-lightning-charge"></i> Run Test (first 10 rows)
+                                            </button>
+                                            <button id="run-icd-btn" class="btn btn-primary">
+                                                <i class="bi bi-play-fill"></i> Translate All Rows
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- /icd-config -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+

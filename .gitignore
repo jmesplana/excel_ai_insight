@@ -34,3 +34,13 @@ uploads/*.csv
 .vscode
 *.swp
 *.swo
+# Node (npm run dev wrapper)
+node_modules/
+npm-debug.log*
+
+# Local backups
+*.backup
+
+# Browser regression artifacts
+test-results/
+playwright-report/

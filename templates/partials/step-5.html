@@ -1,0 +1,122 @@
+            <!-- Step 5: Results -->
+            <div class="step-content fade-in hidden" id="step-5">
+                <div id="analysis-results">
+                <div class="alert alert-success d-flex justify-content-between align-items-center" id="result-message">
+                    <span><i class="bi bi-check-circle"></i> Analysis complete! Your results are ready.</span>
+                    <span class="badge bg-primary"><i class="bi bi-chat-dots"></i> Chat available in bottom right</span>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <ul class="nav nav-tabs card-header-tabs" id="resultTabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active" id="insights-tab" data-bs-toggle="tab" data-bs-target="#insights-content" type="button" role="tab">
+                                            <i class="bi bi-lightbulb"></i> Quick Insights
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="table-tab" data-bs-toggle="tab" data-bs-target="#table-content" type="button" role="tab">
+                                            <i class="bi bi-table"></i> Data Table
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="card-body">
+                                <div class="tab-content" id="resultTabContent">
+                                    <!-- Quick Insights Tab -->
+                                    <div class="tab-pane fade show active" id="insights-content" role="tabpanel">
+                                        <h6 class="mb-3">Dataset Overview</h6>
+                                        <div class="row mb-4" id="stats-cards">
+                                            <!-- Stats cards will be inserted here dynamically -->
+                                        </div>
+
+                                        <h6 class="mb-3">Column Analysis</h6>
+                                        <div id="column-insights" style="max-height: 500px; overflow-y: auto;">
+                                            <!-- Column insights will be inserted here -->
+                                        </div>
+                                    </div>
+
+                                    <!-- Data Table Tab -->
+                                    <div class="tab-pane fade" id="table-content" role="tabpanel">
+                                        <div class="mb-3">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <input type="text" class="form-control form-control-sm" id="table-search" placeholder="Search in table...">
+                                                </div>
+                                                <div class="col-md-6 text-end">
+                                                    <span id="table-info" class="text-muted small"></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div id="result-preview" class="table-container table-responsive" style="max-height: 550px; overflow-y: auto;">
+                                            <!-- Interactive table will be inserted here -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+                            <button type="button" class="btn btn-outline-secondary" id="results-back-btn">
+                                <i class="bi bi-arrow-left"></i> Back to Configure
+                            </button>
+                            <a id="download-link" href="#" class="btn btn-success">
+                                <i class="bi bi-download"></i> Download Results
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                </div>
+                <!-- /analysis-results -->
+
+                <!-- ICD-11 Translation Results (hidden unless appMode === 'icd') -->
+                <div id="icd-results" class="hidden">
+                    <div class="alert alert-success d-flex justify-content-between align-items-center" id="icd-result-message">
+                        <span><i class="bi bi-check-circle"></i> Translation complete! Your ICD mapping is ready.</span>
+                    </div>
+
+                    <div class="alert alert-warning small">
+                        <i class="bi bi-info-circle"></i> The <strong>ICD-10 Match</strong> (relationship) column is <strong>derived/advisory</strong> &mdash; it is computed by this tool, not an official WHO mapping stamp.
+                    </div>
+
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-table"></i> ICD Mapping Results</span>
+                                    <span id="icd-table-info" class="text-muted small"></span>
+                                </div>
+                                <div class="card-body">
+                                    <label class="form-check mb-2"><input type="checkbox" id="icd-review-only" class="form-check-input"> Show rows needing review</label>
+                                    <p class="small text-muted">WHO code existence does not confirm the match. Exports include review status and source details for every field.</p>
+                                    <div id="icd-result-preview" class="table-container table-responsive" style="max-height: 600px; overflow-y: auto;">
+                                        <!-- ICD results table will be inserted here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+                                <button type="button" class="btn btn-outline-secondary" id="icd-results-back-btn">
+                                    <i class="bi bi-arrow-left"></i> Back to Configure
+                                </button>
+                                <a id="icd-download-link" href="#" class="btn btn-success">
+                                    <i class="bi bi-download"></i> Download ICD Mapping
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- /icd-results -->
+            </div>
+
+    

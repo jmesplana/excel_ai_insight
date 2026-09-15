@@ -1,0 +1,22 @@
+{
+  "name": "aidstack-insights",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Aidstack Insights \u2014 AI-powered Excel/CSV analysis and ICD-11 medical translation.",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "start": "node scripts/dev.mjs --no-debug",
+    "setup": "node scripts/dev.mjs --setup-only",
+    "clean": "rm -rf venv __pycache__ .pytest_cache",
+    "test": "node --test tests/frontend.test.mjs",
+    "test:backend": "venv/bin/python -m unittest discover -s tests -v",
+    "test:browser": "playwright test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "type": "module",
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}
