@@ -1,0 +1,77 @@
+/* Aidstack landing: brand neutrals, navy, and restrained orange accents. */
+#landing-page { --landing-surface: #fff; --landing-ink: #0F172A; --landing-muted: #475569; --landing-border: #e2e8f0; color: var(--landing-ink); }
+.insights-hero { display: grid; grid-template-columns: 1.12fr 1fr; align-items: center; gap: 64px; padding: 72px 0 64px; }
+.landing-eyebrow { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 24px; }
+.landing-eyebrow > span { width: 8px; height: 8px; background: #FF6B35; }
+#landing-page h1 { font-size: clamp(42px, 4.6vw, 66px); line-height: 1.06; letter-spacing: -.055em; margin-bottom: 26px; color: #1A365D; }
+.hero-description { font-size: 21px; line-height: 1.5; max-width: 470px; }
+.hero-detail { color: var(--landing-muted); font-size: 16px; line-height: 1.8; max-width: 480px; }
+.landing-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 24px; margin-top: 30px; }
+.landing-primary { background: #1A365D; color: #fff; border: 1px solid #1A365D; padding: 14px 21px; border-radius: 6px; font: 500 16px 'Space Grotesk', sans-serif; }
+.landing-primary i { margin-left: 16px; color: #FF6B35; }
+.landing-primary:hover, .landing-primary:focus-visible { background: #0F172A; border-color: #0F172A; color: #fff; }
+.landing-text-link { color: var(--landing-ink); font-size: 14px; font-weight: 600; text-decoration: none; }
+.landing-text-link i { margin-left: 8px; }
+#landing-page a:hover { text-decoration: underline; text-underline-offset: 5px; }
+#landing-page :focus-visible { outline: 3px solid #FF6B35; outline-offset: 5px; }
+.hero-note { margin: 17px 0 0; color: var(--landing-muted); font-size: 12px; }
+.workflow-preview { margin: 0; background: var(--landing-surface); border: 1px solid var(--landing-border); border-radius: 12px; overflow: hidden; box-shadow: 0 24px 60px -32px #1A365D55; }
+.preview-topline { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 18px 22px; border-bottom: 1px solid var(--landing-border); font-family: 'Space Grotesk', sans-serif; font-size: 15px; }
+.preview-label { font: 400 11px 'Inter', sans-serif; color: var(--landing-muted); }
+.preview-body { padding: 26px; background: #F1F5F9; }
+.preview-file { display: flex; align-items: center; gap: 12px; padding: 16px; border: 1px solid var(--landing-border); border-radius: 6px; background: var(--landing-surface); }
+.preview-file > i { font-size: 25px; }
+.preview-file strong { display: block; font-size: 13px; }
+.preview-file div span { display: block; font-size: 12px; color: var(--landing-muted); margin-top: 4px; }
+.file-tag { margin-left: auto; font-size: 10px; color: var(--landing-muted); letter-spacing: .08em; }
+.preview-connector { height: 22px; width: 1px; background: #94A3B8; margin-left: 26px; }
+.preview-instructions { padding: 20px; background: #1A365D; color: #fff; border-radius: 6px; border-left: 3px solid #FF6B35; }
+.preview-step { font-size: 10px; letter-spacing: .1em; font-weight: 600; }
+.preview-instructions h3 { font-size: 21px; margin: 9px 0 16px; letter-spacing: -.025em; }
+.instruction-row { font-size: 12px; margin-top: 9px; }
+.instruction-row i { margin-right: 8px; }
+.preview-output { padding: 17px; background: var(--landing-surface); border: 1px solid var(--landing-border); border-radius: 6px; }
+.output-head { display: grid; grid-template-columns: 1fr 1fr; margin-top: 15px; gap: 20px; font-size: 11px; font-weight: 600; }
+.output-lines { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 25px; padding: 14px 0 18px; }
+.output-lines span { height: 6px; background: #e2e8f0; width: 85%; border-radius: 2px; }
+.output-lines span:nth-child(even) { background: #94A3B8; width: 70%; }
+.preview-download { border-top: 1px solid var(--landing-border); padding-top: 12px; font-size: 11px; }
+.preview-download i { margin-right: 7px; }
+.workflow-preview figcaption { padding: 14px 18px; font-size: 11px; text-align: center; color: var(--landing-muted); }
+.capability-strip { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 20px; padding: 25px 0; border-block: 1px solid var(--landing-border); font-size: 13px; color: var(--landing-muted); }
+.capability-strip i { margin-right: 8px; }
+.capability-strip a { color: inherit; text-decoration: none; }
+.landing-section { padding: 80px 0; }
+.section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 40px; margin-bottom: 34px; }
+.section-heading .landing-eyebrow { margin-bottom: 15px; color: var(--landing-muted); }
+#landing-page h2 { font-size: clamp(28px, 3vw, 39px); line-height: 1.18; letter-spacing: -.04em; margin: 0; }
+.section-heading > p { max-width: 350px; color: var(--landing-muted); font-size: 15px; line-height: 1.8; margin: 0; }
+.landing-feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.landing-feature { position: relative; padding: 28px; background: var(--landing-surface); border: 1px solid var(--landing-border); border-radius: 8px; }
+.feature-icon { display: inline-block; font-size: 25px; margin-bottom: 30px; }
+.feature-number { position: absolute; right: 26px; top: 30px; font-size: 12px; color: var(--landing-muted); }
+.landing-feature h3 { font-size: 21px; letter-spacing: -.03em; margin-bottom: 14px; }
+.landing-feature p { font-size: 14px; line-height: 1.85; color: var(--landing-muted); margin-bottom: 25px; }
+.feature-caption { display: block; padding-top: 17px; border-top: 1px solid var(--landing-border); font-size: 11px; color: var(--landing-muted); }
+.landing-workflow { border-top: 1px solid var(--landing-border); padding-top: 65px; }
+.landing-steps { list-style: none; padding: 0; margin: 44px 0 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; }
+.landing-steps li { border-top: 2px solid var(--landing-border); padding-top: 18px; }
+.landing-steps li > span { font-family: 'Space Grotesk', sans-serif; font-size: 14px; color: var(--landing-muted); }
+.landing-steps h3 { font-size: 18px; margin: 18px 0 12px; }
+.landing-steps p { font-size: 14px; color: var(--landing-muted); line-height: 1.8; margin: 0; }
+.landing-closing { background: #1A365D; color: #fff; border-radius: 10px; padding: 45px; display: flex; justify-content: space-between; align-items: center; gap: 32px; }
+.landing-closing .landing-eyebrow { margin-bottom: 18px; }
+.landing-closing p:last-child { font-size: 14px; margin: 20px 0 0; }
+.closing-actions { display: flex; flex-direction: column; align-items: center; gap: 20px; flex-shrink: 0; }
+.closing-actions .landing-primary { background: #fff; color: #1A365D; border-color: #fff; }
+.closing-actions .landing-primary i { color: #1A365D; }
+.closing-actions > a { color: #fff; font-size: 13px; text-decoration: none; }
+.landing-data-note { text-align: center; max-width: 790px; font-size: 12px; line-height: 1.8; color: var(--landing-muted); margin: 22px auto 50px; }
+body.dark-mode #landing-page { --landing-surface: #0F172A; --landing-ink: #fff; --landing-muted: #cbd5e1; --landing-border: #475569; }
+body.dark-mode #landing-page h1 { color: #fff; }
+body.dark-mode .preview-body { background: #0F172A; }
+@media (max-width: 991px) { .insights-hero { gap: 30px; padding-top: 45px; } .landing-feature { padding: 22px; } .capability-strip { display: grid; grid-template-columns: 1fr 1fr; } }
+@media (max-width: 767px) { .insights-hero { grid-template-columns: 1fr; padding: 32px 0 38px; gap: 34px; } #landing-page h1 { font-size: 48px; } .hero-description { font-size: 19px; } .landing-feature-grid { grid-template-columns: 1fr; } .section-heading { align-items: flex-start; flex-direction: column; gap: 20px; } .landing-section { padding: 45px 0; } .landing-steps { grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 30px; } .landing-closing { padding: 30px 24px; flex-direction: column; align-items: flex-start; } .closing-actions { align-items: flex-start; } .capability-strip { font-size: 11px; gap: 18px 10px; } .landing-eyebrow { font-size: 10px; } }
+@media (prefers-reduced-motion: reduce) { #landing-page * { transition: none; } }
+body:has(#landing-page:not(.hidden)) { transition: none; }
+body.dark-mode:has(#landing-page:not(.hidden)) { background-color: #0F172A; }

@@ -1709,6 +1709,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const landingPage = document.getElementById('landing-page');
         const workflowStepper = document.getElementById('workflow-stepper');
         landingPage.classList.add('hidden');
+        document.getElementById('main-content').classList.remove('hidden');
         workflowStepper.classList.remove('hidden');
         goToStep(1);
     }
@@ -1717,6 +1718,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const landingPage = document.getElementById('landing-page');
         const workflowStepper = document.getElementById('workflow-stepper');
         landingPage.classList.remove('hidden');
+        document.getElementById('main-content').classList.add('hidden');
         workflowStepper.classList.add('hidden');
     }
     
