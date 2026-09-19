@@ -5,6 +5,9 @@ import { escapeHtml, renderMarkdown } from './rendering.js';
 import { parseWorkbook, exportResults, explodeColumn } from './spreadsheet.js';
 import { BatchRun } from './batch-runner.js';
 import { serializeConfig, deserializeConfig, configFilename } from './analysis-config.js';
+import { getJevConfig, hasJevCredentials, JEV_API_KEY_STORAGE_KEY, JEV_MODEL_STORAGE_KEY } from './provider-settings.js';
+import { serializeJevConfig, deserializeJevConfig, jevConfigFilename, parseOptions,
+    formatOptions, validateQuestion, buildJevState, DEFAULT_QUESTION_TYPE } from './jev-config.js';
 
 /* Global variables */
 let availableColumns = [];
@@ -14,7 +17,8 @@ let resultChart = null;
 const ICD_CLIENT_ID_STORAGE_KEY = 'excel_ai_insight_icd_client_id';
 const ICD_CLIENT_SECRET_STORAGE_KEY = 'excel_ai_insight_icd_client_secret';
 
-// Application mode: 'analysis' (default AI analysis) | 'icd' (Medical Translation
+// Application mode: 'analysis' (default AI analysis) | 'jev' (Jev typed
+// classification against a controlled list) | 'icd' (Medical Translation
 // ICD-11) | 'clean' (split multi-value cells; no AI, no credentials, no step 4/5)
 let appMode = 'analysis';
 
@@ -38,6 +42,9 @@ function icdLangOptionsHtml(defaultCode) {
 // Holds the analyzed dataset in memory: { sheetName, columns: [...], data: [...] }
 let analyzedResult = null;
 const ANALYZE_BATCH_SIZE = 20;     // rows per /analyze_batch request
+// Jev spends one request per row rather than per cell, and the API allows
+// 1,200 requests/minute, so a batch can safely be larger than the LLM path's.
+const JEV_BATCH_SIZE = 25;         // rows per /analyze_batch_jev request
 const MAX_CHAT_ROWS = 5000;        // cap rows sent to /chat_with_data (Vercel body limit)
 
 // Build the input text for one (row, config) cell, mirroring the server's
@@ -644,6 +651,7 @@ function goToStep(step) {
 function applyModePanels(step) {
     const isIcd = (appMode === 'icd');
     const isClean = (appMode === 'clean');
+    const isJev = (appMode === 'jev');
     const setHidden = (id, hidden) => {
         const el = document.getElementById(id);
         if (el) el.classList.toggle('hidden', hidden);
@@ -652,12 +660,23 @@ function applyModePanels(step) {
     if (step === 1) {
         // Clean mode needs no instructions and no credentials; the mode cards
         // are the whole of step 1 for it.
-        setHidden('analysis-instructions-block', isIcd || isClean);
+        // Jev takes its instructions per question on step 4, so the shared
+        // general-instructions box does not apply to it either.
+        setHidden('analysis-instructions-block', isIcd || isClean || isJev);
         setHidden('icd-intro-block', !isIcd);
+        setHidden('jev-intro-block', !isJev);
         setHidden('clean-intro-block', !isClean);
         // The default banner and title speak for the AI flows; clean mode
         // needs no credentials, so neither should mention them.
         setHidden('config-intro-alert', isClean);
+        // Jev uses its own key, so the banner must not send the user to the
+        // OpenAI/Azure settings the LLM path needs.
+        const intro = document.getElementById('config-intro-alert');
+        if (intro && !isClean) {
+            intro.innerHTML = isJev
+                ? '<i class="bi bi-info-circle"></i> Pick <strong>Jev Classification</strong> below, then define your result columns and their option lists on the <strong>Configure Analysis</strong> step. Set your <strong>Jev API Key</strong> in the <strong>API Settings</strong> button in the top navigation bar, unless your server already provides one.'
+                : '<i class="bi bi-info-circle"></i> Before starting your analysis, configure general instructions that will apply to all analyzed columns. Configure OpenAI or Azure in the <strong>API Settings</strong> button in the top navigation bar, unless your server already provides credentials.';
+        }
         const title = document.getElementById('config-card-title');
         if (title) title.textContent = isClean ? 'Choose a Mode' : 'Analysis Configuration';
     }
@@ -673,14 +692,20 @@ function applyModePanels(step) {
     }
 
     if (step === 4) {
-        setHidden('analysis-config', isIcd);
+        setHidden('analysis-config', isIcd || isJev);
         setHidden('icd-config', !isIcd);
+        setHidden('jev-config', !isJev);
         if (isIcd) {
             populateIcdConfig();
+        }
+        if (isJev) {
+            populateJevConfig();
         }
     }
 
     if (step === 5) {
+        // Jev writes into analyzedResult like the LLM path, so it shares the
+        // analysis results view (preview, chart, chat and download).
         setHidden('analysis-results', isIcd);
         setHidden('icd-results', !isIcd);
     }
@@ -1608,6 +1633,418 @@ async function continueAnalysis() {
     }
 }
 
+/* Jev Classification (appMode === 'jev')
+ *
+ * Unlike the LLM path, a Jev result column is a typed *question*: the answer is
+ * always one of the options configured here, so the column holds a clean label
+ * rather than prose to be tidied afterwards. All questions for a row travel in
+ * one request, which is why the row -- not the cell -- is the unit of work.
+ */
+
+// Option lists people reach for most often, so a first run needs no typing.
+const JEV_QUESTION_TEMPLATES = {
+    sentiment: {
+        outputColumnName: 'Sentiment',
+        questionType: 'choice',
+        instructions: 'Classify the overall sentiment expressed in the text.',
+        options: ['Positive', 'Neutral', 'Negative', 'Mixed']
+    },
+    urgency: {
+        outputColumnName: 'Urgency',
+        questionType: 'score',
+        instructions: 'Rate how urgently this requires a response, independently of how it is worded.',
+        options: [
+            'Low: general comment, appreciation or non-urgent suggestion',
+            'Medium: a question or concern needing a reply, but no immediate danger',
+            'High: a serious problem needing prompt action',
+            'Critical: immediate risk to safety requiring escalation now'
+        ]
+    },
+    actionable: {
+        outputColumnName: 'Needs follow-up',
+        questionType: 'noul',
+        instructions: 'Does this entry require someone to take a follow-up action?',
+        options: ['Yes', 'No']
+    }
+};
+
+/** Fill the source-column checkboxes from the sheet being analyzed. */
+function populateJevConfig() {
+    const sheet = currentSheet();
+    const columns = (sheet && sheet.columns) ? sheet.columns : (availableColumns || []);
+    const container = document.getElementById('jev-source-columns');
+    if (!container) return;
+
+    // Preserve the current selection across re-entry into step 4.
+    const checked = new Set(readJevSourceColumns());
+    container.innerHTML = columns.map((col, i) => `
+        <div class="form-check">
+            <input class="form-check-input jev-source-column" type="checkbox"
+                   id="jev-src-${i}" value="${escapeHtml(col)}"${checked.has(col) ? ' checked' : ''}>
+            <label class="form-check-label" for="jev-src-${i}">${escapeHtml(col)}</label>
+        </div>`).join('');
+
+    // Default to the first column so a quick run needs no extra clicks.
+    if (!checked.size) {
+        const first = container.querySelector('.jev-source-column');
+        if (first) first.checked = true;
+    }
+    if (!document.querySelector('.jev-question-container')) addJevQuestion();
+}
+
+function readJevSourceColumns() {
+    return Array.from(document.querySelectorAll('.jev-source-column:checked'))
+        .map(input => input.value);
+}
+
+/**
+ * Append a Jev question card.
+ * @param {object} [preset] - { outputColumnName, questionType, instructions, options }
+ */
+function addJevQuestion(preset = null) {
+    const container = document.getElementById('jev-question-configs');
+    if (!container) return null;
+    const card = document.createElement('div');
+    card.className = 'column-selection-container jev-question-container mb-3';
+    card.innerHTML = `
+        <div class="row mb-2">
+            <div class="col-md-10">
+                <label class="form-label">Result Column Name
+                    <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
+                       title="Name of the new column that will hold the chosen label."></i>
+                </label>
+                <input type="text" class="form-control" name="jev-output-column-name"
+                       placeholder="E.g., Feedback type, Urgency, Sector...">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="button" class="btn btn-sm btn-outline-danger jev-remove-btn mb-2">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Question type
+                <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
+                   title="Choice picks one label from your list. Score rates against ordered levels. Yes/No answers a single question."></i>
+            </label>
+            <select class="form-select" name="jev-question-type">
+                <option value="choice">Choice — pick one label from a list</option>
+                <option value="score">Score — rate against ordered levels</option>
+                <option value="noul">Yes / No — answer a single question</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Instructions
+                <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
+                   title="Tell Jev what to decide. Keep it narrow and specific — one judgement per result column."></i>
+            </label>
+            <textarea class="form-control" name="jev-instructions" rows="2"
+                      placeholder="E.g., Determine the dominant type of feedback."></textarea>
+        </div>
+        <div class="mb-2">
+            <label class="form-label jev-options-label">Options <span class="text-muted">(one per line)</span>
+                <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
+                   title="Jev can only answer with one of these. Paste your existing codebook here."></i>
+            </label>
+            <textarea class="form-control jev-options" name="jev-options" rows="5"
+                      placeholder="Question&#10;Suggestion&#10;Complaint"></textarea>
+            <div class="form-text jev-options-help"></div>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <select class="form-select form-select-sm w-auto jev-template-select">
+                <option value="">Start from a template…</option>
+                <option value="sentiment">Sentiment (Choice)</option>
+                <option value="urgency">Urgency (Score)</option>
+                <option value="actionable">Needs follow-up (Yes/No)</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-outline-info jev-use-categories-btn"
+                    data-bs-toggle="tooltip"
+                    title="Fill the options from the categories found by Detect Patterns in AI Analysis mode.">
+                <i class="bi bi-magic"></i> Use detected categories
+            </button>
+        </div>
+    `;
+
+    const typeSelect = card.querySelector('[name="jev-question-type"]');
+    const optionsField = card.querySelector('.jev-options');
+    const optionsLabel = card.querySelector('.jev-options-label');
+    const optionsHelp = card.querySelector('.jev-options-help');
+
+    // Each question type wants a different shape of list, so the same textarea
+    // is relabelled rather than shown as three separate controls.
+    function syncType() {
+        const type = typeSelect.value;
+        const count = parseOptions(optionsField.value).length;
+        if (type === 'score') {
+            optionsLabel.innerHTML = 'Levels <span class="text-muted">(one per line, lowest first)</span>';
+            optionsHelp.textContent = `Between 2 and 10 ordered levels, lowest first. Describe each one — "Low: a general comment" works better than "Low". ${count} entered.`;
+            optionsField.placeholder = 'Low: a general comment\nMedium: needs a reply\nHigh: needs prompt action';
+        } else if (type === 'noul') {
+            optionsLabel.innerHTML = 'Labels <span class="text-muted">(optional: yes label, then no label)</span>';
+            optionsHelp.textContent = 'Jev answers with a probability. Leave blank to write "Yes"/"No", or give two lines to use your own wording.';
+            optionsField.placeholder = 'Yes\nNo';
+        } else {
+            optionsLabel.innerHTML = 'Options <span class="text-muted">(one per line)</span>';
+            optionsHelp.textContent = `Jev can only answer with one of these. At least 2, at most 255. ${count} entered.`;
+            optionsField.placeholder = 'Question\nSuggestion\nComplaint';
+        }
+    }
+    typeSelect.addEventListener('change', syncType);
+    optionsField.addEventListener('input', syncType);
+
+    card.querySelector('.jev-remove-btn').addEventListener('click', () => {
+        if (document.querySelectorAll('.jev-question-container').length > 1) {
+            card.remove();
+        } else {
+            showAlert('jev-message', 'You need at least one result column.', 'warning');
+        }
+    });
+
+    card.querySelector('.jev-template-select').addEventListener('change', function () {
+        const template = JEV_QUESTION_TEMPLATES[this.value];
+        if (template) applyJevPreset(card, template);
+        this.value = '';
+    });
+
+    // Detect Patterns lives in AI Analysis mode but produces exactly the kind
+    // of controlled list a Choice question needs, so it is reusable here.
+    card.querySelector('.jev-use-categories-btn').addEventListener('click', () => {
+        const categories = Array.from(document.querySelectorAll('#categories-list .badge'))
+            .map(el => el.textContent.trim()).filter(Boolean);
+        if (!categories.length) {
+            showAlert('jev-message', 'No detected categories yet. Run Detect Patterns in AI Analysis mode first.', 'warning');
+            return;
+        }
+        optionsField.value = formatOptions(categories);
+        typeSelect.value = 'choice';
+        syncType();
+        showAlert('jev-message', `Filled ${categories.length} options from the detected categories.`, 'success');
+    });
+
+    if (preset) applyJevPreset(card, preset);
+    syncType();
+    container.appendChild(card);
+    initTooltips();
+    return card;
+}
+
+/* Fill a Jev question card from a template or an imported configuration. */
+function applyJevPreset(card, preset) {
+    card.querySelector('[name="jev-output-column-name"]').value = preset.outputColumnName || '';
+    card.querySelector('[name="jev-question-type"]').value = preset.questionType || DEFAULT_QUESTION_TYPE;
+    card.querySelector('[name="jev-instructions"]').value = preset.instructions || '';
+    card.querySelector('.jev-options').value = formatOptions(preset.options);
+    card.querySelector('.jev-options').dispatchEvent(new Event('input'));
+}
+
+/* Read every Jev question card off the page, in display order. */
+function readJevQuestions() {
+    return Array.from(document.querySelectorAll('.jev-question-container')).map(card => ({
+        outputColumnName: card.querySelector('[name="jev-output-column-name"]').value.trim(),
+        questionType: card.querySelector('[name="jev-question-type"]').value,
+        instructions: card.querySelector('[name="jev-instructions"]').value,
+        options: parseOptions(card.querySelector('.jev-options').value)
+    }));
+}
+
+function exportJevConfig() {
+    const questions = readJevQuestions();
+    if (!questions.some(q => q.outputColumnName || q.instructions.trim() || q.options.length)) {
+        showAlert('jev-message', 'Nothing to export yet — configure at least one result column first.', 'warning');
+        return;
+    }
+    const doc = serializeJevConfig({
+        sourceColumns: readJevSourceColumns(),
+        includeConfidence: document.getElementById('jev-include-confidence')?.checked,
+        sheetName: document.getElementById('sheet-select').value,
+        questions
+    });
+    const url = URL.createObjectURL(new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = jevConfigFilename();
+    link.click();
+    URL.revokeObjectURL(url);
+    showAlert('jev-message', `Configuration exported (${doc.questions.length} result column(s)).`, 'success');
+}
+
+async function importJevConfig(event) {
+    const input = event.target;
+    const file = input.files && input.files[0];
+    if (!file) return;
+    // Reset first so re-picking the same file fires change again.
+    input.value = '';
+
+    let imported;
+    try {
+        imported = deserializeJevConfig(JSON.parse(await file.text()), availableColumns);
+    } catch (error) {
+        const message = error instanceof SyntaxError ? 'That file is not valid JSON.' : error.message;
+        showAlert('jev-message', `Could not import configuration: ${message}`, 'danger');
+        return;
+    }
+
+    const selected = new Set(imported.sourceColumns);
+    document.querySelectorAll('.jev-source-column').forEach(input => {
+        input.checked = selected.has(input.value);
+    });
+    const confidence = document.getElementById('jev-include-confidence');
+    if (confidence) confidence.checked = imported.includeConfidence;
+
+    const container = document.getElementById('jev-question-configs');
+    container.innerHTML = '';
+    imported.questions.forEach(preset => addJevQuestion(preset));
+
+    const applied = `Imported ${imported.questions.length} result column(s).`;
+    showAlert('jev-message', imported.warnings.length ? `${applied} ${imported.warnings.join(' ')}` : applied,
+        imported.warnings.length ? 'warning' : 'success');
+}
+
+let activeJevRun = null;
+
+async function runJevClassification(isTestRun = false) {
+    if (activeJevRun?.running) return;
+
+    if (!hasJevCredentials()) {
+        showAlert('jev-message',
+            'No Jev API key configured locally — attempting to use the server configuration. Open API Settings if this fails.',
+            'info');
+    }
+
+    const sourceColumns = readJevSourceColumns();
+    if (!sourceColumns.length) {
+        showAlert('jev-message', 'Select at least one column to send to Jev.', 'danger');
+        return;
+    }
+
+    const questions = readJevQuestions();
+    if (!questions.length) {
+        showAlert('jev-message', 'Configure at least one result column.', 'danger');
+        return;
+    }
+    // Validate here rather than at the API so a long option list is corrected
+    // before any request is spent.
+    for (const question of questions) {
+        const problem = validateQuestion(question);
+        if (problem) { showAlert('jev-message', problem, 'danger'); return; }
+    }
+    const names = questions.map(q => q.outputColumnName);
+    if (new Set(names).size !== names.length) {
+        showAlert('jev-message', 'Result column names must be unique.', 'danger');
+        return;
+    }
+
+    const selectedSheet = document.getElementById('sheet-select').value;
+    const sheet = fileData.sheets[selectedSheet];
+    if (!sheet || !sheet.data) {
+        showAlert('jev-message', 'No data available for the selected sheet', 'danger');
+        return;
+    }
+    const allRows = sheet.data;
+    const rowCount = isTestRun ? Math.min(5, allRows.length) : allRows.length;
+    if (!rowCount) { showAlert('jev-message', 'This sheet has no data rows.', 'warning'); return; }
+
+    // Resolve output names against the sheet's existing columns, as the LLM
+    // path does, so a question never silently overwrites a source column.
+    const existing = new Set(sheet.columns);
+    questions.forEach(question => {
+        let name = question.outputColumnName;
+        const base = name;
+        let counter = 1;
+        while (existing.has(name)) { name = `${base}_${counter++}`; }
+        existing.add(name);
+        question.resolvedName = name;
+    });
+
+    const includeConfidence = !!document.getElementById('jev-include-confidence')?.checked;
+    const serverConfigs = questions.map(q => ({
+        outputColumnName: q.resolvedName,
+        questionType: q.questionType,
+        instructions: q.instructions,
+        options: q.options
+    }));
+
+    // Confidence columns are appended next to the value they describe.
+    const outColumns = sheet.columns.slice();
+    const outputColumns = [];
+    questions.forEach(q => {
+        outColumns.push(q.resolvedName);
+        outputColumns.push(q.resolvedName);
+        if (includeConfidence) {
+            outColumns.push(`${q.resolvedName}__confidence`);
+            outputColumns.push(`${q.resolvedName}__confidence`);
+            if (q.questionType === 'score' || q.questionType === 'noul') {
+                outColumns.push(`${q.resolvedName}__score`);
+                outputColumns.push(`${q.resolvedName}__score`);
+            }
+        }
+    });
+
+    const jevConfig = getJevConfig();
+    activeJevRun = new BatchRun({
+        rows: allRows.slice(0, rowCount), batchSize: JEV_BATCH_SIZE,
+        processBatch: async (batch, start) => {
+            const rows = batch.map((row, offset) => ({
+                rowIndex: start + offset,
+                state: buildJevState(row, sourceColumns)
+            }));
+            const response = await fetch('/analyze_batch_jev', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...jevConfig, includeConfidence,
+                    isFirstBatch: start === 0, configs: serverConfigs, rows })
+            });
+            const result = await readJson(response);
+            if (!response.ok || result.error) throw new Error(result.error || 'Classification failed.');
+            const values = new Map((result.results || []).map(r => [r.rowIndex, r.values]));
+            if (rows.some(row => !values.has(row.rowIndex))) throw new Error('Incomplete batch response. Resume to retry.');
+            return { rows: batch.map((row, i) => ({ ...row, ...values.get(start + i) })), errors: result.errors };
+        },
+        onProgress: run => {
+            analyzedResult = { sheetName: selectedSheet, columns: outColumns,
+                data: run.results, partial: !run.complete, outputColumns };
+            updateProgress(Math.round(run.cursor / rowCount * 100), run.cursor, rowCount,
+                `Classified ${run.cursor} of ${rowCount} rows`);
+        }
+    });
+    activeJevRun.isTestRun = isTestRun;
+    analyzedResult = null;
+    // A new run invalidates any split staged against the previous results.
+    cleanDataResults?.reset();
+    await continueJevRun();
+}
+
+async function continueJevRun() {
+    const run = activeJevRun;
+    if (!run || run.running) return;
+    document.querySelectorAll('.test-run-preview-panel').forEach(panel => panel.remove());
+    showSpinner(true, 'Classifying rows…', true);
+    const stopButton = document.getElementById('stop-analysis-btn');
+    stopButton.classList.remove('hidden');
+    stopButton.disabled = false;
+    stopButton.textContent = 'Stop after current batch';
+    stopButton.onclick = () => { run.stop(); stopButton.disabled = true; stopButton.textContent = 'Stopping after current batch…'; };
+    document.getElementById('jev-recovery').classList.add('hidden');
+    let failure = null;
+    try { await run.run(); } catch (error) { failure = error; }
+    finally { showSpinner(false); stopButton.classList.add('hidden'); }
+    const message = `${run.complete ? 'Classification complete' : 'Classification paused'}: ${run.cursor} of ${run.rows.length} rows. ${run.errors} row(s) had errors.`;
+    showAlert('jev-message', failure ? `${message} ${failure.message}` : message,
+        failure ? 'danger' : run.complete ? 'success' : 'info');
+    const recovery = document.getElementById('jev-recovery');
+    recovery.classList.toggle('hidden', run.complete);
+    document.getElementById('jev-partial-download-btn').disabled = !run.cursor;
+    if (!analyzedResult) return;
+    document.getElementById('result-message').textContent = message;
+    const downloadLink = document.getElementById('download-link');
+    downloadLink.href = '#';
+    downloadLink.onclick = event => { event.preventDefault(); downloadAnalyzedFile(); };
+    if (run.isTestRun && run.complete) previewAnalyzedData(run.results, true);
+    else if (run.complete) {
+        resultsUI.load({ sheets: { [analyzedResult.sheetName]: analyzedResult } });
+        goToStep(5);
+    }
+}
+
 function previewAnalyzedData(analyzedRows, isTestRun = false) {
     try {
         // Clear any existing data first to ensure we display fresh results
@@ -1906,9 +2343,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Mode chooser (Step 1): AI Analysis, Medical Translation (ICD-11), or
-    // Clean Data (split multi-value cells; no AI, no credentials).
-    const MODE_RADIOS = { analysis: 'mode-analysis', icd: 'mode-icd', clean: 'mode-clean' };
+    // Mode chooser (Step 1): AI Analysis, Jev Classification, Medical
+    // Translation (ICD-11), or Clean Data (split multi-value cells; no AI).
+    const MODE_RADIOS = { analysis: 'mode-analysis', jev: 'mode-jev', icd: 'mode-icd', clean: 'mode-clean' };
     function setAppMode(mode) {
         appMode = MODE_RADIOS[mode] ? mode : 'analysis';
         const radio = document.getElementById(MODE_RADIOS[appMode]);
@@ -1991,6 +2428,30 @@ document.addEventListener('DOMContentLoaded', function() {
         importConfigBtn.addEventListener('click', () => importConfigInput.click());
         importConfigInput.addEventListener('change', importAnalysisConfig);
     }
+
+    // Jev Classification workflow
+    const jevAddQuestionBtn = document.getElementById('jev-add-question-btn');
+    const jevExportBtn = document.getElementById('jev-export-config-btn');
+    const jevImportBtn = document.getElementById('jev-import-config-btn');
+    const jevImportInput = document.getElementById('jev-import-config-input');
+    const jevRunBtn = document.getElementById('jev-run-btn');
+    const jevTestRunBtn = document.getElementById('jev-test-run-btn');
+    const jevBackBtn = document.getElementById('jev-configure-back-btn');
+    const jevResumeBtn = document.getElementById('jev-resume-btn');
+    const jevPartialDownloadBtn = document.getElementById('jev-partial-download-btn');
+
+    // Wrapped: the click Event must not be taken as an imported preset.
+    if (jevAddQuestionBtn) jevAddQuestionBtn.addEventListener('click', () => addJevQuestion());
+    if (jevExportBtn) jevExportBtn.addEventListener('click', exportJevConfig);
+    if (jevImportBtn && jevImportInput) {
+        jevImportBtn.addEventListener('click', () => jevImportInput.click());
+        jevImportInput.addEventListener('change', importJevConfig);
+    }
+    if (jevRunBtn) jevRunBtn.addEventListener('click', () => runJevClassification(false));
+    if (jevTestRunBtn) jevTestRunBtn.addEventListener('click', () => runJevClassification(true));
+    if (jevBackBtn) jevBackBtn.addEventListener('click', () => goToStep(3));
+    if (jevResumeBtn) jevResumeBtn.addEventListener('click', continueJevRun);
+    if (jevPartialDownloadBtn) jevPartialDownloadBtn.addEventListener('click', downloadAnalyzedFile);
 
     if (togglePatternBtn && typeof togglePatternDetection === 'function') {
         togglePatternBtn.addEventListener('click', togglePatternDetection);
@@ -2247,6 +2708,9 @@ document.addEventListener('DOMContentLoaded', function() {
         restore('modal-azure-deployment', AZURE_DEPLOYMENT_STORAGE_KEY);
         restore('modal-azure-api-version', AZURE_API_VERSION_STORAGE_KEY);
         restore('modal-openai-model', OPENAI_MODEL_STORAGE_KEY);
+        // Jev credentials are independent of the provider radio above.
+        restore('modal-jev-api-key', JEV_API_KEY_STORAGE_KEY);
+        restore('modal-jev-model', JEV_MODEL_STORAGE_KEY);
 
         syncProviderUI();
     }
@@ -2285,6 +2749,50 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Test Jev Connection: verify the Jev key independently of the LLM one.
+    const testJevConnBtn = document.getElementById('test-jev-connection-btn');
+    if (testJevConnBtn) {
+        testJevConnBtn.addEventListener('click', async function() {
+            const out = document.getElementById('test-jev-connection-result');
+            testJevConnBtn.disabled = true;
+            out.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass-split"></i> Testing connection...</span>';
+            try {
+                const response = await fetch('/test_jev_connection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(getJevConfig())
+                });
+                const result = await response.json();
+                if (response.ok && result.ok) {
+                    out.innerHTML = '<span class="text-success"><i class="bi bi-check-circle-fill"></i> '
+                        + 'Connected to Jev (model: ' + escapeHtml(result.model) + ')</span>';
+                } else {
+                    out.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle-fill"></i> '
+                        + escapeHtml(result.error || 'Connection failed') + '</span>';
+                }
+            } catch (e) {
+                out.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle-fill"></i> ' + escapeHtml(e.message) + '</span>';
+            } finally {
+                testJevConnBtn.disabled = false;
+            }
+        });
+    }
+
+    // Toggle Jev key visibility in modal
+    const modalJevApiKey = document.getElementById('modal-jev-api-key');
+    const modalToggleJevApiKey = document.getElementById('modal-toggle-jev-api-key');
+    if (modalToggleJevApiKey && modalJevApiKey) {
+        modalToggleJevApiKey.addEventListener('click', function() {
+            if (modalJevApiKey.type === 'password') {
+                modalJevApiKey.type = 'text';
+                modalToggleJevApiKey.innerHTML = '<i class="bi bi-eye-slash"></i>';
+            } else {
+                modalJevApiKey.type = 'password';
+                modalToggleJevApiKey.innerHTML = '<i class="bi bi-eye"></i>';
+            }
+        });
+    }
+
     // Add event listeners with null checks
     if (apiSettingsBtn) {
         apiSettingsBtn.addEventListener('click', function() {
@@ -2331,9 +2839,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const azureDeployment = fieldVal('modal-azure-deployment');
             const azureApiVersion = fieldVal('modal-azure-api-version');
             const openaiModel = fieldVal('modal-openai-model');
+            const jevApiKey = fieldVal('modal-jev-api-key');
+            const jevModel = fieldVal('modal-jev-model');
 
-            if (!apiKey && !icdId && !icdSecret && !azureEndpoint && !azureDeployment) {
-                alert('Please enter your AI provider credentials and/or your WHO ICD credentials.');
+            if (!apiKey && !icdId && !icdSecret && !azureEndpoint && !azureDeployment && !jevApiKey) {
+                alert('Please enter your AI provider credentials, your Jev API key, and/or your WHO ICD credentials.');
                 return;
             }
 
@@ -2356,6 +2866,8 @@ document.addEventListener('DOMContentLoaded', function() {
             persist(AZURE_DEPLOYMENT_STORAGE_KEY, azureDeployment);
             persist(AZURE_API_VERSION_STORAGE_KEY, azureApiVersion);
             persist(OPENAI_MODEL_STORAGE_KEY, openaiModel);
+            persist(JEV_API_KEY_STORAGE_KEY, jevApiKey);
+            persist(JEV_MODEL_STORAGE_KEY, jevModel);
 
             // Persist (or clear) OpenAI key based on the save checkbox.
             if (apiKey) {

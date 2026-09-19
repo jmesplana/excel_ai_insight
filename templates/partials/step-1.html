@@ -16,7 +16,7 @@
                                 <div class="mb-4">
                                     <label class="form-label">Choose a mode</label>
                                     <div class="row g-3" id="mode-chooser">
-                                        <div class="col-md-4">
+                                        <div class="col-md-6 col-xl-3">
                                             <div class="card h-100 mode-card border" id="mode-card-analysis" data-mode="analysis" style="cursor: pointer;">
                                                 <div class="card-body">
                                                     <div class="form-check">
@@ -29,7 +29,7 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="col-md-4">
+                                        <div class="col-md-6 col-xl-3">
                                             <div class="card h-100 mode-card border" id="mode-card-icd" data-mode="icd" style="cursor: pointer;">
                                                 <div class="card-body">
                                                     <div class="form-check">
@@ -42,7 +42,20 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="col-md-4">
+                                        <div class="col-md-6 col-xl-3">
+                                            <div class="card h-100 mode-card border" id="mode-card-jev" data-mode="jev" style="cursor: pointer;">
+                                                <div class="card-body">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="app-mode" id="mode-jev" value="jev">
+                                                        <label class="form-check-label fw-bold" for="mode-jev">
+                                                            <i class="bi bi-shield-check"></i> Jev Classification
+                                                        </label>
+                                                    </div>
+                                                    <p class="small text-muted mb-0 mt-2">Assign each row one label from a list you define. Uses Jev instead of an LLM, so the answer is always one of your options. Requires a Jev API key.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6 col-xl-3">
                                             <div class="card h-100 mode-card border" id="mode-card-clean" data-mode="clean" style="cursor: pointer;">
                                                 <div class="card-body">
                                                     <div class="form-check">
@@ -102,6 +115,12 @@
                                 <div id="icd-intro-block" class="hidden">
                                     <div class="alert alert-warning small">
                                         <i class="bi bi-translate"></i> <strong>Medical Translation (ICD-11):</strong> map each row of a column to ICD-11 (and optionally a derived ICD-10 code). Make sure your <strong>WHO ICD Client ID &amp; Secret</strong> are set in <strong>API Settings</strong>. An OpenAI API key (optional) improves disambiguation of free-text input.
+                                    </div>
+                                </div>
+
+                                <div id="jev-intro-block" class="hidden">
+                                    <div class="alert alert-primary small">
+                                        <i class="bi bi-shield-check"></i> <strong>Jev Classification:</strong> for each row, Jev picks one label from a list you define &mdash; it cannot return anything outside that list, and it reports how confident it is. Best for coding feedback, triage and categorisation where the categories are already fixed. Set your <strong>Jev API Key</strong> in <strong>API Settings</strong>. Define the lists on the next configuration step.
                                     </div>
                                 </div>
 

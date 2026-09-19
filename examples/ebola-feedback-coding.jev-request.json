@@ -1,0 +1,181 @@
+{
+  "model": "jev-latest",
+  "state": "Feedback: Nous avons peur d'aller à l'hôpital parce que les gens meurent là bas.\ntype_of_feedback: Signalements et préoccupations",
+  "questions": {
+    "feedback_type": {
+      "type": "choice",
+      "instructions": "Détermine le type de feedback à partir de Feedback et type_of_feedback. Choisis le type dominant. Un simple remerciement ou compliment se code Appréciation / Remerciement.",
+      "criteria": {
+        "question": "Question",
+        "rumeur_croyance_observation": "Rumeur / Croyance / Observation",
+        "suggestion_recommandation": "Suggestion / Recommandation",
+        "appreciation_remerciement": "Appréciation / Remerciement",
+        "refus": "Refus",
+        "plainte": "Plainte",
+        "feedback_sensible": "Feedback sensible"
+      }
+    },
+    "feedback_code": {
+      "type": "choice",
+      "instructions": "Détermine la meilleure catégorie en combinant Feedback et type_of_feedback. Choisis la catégorie dominante ; si plusieurs sujets sont présents, choisis celui qui nécessite l'action la plus importante. Un remerciement se code selon le sujet concerné.",
+      "criteria": {
+        "ebola_existe": "Ebola existe",
+        "ebola_n_existe_pas": "Ebola n'existe pas",
+        "cause_origine_d_ebola": "Cause/origine d'Ebola",
+        "transmission": "Transmission",
+        "symptomes": "Symptômes",
+        "prevention": "Prévention",
+        "diagnostic": "Diagnostic",
+        "traitement": "Traitement",
+        "cte_cet": "CTE/CET",
+        "vaccination": "Vaccination",
+        "eligibilite_au_vaccin": "Éligibilité au vaccin",
+        "effets_secondaires_du_vaccin": "Effets secondaires du vaccin",
+        "mefiance_envers_le_vaccin": "Méfiance envers le vaccin",
+        "enterrement_digne_et_securise": "Enterrement digne et sécurisé",
+        "activites_de_riposte": "Activités de riposte",
+        "personnel_de_riposte": "Personnel de riposte",
+        "ebola_est_un_business": "Ebola est un business",
+        "ebola_est_politique": "Ebola est politique",
+        "intention_malveillante": "Intention malveillante",
+        "stigmatisation": "Stigmatisation",
+        "recherche_des_contacts": "Recherche des contacts",
+        "surveillance_alerte": "Surveillance/alerte",
+        "pci_wash": "PCI/WASH",
+        "communication_sensibilisation": "Communication/sensibilisation",
+        "acces_aux_services": "Accès aux services",
+        "securite": "Sécurité",
+        "besoin_d_assistance": "Besoin d'assistance"
+      }
+    },
+    "feedback_dimension": {
+      "type": "choice",
+      "instructions": "Détermine la dimension principale en combinant Feedback et type_of_feedback. Si plusieurs dimensions sont présentes, choisis la dominante.",
+      "criteria": {
+        "maladie_virus_ebola": "Maladie à virus Ebola",
+        "surveillance": "Surveillance",
+        "prise_en_charge_soins": "Prise en charge / Soins",
+        "vaccination": "Vaccination",
+        "pci_wash": "PCI/WASH",
+        "eds_sdb": "EDS/SDB",
+        "rcce_communication": "RCCE / Communication",
+        "confiance": "Confiance",
+        "riposte": "Riposte",
+        "protection": "Protection",
+        "securite": "Sécurité",
+        "services_assistance": "Services / Assistance"
+      }
+    },
+    "feedback_sous_dimension": {
+      "type": "choice",
+      "instructions": "Choisis UNE seule sous-dimension principale. Utilise le sens du commentaire, pas seulement des mots-clés. Si plusieurs sujets sont présents, choisis celui qui nécessite l'action la plus importante ; sinon choisis le sujet dominant. Pour un simple remerciement ou une appréciation liée à l'information reçue, choisis Sensibilisation.",
+      "criteria": {
+        "existence_de_la_maladie": "Existence de la maladie",
+        "cause_origine": "Cause / origine",
+        "transmission": "Transmission",
+        "signes_et_symptomes": "Signes et symptômes",
+        "prevention": "Prévention",
+        "alerte_communautaire": "Alerte communautaire",
+        "recherche_des_contacts": "Recherche des contacts",
+        "diagnostic": "Diagnostic",
+        "traitement": "Traitement",
+        "centre_de_traitement_ebola": "Centre de traitement Ebola",
+        "vaccin": "Vaccin",
+        "securite_vaccinale": "Sécurité vaccinale",
+        "eligibilite": "Éligibilité",
+        "acces_equite": "Accès / équité",
+        "acceptation_vaccinale": "Acceptation vaccinale",
+        "enterrement_digne_et_securise": "Enterrement digne et sécurisé",
+        "hygiene_des_mains": "Hygiène des mains",
+        "prevention_et_controle_des_infections": "Prévention et contrôle des infections",
+        "sensibilisation": "Sensibilisation",
+        "information": "Information",
+        "rumeurs_croyances": "Rumeurs / croyances",
+        "confiance_dans_les_intervenants": "Confiance dans les intervenants",
+        "interets_financiers": "Intérêts financiers",
+        "politisation": "Politisation",
+        "intention_malveillante": "Intention malveillante",
+        "stigmatisation": "Stigmatisation",
+        "acces_aux_services": "Accès aux services",
+        "protection": "Protection",
+        "menace_violence": "Menace / violence"
+      }
+    },
+    "feedback_sensibilite": {
+      "type": "score",
+      "instructions": "Classe la sensibilité du feedback indépendamment de sa véracité.",
+      "criteria": [
+        "Non sensible : commentaire ordinaire sans enjeu de protection, de sécurité ou de confidentialité",
+        "Sensible : stigmatisation, discrimination, conflit, plainte grave non nominative, ou question de protection ou de sécurité sans personne identifiable",
+        "Très sensible / confidentiel : allégation d'exploitation ou d'abus sexuels, informations personnelles identifiables, menace ciblée, violence, risque immédiat pour une personne, accusation grave identifiable, ou information médicale individuelle"
+      ]
+    },
+    "feedback_criticalite": {
+      "type": "score",
+      "instructions": "Évalue l'urgence opérationnelle du feedback, indépendamment de sa sensibilité et sans supposer que l'affirmation est vraie.",
+      "criteria": [
+        "Faible : appréciation, commentaire général ou suggestion non urgente",
+        "Moyenne : question, inquiétude, demande ou rumeur nécessitant une réponse ou vérification, sans danger immédiat",
+        "Élevée : refus collectif, forte méfiance susceptible de perturber la riposte, problème sérieux d'accès aux soins, stigmatisation importante ou rumeur dangereuse",
+        "Critique / Urgente : alerte de cas ou décès suspect, menace ou violence imminente, risque immédiat pour la sécurité, abus grave, ou événement exigeant une escalade immédiate"
+      ]
+    },
+    "feedback_action": {
+      "type": "choice",
+      "instructions": "Choisis UNE seule action principale à entreprendre. N'affirme pas qu'une action a déjà été réalisée. Priorise la sécurité et les alertes sanitaires lorsqu'elles sont présentes.",
+      "criteria": {
+        "aucune_action": "Aucune action",
+        "fournir_une_information_reponse": "Fournir une information / réponse",
+        "adapter_les_messages_rcce": "Adapter les messages RCCE",
+        "verifier_l_information": "Vérifier l'information",
+        "investiguer": "Investiguer",
+        "referer_au_secteur_concerne": "Référer au secteur concerné",
+        "declencher_une_alerte": "Déclencher une alerte",
+        "mobilisation_communautaire": "Mobilisation communautaire",
+        "dialogue_communautaire": "Dialogue communautaire",
+        "suivi_individuel": "Suivi individuel",
+        "escalade_immediate": "Escalade immédiate",
+        "adapter_une_activite_un_service": "Adapter une activité / un service",
+        "documenter_et_surveiller_la_tendance": "Documenter et surveiller la tendance"
+      }
+    },
+    "feedback_secteur": {
+      "type": "choice",
+      "instructions": "Choisis le secteur principalement responsable. Si plusieurs secteurs sont concernés, choisis celui qui doit agir en premier.",
+      "criteria": {
+        "rcce_cea": "RCCE/CEA",
+        "surveillance": "Surveillance",
+        "vaccination": "Vaccination",
+        "prise_en_charge_clinique": "Prise en charge clinique",
+        "pci": "PCI",
+        "wash": "WASH",
+        "eds_sdb": "EDS/SDB",
+        "protection": "Protection",
+        "securite": "Sécurité",
+        "logistique": "Logistique",
+        "sante": "Santé",
+        "coordination": "Coordination",
+        "mhpss": "MHPSS",
+        "assistance_programmes": "Assistance / programmes"
+      }
+    },
+    "feedback_referent": {
+      "type": "choice",
+      "instructions": "Choisis le référent principal auquel orienter ce feedback. Si plusieurs sont possibles, choisis celui qui a le mandat opérationnel le plus direct.",
+      "criteria": {
+        "rcce_cea": "RCCE/CEA",
+        "surveillance": "Surveillance",
+        "commission_vaccination": "Commission vaccination",
+        "prise_en_charge_case_management": "Prise en charge / Case Management",
+        "pci_wash": "PCI/WASH",
+        "eds_sdb": "EDS/SDB",
+        "protection": "Protection",
+        "securite": "Sécurité",
+        "coordination_ebola_incident_management": "Coordination Ebola / Incident Management",
+        "ministere_de_la_sante_dps": "Ministère de la Santé / DPS",
+        "croix_rouge": "Croix-Rouge",
+        "partenaire_competent": "Partenaire compétent"
+      }
+    }
+  }
+}

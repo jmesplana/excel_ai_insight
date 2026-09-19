@@ -1,5 +1,6 @@
 """Public error messages never include provider responses or credentials."""
 from llm_provider import LLMConfigError
+from jev_provider import JevConfigError, JevError
 from openai import AuthenticationError, RateLimitError, APIConnectionError
 
 
@@ -9,6 +10,14 @@ class AnalysisOutputError(ValueError):
 
 def public_error(error):
     if isinstance(error, AnalysisOutputError):
+        return str(error)
+    # Jev config errors describe the user's own question setup ("a Choice needs
+    # at least 2 options"), so they are safe -- and necessary -- to show as-is.
+    if isinstance(error, JevConfigError):
+        return str(error)
+    # JevError messages are built by jev_provider from status codes and the
+    # API's own `error` field; they never carry the key or the request body.
+    if isinstance(error, JevError):
         return str(error)
     if isinstance(error, LLMConfigError):
         return 'AI provider configuration is incomplete. Check API Settings.'

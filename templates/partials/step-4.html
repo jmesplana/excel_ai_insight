@@ -109,6 +109,76 @@
                                 </div>
                                 <!-- /analysis-config -->
 
+                                <!-- Jev Classification Config (hidden unless appMode === 'jev') -->
+                                <div id="jev-config" class="hidden">
+                                    <div class="alert alert-primary">
+                                        <i class="bi bi-shield-check"></i> Each result column below is one question Jev answers about every row. All questions for a row are asked in a single request, so adding columns costs little extra time.
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Columns to send to Jev
+                                            <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
+                                               title="The row context every question is answered against. Pick the column holding the text to classify, plus any column that adds useful context."></i>
+                                        </label>
+                                        <div id="jev-source-columns" class="border rounded p-2">
+                                            <!-- Source column checkboxes are inserted here -->
+                                        </div>
+                                        <div class="form-text">Each selected column is sent as <code>name: value</code>, so the question instructions can refer to it by name.</div>
+                                    </div>
+
+                                    <div id="jev-question-configs">
+                                        <!-- Jev question cards are inserted here -->
+                                    </div>
+
+                                    <div class="d-flex flex-wrap gap-2 mb-3">
+                                        <button id="jev-add-question-btn" class="btn btn-outline-primary">
+                                            <i class="bi bi-plus-circle"></i> Add Result Column
+                                        </button>
+                                        <button id="jev-export-config-btn" class="btn btn-outline-secondary ms-auto"
+                                                data-bs-toggle="tooltip"
+                                                title="Save these questions and option lists to a JSON file you can reuse on another dataset.">
+                                            <i class="bi bi-download"></i> Export Configuration
+                                        </button>
+                                        <button id="jev-import-config-btn" class="btn btn-outline-secondary"
+                                                data-bs-toggle="tooltip"
+                                                title="Load a previously exported Jev JSON configuration. This replaces the questions below.">
+                                            <i class="bi bi-upload"></i> Import Configuration
+                                        </button>
+                                        <input type="file" id="jev-import-config-input" accept="application/json,.json" class="hidden">
+                                    </div>
+
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="jev-include-confidence">
+                                        <label class="form-check-label" for="jev-include-confidence">
+                                            Add confidence columns
+                                            <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
+                                               title="Adds '<result>__confidence' (0-1) for every question, plus '<result>__score' for Score and Yes/No questions. Use it to route low-confidence rows for human review."></i>
+                                        </label>
+                                    </div>
+
+                                    <div id="jev-recovery" class="alert alert-info hidden" role="status">
+                                        <p>Completed batches are available while this page stays open. Resume uses the original settings.</p>
+                                        <button type="button" id="jev-resume-btn" class="btn btn-primary">Resume analysis</button>
+                                        <button type="button" id="jev-partial-download-btn" class="btn btn-outline-primary">Download completed rows</button>
+                                    </div>
+                                    <div id="jev-message" class="alert alert-success mt-3 hidden"></div>
+
+                                    <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-3">
+                                        <button type="button" class="btn btn-outline-secondary" id="jev-configure-back-btn">
+                                            <i class="bi bi-arrow-left"></i> Back
+                                        </button>
+                                        <div>
+                                            <button id="jev-test-run-btn" class="btn btn-outline-success me-2">
+                                                <i class="bi bi-lightning"></i> Test Run (5 Rows)
+                                            </button>
+                                            <button id="jev-run-btn" class="btn btn-primary">
+                                                <i class="bi bi-play-fill"></i> Classify All Rows
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- /jev-config -->
+
                                 <!-- ICD-11 Translation Config (hidden unless appMode === 'icd') -->
                                 <div id="icd-config" class="hidden">
                                     <div class="alert alert-info">

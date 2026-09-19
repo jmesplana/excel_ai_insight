@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { BatchRun } from '../static/js/batch-runner.js';
 import { parseWorkbook, explodeColumn, splitCell } from '../static/js/spreadsheet.js';
 import { serializeConfig, deserializeConfig, configFilename, DEFAULT_OUTPUT_TOKENS } from '../static/js/analysis-config.js';
+import { serializeJevConfig, deserializeJevConfig, jevConfigFilename, parseOptions,
+    validateQuestion, buildJevState, MAX_CHOICE_OPTIONS } from '../static/js/jev-config.js';
 
 test('failed batch preserves earlier work and resume skips paid completed batches', async () => {
     const calls = []; let fail = true;
@@ -153,4 +155,81 @@ test('the single-column shorthand imports as a one-column list', () => {
 
 test('the filename is dated so repeated exports do not overwrite each other', () => {
     assert.equal(configFilename(new Date('2026-09-19T10:00:00Z')), 'aidstack-config-2026-09-19.json');
+});
+
+
+/* Jev Classification configuration */
+const jevQuestion = {
+    outputColumnName: 'Feedback type',
+    questionType: 'choice',
+    instructions: 'Determine le type dominant.',
+    options: ['Question', 'Plainte', 'Refus']
+};
+const savedJevConfig = serializeJevConfig({
+    sourceColumns: ['Feedback', 'type_of_feedback'],
+    includeConfidence: true,
+    sheetName: 'Sheet1',
+    questions: [jevQuestion]
+});
+
+test('options are split per line, trimmed, and blank lines dropped', () => {
+    assert.deepEqual(parseOptions('  Question \n\n Plainte\n   \nRefus '),
+        ['Question', 'Plainte', 'Refus']);
+});
+
+test('a Jev round trip restores the question set and the source columns', () => {
+    const back = deserializeJevConfig(savedJevConfig, ['Feedback', 'type_of_feedback']);
+    assert.deepEqual(back.sourceColumns, ['Feedback', 'type_of_feedback']);
+    assert.equal(back.includeConfidence, true);
+    assert.deepEqual(back.questions[0], jevQuestion);
+    assert.deepEqual(back.warnings, []);
+});
+
+test('source columns missing from the new sheet warn but the option lists survive', () => {
+    // The option list is the expensive part of the configuration, so a column
+    // mismatch must never discard it.
+    const back = deserializeJevConfig(savedJevConfig, ['Feedback']);
+    assert.deepEqual(back.sourceColumns, ['Feedback']);
+    assert.equal(back.questions[0].options.length, 3);
+    assert.equal(back.warnings.length, 1);
+    assert.match(back.warnings[0], /type_of_feedback/);
+});
+
+test('rejects files that are not Jev configurations, and configs from a newer version', () => {
+    assert.throws(() => deserializeJevConfig({ format: 'something-else' }), /not an Aidstack Jev/);
+    assert.throws(() => deserializeJevConfig(savedConfig), /not an Aidstack Jev/);
+    assert.throws(() => deserializeJevConfig({ ...savedJevConfig, version: 99 }), /newer version/);
+    assert.throws(() => deserializeJevConfig({ ...savedJevConfig, questions: [] }), /no result columns/);
+});
+
+test('an unknown question type falls back to choice rather than reaching the API', () => {
+    const odd = { ...savedJevConfig, questions: [{ ...jevQuestion, questionType: 'freeform' }] };
+    assert.equal(deserializeJevConfig(odd, ['Feedback']).questions[0].questionType, 'choice');
+});
+
+test('validation catches the option-count limits the API enforces', () => {
+    assert.equal(validateQuestion(jevQuestion), null);
+    assert.match(validateQuestion({ ...jevQuestion, options: ['Only one'] }), /at least 2 options/);
+    assert.match(validateQuestion({ ...jevQuestion, outputColumnName: '' }), /every result column a name/);
+    assert.match(validateQuestion({ ...jevQuestion, instructions: '  ' }), /needs instructions/);
+    // Score allows 2-10 ordered levels, Choice up to 255 options.
+    assert.match(validateQuestion({ ...jevQuestion, questionType: 'score',
+        options: Array.from({ length: 11 }, (_, i) => `L${i}`) }), /between 2 and 10/);
+    assert.equal(validateQuestion({ ...jevQuestion, questionType: 'score',
+        options: ['Low', 'High'] }), null);
+    assert.match(validateQuestion({ ...jevQuestion,
+        options: Array.from({ length: MAX_CHOICE_OPTIONS + 1 }, (_, i) => `O${i}`) }), /at most 255/);
+});
+
+test('row state labels each value so instructions can name the field', () => {
+    const row = { Feedback: 'Nous avons peur', type_of_feedback: 'Signalement', Empty: '   ' };
+    assert.equal(buildJevState(row, ['Feedback', 'type_of_feedback']),
+        'Feedback: Nous avons peur\ntype_of_feedback: Signalement');
+    // A row with nothing to classify yields null, which the caller treats as a
+    // no-op rather than spending an API call on it.
+    assert.equal(buildJevState(row, ['Empty']), null);
+});
+
+test('the Jev filename is dated so repeated exports do not overwrite each other', () => {
+    assert.equal(jevConfigFilename(new Date('2026-09-20T10:00:00Z')), 'aidstack-jev-config-2026-09-20.json');
 });

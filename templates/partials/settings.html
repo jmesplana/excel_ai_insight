@@ -78,6 +78,35 @@
 
                     <hr>
                     <div class="alert alert-info">
+                        <i class="bi bi-shield-check"></i> A <strong>Jev</strong> API key is required for <strong>Jev Classification</strong> mode, which picks one label from your own list instead of generating text. It is not used by the AI Analysis mode above.
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="modal-jev-api-key" class="form-label">Jev API Key</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="modal-jev-api-key" placeholder="Enter your Jev API Key">
+                            <button class="btn btn-outline-secondary" type="button" id="modal-toggle-jev-api-key">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">Create a key at the <a href="https://console.typesafe.ai" target="_blank">TypeSafe console</a>.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="modal-jev-model" class="form-label">Jev Model <span class="text-muted">(optional)</span></label>
+                        <input type="text" class="form-control" id="modal-jev-model" placeholder="jev-latest">
+                        <div class="form-text">Leave blank to use the default (jev-latest). Pin an exact version, e.g. <code>jev-1.13.0</code>, if you tune confidence thresholds.</div>
+                    </div>
+
+                    <div class="d-grid mb-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="test-jev-connection-btn">
+                            <i class="bi bi-plug"></i> Test Jev Connection
+                        </button>
+                    </div>
+                    <div id="test-jev-connection-result" class="small mb-2"></div>
+
+                    <hr>
+                    <div class="alert alert-info">
                         <i class="bi bi-translate"></i> WHO ICD-11 API credentials are required for <strong>Medical Translation (ICD-11)</strong>. Saved credentials stay in this browser and are sent to the server for authentication. WHO access tokens and credential cache keys are held temporarily in server memory.
                     </div>
 

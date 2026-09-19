@@ -14,6 +14,7 @@ Perfect for anyone drowning in Excel data: e-commerce managers analyzing custome
 - **Sentiment Analysis**: Extract sentiment (Positive/Negative/Neutral) from customer feedback
 - **Translation Service**: Translate text to any language (English, Spanish, French, Japanese, etc.)
 - **Medical Coding & Translation (WHO ICD-11)**: Map free-text diagnoses (any language, even with typos) to official WHO ICD-11 codes and translated terms, plus an optional derived ICD-10 mapping with a relationship indicator (same-as / broader-than / narrower-than / no-map)
+- **Jev Classification (typesafe.ai)**: Assign each row one label from a list you define. Jev returns a *typed* answer constrained to your options — never invented text — along with a calibrated confidence, so results need no cleanup
 - **Pattern Detection**: Discover categories and themes in your data automatically
 - **Multi-Column Analysis**: Analyze multiple columns together for deeper insights
 - **Test Mode**: Test your prompts on 5 rows before running full analysis
@@ -143,6 +144,36 @@ The mapped file adds the following columns (ICD-11 / ICD-10 code columns appear 
 
 > ICD-11 is licensed by WHO under CC BY-ND 3.0 IGO. The ICD-10 mapping and relationship indicators are derived and provided for reference; verify before clinical or statistical use.
 
+### Jev Classification (typesafe.ai)
+
+A dedicated mode (select **Jev Classification** on the Configuration step) that
+replaces the LLM with [Jev](https://typesafe.ai), a *System One* model. Where an
+LLM generates prose you then have to parse, Jev answers **typed questions**: the
+result is always one of the options you supplied, plus a probability for each
+option and a calibrated confidence.
+
+Each result column is one question, of three kinds:
+
+| Type | What it does | Limits |
+|---|---|---|
+| **Choice** | Picks one label from your list | 2–255 options |
+| **Score** | Rates against ordered, described levels (lowest first) | 2–10 levels |
+| **Yes / No** | Answers a single yes/no question as a probability | — |
+
+Notes:
+
+- **One call per row.** Every result column for a row travels in a single
+  request, which the API evaluates in parallel. Adding columns costs little
+  extra time.
+- **Confidence columns** are optional. Tick *Add confidence columns* to also
+  emit `<result>__confidence` (0–1), plus `<result>__score` for Score and
+  Yes/No questions — useful for routing low-confidence rows to human review.
+- **Accents and non-Latin labels** are handled: option keys are slugified to
+  ASCII internally, and the label you typed is what lands in the cell.
+- **Configurations are portable.** Export the question set and option lists to
+  JSON and reimport them onto the next file.
+- Set your **Jev API Key** in API Settings (or `TYPESAFE_API_KEY` server-side).
+
 ### Pattern Detection
 Discover categories automatically:
 - AI analyzes a sample of your data (up to 100 values)
@@ -208,6 +239,10 @@ For **Azure AI Foundry** you need three values from the Azure portal:
 | **Azure API Key** | Either key on that same page |
 | **Deployment Name** | *Model deployments* in Azure AI Foundry — the name **your organization chose**, which is often different from the model name |
 | **API Version** | Optional; defaults to `2024-10-21` |
+
+**Jev** is configured separately, in its own section of the same modal: it is
+selected per analysis by choosing **Jev Classification** mode, not by the AI
+Provider radio, so you can keep an OpenAI key and a Jev key side by side.
 
 ### Option B: Server-side (shared deployment)
 
@@ -279,6 +314,14 @@ On the Configuration step, choose **Medical Translation (ICD-11)** instead of AI
 3. Choose the **input type** — *Free text* (with a source language) or *Existing code* (ICD-11 MMS or ICD-10)
 4. Pick the **target language** and which outputs you want (ICD-11 term and/or ICD-10 code + relationship)
 5. Click **Run** and download the mapped file
+
+### Alternative: Jev Classification
+On the Configuration step, choose **Jev Classification** instead of AI Analysis, then:
+1. Make sure your **Jev API Key** is set in API Settings (**Test Jev Connection** verifies it)
+2. Upload your file and tick the **columns to send to Jev** — these become the row context every question is answered against
+3. For each result column, set a name, pick **Choice / Score / Yes-No**, write the instructions, and paste your option list (one per line)
+4. Optionally tick **Add confidence columns**
+5. **Test Run (5 Rows)**, then **Classify All Rows**, and download the result
 
 ## 📝 Prompt Templates
 

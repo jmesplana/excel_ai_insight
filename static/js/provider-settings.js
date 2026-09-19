@@ -35,3 +35,22 @@ export function syncProviderUI() {
     document.querySelectorAll('.provider-azure-only').forEach(el => el.classList.toggle('d-none', !isAzure));
     document.querySelectorAll('.provider-openai-only').forEach(el => el.classList.toggle('d-none', isAzure));
 }
+
+/* Jev (typesafe.ai) credentials. Kept separate from the LLM provider config:
+   Jev is chosen per analysis by mode, not by the AI Provider radio, and a user
+   may well have both an OpenAI key and a Jev key saved at once. */
+export const JEV_API_KEY_STORAGE_KEY = 'excel_ai_insight_jev_api_key';
+export const JEV_MODEL_STORAGE_KEY = 'excel_ai_insight_jev_model';
+
+export function getJevConfig() {
+    const value = (id, key) => document.getElementById(id)?.value?.trim()
+        || localStorage.getItem(key)?.trim() || null;
+    return {
+        jevApiKey: value('modal-jev-api-key', JEV_API_KEY_STORAGE_KEY),
+        jevModel: value('modal-jev-model', JEV_MODEL_STORAGE_KEY)
+    };
+}
+
+export function hasJevCredentials() {
+    return !!getJevConfig().jevApiKey;
+}
