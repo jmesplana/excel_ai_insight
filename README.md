@@ -256,6 +256,11 @@ OPENAI_MODEL=gpt-4o-mini   # optional
 2. Choose columns for analysis
 3. Add column-specific prompts
 4. Optionally enable **Multi-Column Analysis** for related columns
+5. Click **Export Configuration** to save the setup (general instructions, source
+   columns, result column names, output lengths and prompts) to a JSON file, and
+   **Import Configuration** to restore it on a later file. On import, source columns
+   the new sheet does not have are left unselected and reported, so long prompts and
+   category lists survive even when the headers differ.
 
 ### Step 4: Run Analysis
 1. Click **Run Test (5 rows)** to test your prompts first (recommended)

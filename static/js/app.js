@@ -4,6 +4,7 @@ import { API_KEY_STORAGE_KEY, PROVIDER_STORAGE_KEY, AZURE_ENDPOINT_STORAGE_KEY, 
 import { escapeHtml, renderMarkdown } from './rendering.js';
 import { parseWorkbook, exportResults, explodeColumn } from './spreadsheet.js';
 import { BatchRun } from './batch-runner.js';
+import { serializeConfig, deserializeConfig, configFilename } from './analysis-config.js';
 
 /* Global variables */
 let availableColumns = [];
@@ -1073,7 +1074,12 @@ function updateColumnConfigs() {
     addColumnConfig();
 }
 
-function addColumnConfig() {
+/**
+ * Append a column-analysis card.
+ * @param {object} [preset] - values from an imported configuration:
+ *   { columns: string[], outputColumnName, prompt, maxOutputTokens }
+ */
+function addColumnConfig(preset = null) {
     const columnConfigs = document.getElementById('column-configs');
     const configId = crypto.randomUUID();
     
@@ -1212,8 +1218,25 @@ function addColumnConfig() {
         });
     });
     
+    if (preset) applyColumnPreset(configCard, preset);
+
     columnConfigs.appendChild(configCard);
     initTooltips();
+    return configCard;
+}
+
+/* Fill a freshly built config card from an imported configuration. */
+function applyColumnPreset(configCard, preset) {
+    const [mainColumn, ...extras] = preset.columns || [];
+    if (mainColumn) configCard.querySelector('select[name="column"]').value = mainColumn;
+    extras.forEach(name => {
+        addAdditionalColumn(configCard);
+        const selects = configCard.querySelectorAll('.additional-column select');
+        selects[selects.length - 1].value = name;
+    });
+    configCard.querySelector('input[name="output-column-name"]').value = preset.outputColumnName || '';
+    configCard.querySelector('input[name="prompt"]').value = preset.prompt || '';
+    configCard.querySelector('[name="max-output-tokens"]').value = String(preset.maxOutputTokens);
 }
 
 function addAdditionalColumn(configCard) {
@@ -1237,6 +1260,85 @@ function addAdditionalColumn(configCard) {
     });
     
     additionalColumnsDiv.appendChild(columnDiv);
+}
+
+/* Read every column-analysis card off the page, in display order. */
+function readColumnConfigs() {
+    return Array.from(document.querySelectorAll('.column-selection-container')).map(config => {
+        const mainColumn = config.querySelector('select[name="column"]').value;
+        const additionalColumns = Array.from(config.querySelectorAll('.additional-column select'))
+            .map(select => select.value)
+            .filter(col => col !== "");
+        const columns = [mainColumn, ...additionalColumns].filter(col => col !== "");
+        const outputColumnName = config.querySelector('input[name="output-column-name"]').value.trim();
+
+        return {
+            column: mainColumn,
+            columns: columns,
+            prompt: config.querySelector('input[name="prompt"]').value,
+            maxOutputTokens: Number(config.querySelector('[name="max-output-tokens"]').value),
+            outputColumnName: outputColumnName || null, // Use null if not provided
+            id: config.dataset.id || Date.now().toString()
+        };
+    });
+}
+
+/* Configuration Export / Import */
+// "analysis" pluralizes to "analyses", not "analysises".
+function pluralizeAnalyses(count) {
+    return `${count} column ${count === 1 ? 'analysis' : 'analyses'}`;
+}
+
+function exportAnalysisConfig() {
+    const columns = readColumnConfigs();
+    // An empty form would export a file that restores nothing.
+    if (!columns.some(cfg => cfg.columns.length || cfg.prompt.trim())) {
+        showAlert('analyze-message', 'Nothing to export yet — configure at least one column first.', 'warning');
+        return;
+    }
+    const doc = serializeConfig({
+        generalInstructions: document.getElementById('general-instructions').value,
+        sheetName: document.getElementById('sheet-select').value,
+        columns
+    });
+    const url = URL.createObjectURL(new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = configFilename();
+    link.click();
+    URL.revokeObjectURL(url);
+    showAlert('analyze-message', `Configuration exported (${pluralizeAnalyses(doc.columns.length)}).`, 'success');
+}
+
+async function importAnalysisConfig(event) {
+    const input = event.target;
+    const file = input.files && input.files[0];
+    if (!file) return;
+    // Reset first so re-picking the same file fires change again.
+    input.value = '';
+
+    let imported;
+    try {
+        imported = deserializeConfig(JSON.parse(await file.text()), availableColumns);
+    } catch (error) {
+        const message = error instanceof SyntaxError
+            ? 'That file is not valid JSON.'
+            : error.message;
+        showAlert('analyze-message', `Could not import configuration: ${message}`, 'danger');
+        return;
+    }
+
+    document.getElementById('general-instructions').value = imported.generalInstructions;
+    const container = document.getElementById('column-configs');
+    container.innerHTML = '';
+    imported.columns.forEach(preset => addColumnConfig(preset));
+
+    const applied = `Imported ${pluralizeAnalyses(imported.columns.length)}.`;
+    if (imported.warnings.length) {
+        showAlert('analyze-message', `${applied} ${imported.warnings.join(' ')}`, 'warning');
+    } else {
+        showAlert('analyze-message', `${applied} General instructions were restored too.`, 'success');
+    }
 }
 
 /* Pattern Detection */
@@ -1405,30 +1507,7 @@ async function analyzeColumns(isTestRun = false) {
     }
     
     // Get column configurations
-    const columnConfigs = Array.from(document.querySelectorAll('.column-selection-container')).map(config => {
-        // Get the main column
-        const mainColumn = config.querySelector('select[name="column"]').value;
-
-        // Get any additional columns
-        const additionalColumns = Array.from(config.querySelectorAll('.additional-column select'))
-            .map(select => select.value)
-            .filter(col => col !== "");
-
-        // Combine main column with additional columns
-        const columns = [mainColumn, ...additionalColumns].filter(col => col !== "");
-
-        // Get the output column name (custom name user specified)
-        const outputColumnName = config.querySelector('input[name="output-column-name"]').value.trim();
-
-        return {
-            column: mainColumn,
-            columns: columns,
-            prompt: config.querySelector('input[name="prompt"]').value,
-            maxOutputTokens: Number(config.querySelector('[name="max-output-tokens"]').value),
-            outputColumnName: outputColumnName || null, // Use null if not provided
-            id: config.dataset.id || Date.now().toString()
-        };
-    }).filter(config => config.column && config.prompt);
+    const columnConfigs = readColumnConfigs().filter(config => config.column && config.prompt);
     
     // Check if we have valid configurations
     if (columnConfigs.length === 0) {
@@ -1899,9 +1978,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const analyzeBtn = document.getElementById('analyze-btn');
     
     if (addColumnBtn && typeof addColumnConfig === 'function') {
-        addColumnBtn.addEventListener('click', addColumnConfig);
+        // Wrapped: the click Event must not be taken as an imported preset.
+        addColumnBtn.addEventListener('click', () => addColumnConfig());
     }
     
+    const exportConfigBtn = document.getElementById('export-config-btn');
+    const importConfigBtn = document.getElementById('import-config-btn');
+    const importConfigInput = document.getElementById('import-config-input');
+
+    if (exportConfigBtn) exportConfigBtn.addEventListener('click', exportAnalysisConfig);
+    if (importConfigBtn && importConfigInput) {
+        importConfigBtn.addEventListener('click', () => importConfigInput.click());
+        importConfigInput.addEventListener('change', importAnalysisConfig);
+    }
+
     if (togglePatternBtn && typeof togglePatternDetection === 'function') {
         togglePatternBtn.addEventListener('click', togglePatternDetection);
     }

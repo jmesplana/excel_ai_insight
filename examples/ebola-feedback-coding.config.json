@@ -1,0 +1,27 @@
+{
+  "format": "aidstack-insights-analysis-config",
+  "version": 1,
+  "exportedAt": "2026-09-19T00:00:00.000Z",
+  "sheetName": "Sheet1",
+  "generalInstructions": "",
+  "columns": [
+    {
+      "columns": [
+        "Feedback",
+        "type_of_feedback"
+      ],
+      "outputColumnName": "feedback_code",
+      "prompt": "i want you to determine the best category when feedback and type of feedback is combined. some of the feedback have multiple types of feedback so code it according to the combination of the two columns. do not make up a category and do not make a mistake. here's the list of categories, but make sure you only give me the category and nothing else. sometimes they will just say thank you but don't repeat the word thank you, make sure you code it properly.do not explain anything: Ebola existe; Ebola n’existe pas; Cause/origine d’Ebola; Transmission; Symptômes; Prévention; Diagnostic; Traitement; CTE/CET; Vaccination; Éligibilité au vaccin; Effets secondaires du vaccin; Méfiance envers le vaccin; Enterrement digne et sécurisé; Activités de riposte; Personnel de riposte; Ebola est un business; Ebola est politique; Intention malveillante; Stigmatisation; Recherche des contacts; Surveillance/alerte; PCI/WASH; Communication/sensibilisation; Accès aux services; Sécurité; Besoin d’assistance",
+      "maxOutputTokens": 1024
+    },
+    {
+      "columns": [
+        "Feedback",
+        "type_of_feedback"
+      ],
+      "outputColumnName": "feedback_dimension",
+      "prompt": "i want you to determine the best category when feedback and type of feedback is combined. some of the feedback have multiple types of feedback so code it according to the combination of the two columns. do not make up a category and do not make a mistake. here's the list of categories, but make sure you only give me the category and nothing else. sometimes they will just say thank you but don't repeat the word thank you, make sure you code it properly.do not explain anything: Maladie à virus Ebola; Surveillance; Prise en charge / Soins; Vaccination; PCI/WASH; EDS/SDB; RCCE / Communication; Confiance; Riposte; Protection; Sécurité; Services / Assistance",
+      "maxOutputTokens": 1024
+    }
+  ]
+}

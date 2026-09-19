@@ -72,6 +72,17 @@
                                     <button id="toggle-pattern-btn" class="btn btn-outline-info">
                                         <i class="bi bi-search"></i> Detect Patterns
                                     </button>
+                                    <button id="export-config-btn" class="btn btn-outline-secondary ms-auto"
+                                            data-bs-toggle="tooltip"
+                                            title="Save these columns, instructions and result names to a JSON file you can reuse on another dataset.">
+                                        <i class="bi bi-download"></i> Export Configuration
+                                    </button>
+                                    <button id="import-config-btn" class="btn btn-outline-secondary"
+                                            data-bs-toggle="tooltip"
+                                            title="Load a previously exported JSON configuration. This replaces the configuration below.">
+                                        <i class="bi bi-upload"></i> Import Configuration
+                                    </button>
+                                    <input type="file" id="import-config-input" accept="application/json,.json" class="hidden">
                                 </div>
                                 
                                 <div id="analysis-recovery" class="alert alert-info hidden" role="status">
