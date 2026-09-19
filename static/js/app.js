@@ -2,7 +2,7 @@ import { initResults } from './results.js';
 let resultsUI;
 import { API_KEY_STORAGE_KEY, PROVIDER_STORAGE_KEY, AZURE_ENDPOINT_STORAGE_KEY, AZURE_DEPLOYMENT_STORAGE_KEY, AZURE_API_VERSION_STORAGE_KEY, OPENAI_MODEL_STORAGE_KEY, getLLMConfig, hasLocalCredentials, syncProviderUI } from './provider-settings.js';
 import { escapeHtml, renderMarkdown } from './rendering.js';
-import { parseWorkbook, exportResults } from './spreadsheet.js';
+import { parseWorkbook, exportResults, explodeColumn } from './spreadsheet.js';
 import { BatchRun } from './batch-runner.js';
 
 /* Global variables */
@@ -13,7 +13,8 @@ let resultChart = null;
 const ICD_CLIENT_ID_STORAGE_KEY = 'excel_ai_insight_icd_client_id';
 const ICD_CLIENT_SECRET_STORAGE_KEY = 'excel_ai_insight_icd_client_secret';
 
-// Application mode: 'analysis' (default AI analysis) | 'icd' (Medical Translation ICD-11)
+// Application mode: 'analysis' (default AI analysis) | 'icd' (Medical Translation
+// ICD-11) | 'clean' (split multi-value cells; no AI, no credentials, no step 4/5)
 let appMode = 'analysis';
 
 // Holds the ICD translation dataset in memory: { sheetName, columns: [...], data: [...] }
@@ -100,6 +101,207 @@ async function streamChat(payload, onToken) {
 }
 
 // Build an .xlsx from the in-memory analyzed dataset and trigger a download.
+// =========================================================================
+// CLEAN DATA: split a multi-value column into one row per value
+// =========================================================================
+
+// "|| | ;" -> ['||','|',';']. Whitespace separates the separators, so a
+// literal space cannot itself be one; that is the intended trade-off.
+function parseSeparators(text) {
+    return (text || '').trim().split(/\s+/).filter(Boolean);
+}
+
+/**
+ * Wire one Clean Data panel.
+ *
+ * The same panel serves two places with different data sources: step 3 acts
+ * on the uploaded sheet (no API key, no spend), step 5 on the analyzed
+ * results. The caller supplies get/set so this code never needs to know which.
+ *
+ * @param {string} prefix - element id prefix ('explode' or 'pre-explode').
+ * @param {() => object|null} getSource - current {columns, data} to split.
+ * @param {(result: object) => void} onApply - install the exploded dataset.
+ * @param {() => string[]} [preferredColumns] - columns to default the picker to.
+ */
+function createCleanDataPanel({ prefix, getSource, onApply, preferredColumns = () => [] }) {
+    const el = suffix => document.getElementById(`${prefix}-${suffix}`);
+    let preview = null;      // staged {result, column}, not yet applied
+    let beforeApply = null;  // source snapshot, for Undo
+    // The split dataset currently offered for download. Set by Preview and
+    // kept across Apply, which clears `preview` but must not strip the only
+    // way to get the file out (clean mode has no other download button).
+    let downloadable = null;
+
+    const setMessage = (text, type = 'info') => {
+        const box = el('message');
+        if (box) box.innerHTML = text
+            ? `<div class="alert alert-${type} py-2 mb-0">${escapeHtml(text)}</div>` : '';
+    };
+
+    // Keep the current selection when possible; otherwise fall back to the
+    // caller's preferred column (the newest AI output, on step 5).
+    function refreshColumns() {
+        const select = el('column');
+        const source = getSource();
+        if (!select || !source) return;
+        const previous = select.value;
+        select.innerHTML = source.columns
+            .map(col => `<option value="${escapeHtml(col)}">${escapeHtml(col)}</option>`).join('');
+        if (source.columns.includes(previous)) select.value = previous;
+        else {
+            const preferred = preferredColumns().filter(c => source.columns.includes(c));
+            if (preferred.length) select.value = preferred[preferred.length - 1];
+        }
+    }
+
+    function renderPreview(result, column) {
+        const rows = result.data.slice(0, 20);
+        let html = '<thead class="table-light"><tr>';
+        result.columns.forEach(col => {
+            html += `<th${col === column ? ' class="table-warning"' : ''}>${escapeHtml(col)}</th>`;
+        });
+        html += '</tr></thead><tbody>';
+        rows.forEach(row => {
+            html += '<tr>';
+            result.columns.forEach(col => {
+                const value = row[col];
+                html += `<td>${escapeHtml(value === null || value === undefined ? '' : value)}</td>`;
+            });
+            html += '</tr>';
+        });
+        el('preview-table').innerHTML = html + '</tbody>';
+        const info = el('preview-info');
+        if (info) info.textContent = `— showing ${rows.length} of ${result.data.length} rows`;
+        el('preview').classList.remove('hidden');
+    }
+
+    function buildPreview() {
+        const source = getSource();
+        if (!source) { setMessage('Load a file first.', 'warning'); return; }
+        const column = el('column').value;
+        const separators = parseSeparators(el('separator').value);
+        const rename = (el('output').value || '').trim();
+        const dedupe = el('dedupe').checked;
+        if (!separators.length) { setMessage('Enter at least one separator.', 'warning'); return; }
+
+        try {
+            const exploded = explodeColumn(source, column, separators,
+                { outputColumn: rename || column, dedupe });
+            preview = { result: exploded, column: rename || column };
+            const before = source.data.length, after = exploded.data.length;
+            if (after === before) {
+                setMessage(`No cell in "${column}" contained ${separators.join(' or ')}. `
+                    + 'Check the separator and retry.', 'warning');
+            } else {
+                setMessage(`${before} rows become ${after} rows.`, 'success');
+            }
+            renderPreview(exploded, rename || column);
+            downloadable = exploded;
+            el('download-btn').classList.remove('hidden');
+        } catch (error) {
+            preview = null;
+            downloadable = null;
+            el('download-btn').classList.add('hidden');
+            el('preview').classList.add('hidden');
+            setMessage(error.message, 'danger');
+        }
+    }
+
+    function apply() {
+        if (!preview) return;
+        beforeApply = getSource();
+        const applied = preview.result;
+        const producedColumn = preview.column;
+        onApply(applied);
+        refreshColumns();
+        // Keep the picker on the column the split just produced, rather than
+        // letting it fall back to the first column in the sheet.
+        const select = el('column');
+        if (select && applied.columns.includes(producedColumn)) select.value = producedColumn;
+        el('undo-btn').classList.remove('hidden');
+        el('preview').classList.add('hidden');
+        // Applying replaces the working sheet; the download stays armed so the
+        // split file is still one click away.
+        downloadable = applied;
+        el('download-btn').classList.remove('hidden');
+        setMessage(`Applied — now ${applied.data.length} rows. `
+            + 'Use "Download split file" to save it.', 'success');
+        preview = null;
+    }
+
+    function undo() {
+        if (!beforeApply) return;
+        onApply(beforeApply);
+        setMessage(`Reverted — back to ${beforeApply.data.length} rows.`, 'info');
+        beforeApply = null;
+        refreshColumns();
+        el('undo-btn').classList.add('hidden');
+        // Nothing split is in effect any more, so offer nothing to download.
+        downloadable = null;
+        el('download-btn').classList.add('hidden');
+    }
+
+    // Clear staged state so a new file or a new analysis never inherits a
+    // preview or an Undo that points at the previous dataset.
+    function reset() {
+        preview = null;
+        beforeApply = null;
+        downloadable = null;
+        el('preview')?.classList.add('hidden');
+        el('undo-btn')?.classList.add('hidden');
+        el('download-btn')?.classList.add('hidden');
+        setMessage('');
+    }
+
+    const previewBtn = el('preview-btn');
+    if (!previewBtn) return { refreshColumns() {}, reset() {} };
+    previewBtn.addEventListener('click', buildPreview);
+    el('apply-btn').addEventListener('click', apply);
+    el('undo-btn').addEventListener('click', undo);
+    el('download-btn').addEventListener('click', () => {
+        if (downloadable) exportResults(downloadable, fileData.filename || 'data', 'split');
+    });
+    return { refreshColumns, reset };
+}
+
+// Step 5 panel: splits the analyzed results.
+let cleanDataResults = null;
+// Step 3 panel: splits the uploaded sheet before any analysis.
+let cleanDataPreview = null;
+
+function initCleanData() {
+    cleanDataResults = createCleanDataPanel({
+        prefix: 'explode',
+        getSource: () => analyzedResult,
+        onApply: result => {
+            analyzedResult = result;
+            resultsUI.load({ sheets: { [result.sheetName]: result } });
+        },
+        preferredColumns: () => (analyzedResult && analyzedResult.outputColumns) || [],
+    });
+
+    cleanDataPreview = createCleanDataPanel({
+        prefix: 'pre-explode',
+        getSource: () => currentSheet(),
+        onApply: result => {
+            // Write the split sheet back into fileData so the preview table,
+            // the column pickers and the analysis itself all see the new rows.
+            const name = document.getElementById('sheet-select').value;
+            fileData.sheets[name] = { columns: result.columns, data: result.data };
+            updatePreviewTable(name);
+        },
+    });
+}
+
+// The sheet currently selected in the step 3 preview, or null before upload.
+function currentSheet() {
+    const select = document.getElementById('sheet-select');
+    if (!select || !fileData.sheets) return null;
+    const sheet = fileData.sheets[select.value];
+    return sheet ? { ...sheet, sheetName: select.value } : null;
+}
+
+
 function downloadAnalyzedFile() {
     if (!analyzedResult) return;
     exportResults(analyzedResult, fileData.filename || 'data', analyzedResult.partial ? 'partial' : 'analyzed');
@@ -407,6 +609,9 @@ function showAlert(id, message, type = 'success') {
 
 function goToStep(step) {
     resultsUI?.onStep(step);
+    // The Clean Data picker lists the columns of the current results, which
+    // only exist once the analysis has produced them.
+    if (step === 5 && appMode === 'analysis') cleanDataResults?.refreshColumns();
     // Hide all steps
     document.querySelectorAll('.step-content').forEach(el => el.classList.add('hidden'));
     
@@ -437,14 +642,33 @@ function goToStep(step) {
 // Show/hide the analysis vs ICD panels for the given step according to appMode.
 function applyModePanels(step) {
     const isIcd = (appMode === 'icd');
+    const isClean = (appMode === 'clean');
     const setHidden = (id, hidden) => {
         const el = document.getElementById(id);
         if (el) el.classList.toggle('hidden', hidden);
     };
 
     if (step === 1) {
-        setHidden('analysis-instructions-block', isIcd);
+        // Clean mode needs no instructions and no credentials; the mode cards
+        // are the whole of step 1 for it.
+        setHidden('analysis-instructions-block', isIcd || isClean);
         setHidden('icd-intro-block', !isIcd);
+        setHidden('clean-intro-block', !isClean);
+        // The default banner and title speak for the AI flows; clean mode
+        // needs no credentials, so neither should mention them.
+        setHidden('config-intro-alert', isClean);
+        const title = document.getElementById('config-card-title');
+        if (title) title.textContent = isClean ? 'Choose a Mode' : 'Analysis Configuration';
+    }
+
+    if (step === 3) {
+        // Clean mode ends at step 3: the panel is the whole workflow, so open
+        // it by default and drop the "Next" that leads into analysis config.
+        const body = document.getElementById('pre-clean-data-body');
+        if (body) body.classList.toggle('show', isClean);
+        setHidden('preview-next-btn', isClean);
+        const chatTip = document.getElementById('preview-chat-tip');
+        if (chatTip) chatTip.classList.toggle('hidden', isClean);
     }
 
     if (step === 4) {
@@ -777,6 +1001,9 @@ async function uploadFile(e) {
 
 /* Display File Preview */
 function displayFilePreview() {
+    // A new file invalidates any split staged against the previous one.
+    cleanDataPreview?.reset();
+    cleanDataResults?.reset();
     const sheetSelect = document.getElementById('sheet-select');
     sheetSelect.innerHTML = '';
     
@@ -834,6 +1061,9 @@ function updatePreviewTable(sheetName) {
     });
     
     updateColumnConfigs();
+
+    // Keep the Clean Data picker in step with the sheet being previewed.
+    cleanDataPreview?.refreshColumns();
 }
 
 /* Column Configuration */
@@ -1259,6 +1489,8 @@ async function analyzeColumns(isTestRun = false) {
     });
     activeAnalysis.isTestRun = isTestRun;
     analyzedResult = null;
+    // A new run invalidates any split staged against the previous results.
+    cleanDataResults?.reset();
     await continueAnalysis();
 }
 
@@ -1595,14 +1827,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Mode chooser (Step 1): AI Analysis vs Medical Translation (ICD-11).
+    // Mode chooser (Step 1): AI Analysis, Medical Translation (ICD-11), or
+    // Clean Data (split multi-value cells; no AI, no credentials).
+    const MODE_RADIOS = { analysis: 'mode-analysis', icd: 'mode-icd', clean: 'mode-clean' };
     function setAppMode(mode) {
-        appMode = (mode === 'icd') ? 'icd' : 'analysis';
-        const radio = document.getElementById(appMode === 'icd' ? 'mode-icd' : 'mode-analysis');
+        appMode = MODE_RADIOS[mode] ? mode : 'analysis';
+        const radio = document.getElementById(MODE_RADIOS[appMode]);
         if (radio) radio.checked = true;
         document.querySelectorAll('.mode-card').forEach(card => {
             card.classList.toggle('border-primary', card.dataset.mode === appMode);
         });
+        applyStepperLabels();
         applyModePanels(currentStep);
     }
     document.querySelectorAll('input[name="app-mode"]').forEach(r => {
@@ -1712,6 +1947,21 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('main-content').classList.remove('hidden');
         workflowStepper.classList.remove('hidden');
         goToStep(1);
+    }
+
+    // The stepper is written for the analysis flow; clean mode ends at step 3,
+    // so hide the analysis-only steps and relabel the ones it does use.
+    function applyStepperLabels() {
+        const clean = (appMode === 'clean');
+        document.querySelectorAll('.stepper-item').forEach(item => {
+            item.classList.toggle('hidden', clean && parseInt(item.dataset.step) > 3);
+        });
+        const names = { 1: clean ? 'Choose Mode' : 'Configuration',
+                        3: clean ? 'Split & Download' : 'Preview & Chat' };
+        Object.entries(names).forEach(([step, label]) => {
+            const el = document.querySelector(`.stepper-item[data-step="${step}"] .step-name`);
+            if (el) el.textContent = label;
+        });
     }
     
     function showHome() {
@@ -2068,4 +2318,5 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     resultsUI = initResults({ getFileData: () => fileData, getChatDataset, streamChat, getLLMConfig, showAlert });
+    initCleanData();
 });

@@ -11,11 +11,77 @@
                                 </div>
                             </div>
                             <div class="card-body">
-                                <div class="alert alert-info">
+                                <div class="alert alert-info" id="preview-chat-tip">
                                     <i class="bi bi-chat-dots"></i> <strong>Pro tip:</strong> Click the chat button in the bottom right corner to ask questions about your data!
                                 </div>
                                 <div id="preview-table" class="table-container table-responsive" style="max-height: 600px; overflow-y: auto;">
                                     <!-- Table content will be inserted here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Clean Data: split multi-value cells before (or instead of) any analysis -->
+                <div class="card mt-3" id="pre-clean-data-card">
+                    <div class="card-header d-flex justify-content-between align-items-center"
+                         role="button" data-bs-toggle="collapse" data-bs-target="#pre-clean-data-body"
+                         aria-expanded="false" aria-controls="pre-clean-data-body">
+                        <span><i class="bi bi-scissors"></i> Clean Data &mdash; split multi-value cells into rows</span>
+                        <i class="bi bi-chevron-down"></i>
+                    </div>
+                    <div class="collapse" id="pre-clean-data-body">
+                        <div class="card-body">
+                            <p class="text-muted small">
+                                Already have a column where one cell holds several values joined by a separator?
+                                Split it here &mdash; no AI analysis and no API key needed. Runs entirely in your browser.
+                            </p>
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-4">
+                                    <label class="form-label" for="pre-explode-column">Column to split</label>
+                                    <select class="form-select" id="pre-explode-column"></select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" for="pre-explode-separator">Separator</label>
+                                    <input type="text" class="form-control" id="pre-explode-separator"
+                                           value="||" placeholder="e.g. || or ; or ,">
+                                    <div class="form-text">Separate several with a space: <code>|| | ;</code></div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" for="pre-explode-output">New column name</label>
+                                    <input type="text" class="form-control" id="pre-explode-output"
+                                           placeholder="keep the same name">
+                                </div>
+                                <div class="col-md-2">
+                                    <button type="button" class="btn btn-primary w-100" id="pre-explode-preview-btn">
+                                        <i class="bi bi-eye"></i> Preview
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="form-check mt-3">
+                                <input class="form-check-input" type="checkbox" id="pre-explode-dedupe" checked>
+                                <label class="form-check-label" for="pre-explode-dedupe">
+                                    Drop values repeated within the same row
+                                </label>
+                            </div>
+                            <div id="pre-explode-message" class="mt-3"></div>
+                            <div class="d-flex gap-2 mt-2">
+                                <button type="button" class="btn btn-success hidden" id="pre-explode-download-btn">
+                                    <i class="bi bi-download"></i> Download split file
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary ms-auto hidden" id="pre-explode-undo-btn">
+                                    <i class="bi bi-arrow-counterclockwise"></i> Undo
+                                </button>
+                            </div>
+                            <div id="pre-explode-preview" class="hidden">
+                                <h6 class="mt-3">Preview <span class="text-muted small" id="pre-explode-preview-info"></span></h6>
+                                <div class="table-responsive" style="max-height: 320px; overflow-y: auto;">
+                                    <table class="table table-sm table-striped table-bordered" id="pre-explode-preview-table"></table>
+                                </div>
+                                <div class="d-flex gap-2 mt-2">
+                                    <button type="button" class="btn btn-success" id="pre-explode-apply-btn">
+                                        <i class="bi bi-check2"></i> Apply to this sheet
+                                    </button>
                                 </div>
                             </div>
                         </div>

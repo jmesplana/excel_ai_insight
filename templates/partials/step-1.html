@@ -4,11 +4,11 @@
                     <div class="col-md-8">
                         <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center">
-                                <span>Analysis Configuration</span>
+                                <span id="config-card-title">Analysis Configuration</span>
                                 <i class="bi bi-sliders"></i>
                             </div>
                             <div class="card-body">
-                                <div class="alert alert-info">
+                                <div class="alert alert-info" id="config-intro-alert">
                                     <i class="bi bi-info-circle"></i> Before starting your analysis, configure general instructions that will apply to all analyzed columns. Configure OpenAI or Azure in the <strong>API Settings</strong> button in the top navigation bar, unless your server already provides credentials.
                                 </div>
 
@@ -16,7 +16,7 @@
                                 <div class="mb-4">
                                     <label class="form-label">Choose a mode</label>
                                     <div class="row g-3" id="mode-chooser">
-                                        <div class="col-md-6">
+                                        <div class="col-md-4">
                                             <div class="card h-100 mode-card border" id="mode-card-analysis" data-mode="analysis" style="cursor: pointer;">
                                                 <div class="card-body">
                                                     <div class="form-check">
@@ -29,7 +29,7 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="col-md-6">
+                                        <div class="col-md-4">
                                             <div class="card h-100 mode-card border" id="mode-card-icd" data-mode="icd" style="cursor: pointer;">
                                                 <div class="card-body">
                                                     <div class="form-check">
@@ -39,6 +39,19 @@
                                                         </label>
                                                     </div>
                                                     <p class="small text-muted mb-0 mt-2">Map free-text diagnoses or codes to ICD-11 (and derived ICD-10). Requires WHO ICD API credentials.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="card h-100 mode-card border" id="mode-card-clean" data-mode="clean" style="cursor: pointer;">
+                                                <div class="card-body">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="app-mode" id="mode-clean" value="clean">
+                                                        <label class="form-check-label fw-bold" for="mode-clean">
+                                                            <i class="bi bi-scissors"></i> Clean Data
+                                                        </label>
+                                                    </div>
+                                                    <p class="small text-muted mb-0 mt-2">Split cells holding several values into one row each. No AI and no API key needed.</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -89,6 +102,12 @@
                                 <div id="icd-intro-block" class="hidden">
                                     <div class="alert alert-warning small">
                                         <i class="bi bi-translate"></i> <strong>Medical Translation (ICD-11):</strong> map each row of a column to ICD-11 (and optionally a derived ICD-10 code). Make sure your <strong>WHO ICD Client ID &amp; Secret</strong> are set in <strong>API Settings</strong>. An OpenAI API key (optional) improves disambiguation of free-text input.
+                                    </div>
+                                </div>
+
+                                <div id="clean-intro-block" class="hidden">
+                                    <div class="alert alert-success small">
+                                        <i class="bi bi-scissors"></i> <strong>Clean Data:</strong> upload a file, pick the column whose cells hold several values, and split it into one row per value. Runs entirely in your browser &mdash; no AI, no API key, and nothing is sent to a provider.
                                     </div>
                                 </div>
 

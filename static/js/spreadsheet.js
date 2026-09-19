@@ -26,3 +26,71 @@ export function exportResults(result, filename, prefix = 'analyzed', xlsx = XLSX
     const base = filename.replace(/\.(xlsx|xls|csv)$/i, '');
     xlsx.writeFile(wb, `${prefix}_${base}.xlsx`);
 }
+
+/** Escape a literal separator for use inside a RegExp character sequence. */
+function escapeRegExp(text) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Split one cell on a separator, longest-first so "||" wins over "|".
+ *
+ * Separators are matched literally, never as regex, so a user typing "|" gets
+ * a pipe rather than an alternation. Blank fragments are dropped: "a || || b"
+ * is two categories, not four.
+ */
+export function splitCell(value, separators, { trim = true } = {}) {
+    if (value === null || value === undefined) return [];
+    const text = String(value);
+    const active = separators.filter(Boolean);
+    if (!active.length) return text.trim() === '' ? [] : [trim ? text.trim() : text];
+    // Longest first: "||" must be consumed before "|" can match half of it.
+    const ordered = [...new Set(active)].sort((a, b) => b.length - a.length);
+    const pattern = new RegExp(ordered.map(escapeRegExp).join('|'), 'g');
+    return text.split(pattern)
+        .map(part => (trim ? part.trim() : part))
+        .filter(part => part !== '');
+}
+
+/**
+ * Explode a multi-value column into one row per value, copying every other
+ * column down. Rows whose target cell holds a single value pass through
+ * unchanged, so this is safe to run over a whole mixed sheet.
+ *
+ * @param {{columns: string[], data: object[]}} result - sheet to expand.
+ * @param {string} column - the column holding separated values.
+ * @param {string[]} separators - literal separators, e.g. ['||', '|', ';'].
+ * @param {object} [options]
+ * @param {string} [options.outputColumn] - rename the exploded column.
+ * @param {boolean} [options.keepEmpty] - emit a row with an empty value when a
+ *   cell has no values at all, instead of dropping the source row.
+ * @param {boolean} [options.dedupe] - drop repeated values within one row.
+ * @returns {{columns: string[], data: object[], sheetName?: string}}
+ */
+export function explodeColumn(result, column, separators, options = {}) {
+    const { outputColumn = column, keepEmpty = true, dedupe = true } = options;
+    if (!result || !Array.isArray(result.data)) throw new Error('No data to clean.');
+    if (!result.columns.includes(column)) throw new Error(`Column "${column}" is not in this sheet.`);
+    if (outputColumn !== column && result.columns.includes(outputColumn)) {
+        throw new Error(`Column "${outputColumn}" already exists. Choose another name.`);
+    }
+
+    const columns = result.columns.map(name => (name === column ? outputColumn : name));
+    // Build each output row from `columns` so a renamed column leaves no
+    // stray key behind and the field order matches the header exactly.
+    const buildRow = (row, value) => Object.fromEntries(
+        columns.map(name => [name, name === outputColumn ? value : row[name]]));
+
+    const data = [];
+    for (const row of result.data) {
+        let values = splitCell(row[column], separators);
+        if (dedupe) values = [...new Set(values)];
+        if (!values.length) {
+            // Nothing to explode; preserve the row so counts still reconcile.
+            if (keepEmpty) data.push(buildRow(row, ''));
+            continue;
+        }
+        for (const value of values) data.push(buildRow(row, value));
+    }
+    return { ...result, columns, data, partial: result.partial };
+}
