@@ -347,6 +347,24 @@ function renderIcdResults() {
 // accumulates results by rowIndex, builds icdResult and renders step 5.
 const ICD_TEST_ROWS = 10;
 
+/**
+ * Rows to use for a test run, read from that mode's "Test rows" input.
+ *
+ * The field is a free number box, so it is clamped to what the sheet actually
+ * has: a typo of 500 on a 20-row file tests 20 rows rather than erroring, and
+ * a blank or junk value falls back to the mode's default instead of running
+ * zero rows (which would look like a silent failure).
+ *
+ * @param {string} inputId - id of the number input for this mode
+ * @param {number} fallback - default when the field is empty or unusable
+ * @param {number} available - rows in the sheet being analyzed
+ */
+function testRowCount(inputId, fallback, available) {
+    const requested = Math.floor(Number(document.getElementById(inputId)?.value));
+    const rows = Number.isFinite(requested) && requested > 0 ? requested : fallback;
+    return Math.max(1, Math.min(rows, available));
+}
+
 async function runIcdTranslation(isTestRun = false) {
     const openaiApiKey = (document.getElementById('modal-api-key').value || '').trim() ||
                          (localStorage.getItem(API_KEY_STORAGE_KEY) || '').trim();
@@ -392,7 +410,11 @@ async function runIcdTranslation(isTestRun = false) {
     }
     const allRows = sheet.data;
     const totalRows = allRows.length;
-    const rowCount = isTestRun ? Math.min(ICD_TEST_ROWS, totalRows) : totalRows;
+    if (!totalRows) {
+        showAlert('icd-config-message', 'This sheet has no data rows.', 'warning');
+        return;
+    }
+    const rowCount = isTestRun ? testRowCount('icd-test-rows', ICD_TEST_ROWS, totalRows) : totalRows;
 
     showSpinner(true, 'Validating WHO ICD credentials...', false);
 
@@ -1547,9 +1569,8 @@ async function analyzeColumns(isTestRun = false) {
         return;
     }
     const allRows = sheet.data;
-    const rowCount = isTestRun ? Math.min(5, allRows.length) : allRows.length;
-
-    if (!rowCount) { showAlert('analyze-message', 'This sheet has no data rows.', 'warning'); return; }
+    if (!allRows.length) { showAlert('analyze-message', 'This sheet has no data rows.', 'warning'); return; }
+    const rowCount = isTestRun ? testRowCount('test-rows', 5, allRows.length) : allRows.length;
 
     // Resolve each output column name once, ensuring uniqueness against
     // existing columns (previously done per-row on the server).
@@ -1941,8 +1962,8 @@ async function runJevClassification(isTestRun = false) {
         return;
     }
     const allRows = sheet.data;
-    const rowCount = isTestRun ? Math.min(5, allRows.length) : allRows.length;
-    if (!rowCount) { showAlert('jev-message', 'This sheet has no data rows.', 'warning'); return; }
+    if (!allRows.length) { showAlert('jev-message', 'This sheet has no data rows.', 'warning'); return; }
+    const rowCount = isTestRun ? testRowCount('jev-test-rows', 5, allRows.length) : allRows.length;
 
     // Resolve output names against the sheet's existing columns, as the LLM
     // path does, so a question never silently overwrites a source column.

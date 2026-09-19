@@ -17,7 +17,7 @@ Perfect for anyone drowning in Excel data: e-commerce managers analyzing custome
 - **Jev Classification (typesafe.ai)**: Assign each row one label from a list you define. Jev returns a *typed* answer constrained to your options — never invented text — along with a calibrated confidence, so results need no cleanup
 - **Pattern Detection**: Discover categories and themes in your data automatically
 - **Multi-Column Analysis**: Analyze multiple columns together for deeper insights
-- **Test Mode**: Test your prompts on 5 rows before running full analysis
+- **Test Mode**: Try your prompts on a sample before the full run — set how many rows in the **Test rows** box next to the Test Run button
 - **Progress Tracking**: Real-time progress updates during analysis
 - **Dark Mode**: Easy on the eyes for long analysis sessions
 - **Privacy First**: Files parsed locally; selected rows and credentials pass through the server for processing
@@ -321,7 +321,7 @@ On the Configuration step, choose **Jev Classification** instead of AI Analysis,
 2. Upload your file and tick the **columns to send to Jev** — these become the row context every question is answered against
 3. For each result column, set a name, pick **Choice / Score / Yes-No**, write the instructions, and paste your option list (one per line)
 4. Optionally tick **Add confidence columns**
-5. **Test Run (5 Rows)**, then **Classify All Rows**, and download the result
+5. Set **Test rows** (default 5), click **Test Run**, then **Classify All Rows** and download the result
 
 ## 📝 Prompt Templates
 
