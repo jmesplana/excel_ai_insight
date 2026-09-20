@@ -70,3 +70,44 @@ open(out, 'a').write('\n')
 print(f'wrote {out}')
 for q in cfg["questions"]:
     print(f'  {q["outputColumnName"]:28s} {q["questionType"]:7s} {len(q["options"]):3d} opts')
+
+# Optional v2 hierarchy: all taxonomy content lives in the imported JSON.
+# The runtime workflow engine contains no Ebola/Framework 2 special cases.
+import copy
+hierarchical = copy.deepcopy(cfg)
+hierarchical['version'] = 2
+hierarchical['questions'][1] = {
+    'outputColumnName': 'framework2_topic', 'questionType': 'choice',
+    'instructions': 'Choisis le sujet dominant dans record pour le type accepté dans decisions.framework2_type.',
+    'dependsOn': ['framework2_type'],
+    'branches': [{'when': {'framework2_type': kind}, 'options': options} for kind, options in valid.items()],
+    'review': {'minConfidence': 0.6},
+}
+taxonomy = json.load(open(ROOT / 'framework2_taxonomy.json', encoding='utf-8'))['taxonomy']
+leaf_branches = []
+lookup_table = []
+for pair, subdimension in G['grid'].items():
+    kind, topic = pair.split('||')
+    when = {'framework2_type': kind, 'framework2_topic': topic}
+    lookup_table.append({'when': when, 'value': subdimension})
+    options = list(dict.fromkeys(taxonomy[kind][subdimension]))
+    # Explicit catch-all also gives singleton branches a genuine alternative.
+    options.append('Aucun code ne correspond / information insuffisante')
+    leaf_branches.append({'when': when, 'options': options})
+hierarchical['questions'].append({
+    'outputColumnName': 'framework2_code', 'questionType': 'choice',
+    'instructions': 'Choisis le code précis correspondant au feedback dans record, pour le type et sujet acceptés dans decisions. Choisis la catégorie de repli si aucun code ne convient.',
+    'dependsOn': ['framework2_type', 'framework2_topic'],
+    'branches': leaf_branches, 'review': {'minConfidence': 0.6},
+})
+hierarchical['derived'] = [{'outputColumnName': 'framework2_sous_dimension', 'type': 'lookup',
+    'inputs': ['framework2_type', 'framework2_topic'], 'table': lookup_table}]
+hierarchical['report'] = {'title': 'Synthèse du feedback — Framework 2',
+    'instructions': 'Rédige une synthèse en français avec les effectifs, les thèmes dominants, la criticité, les limites et les suites suggérées. Distingue les croyances rapportées des faits vérifiés.',
+    'crossTabs': [['framework2_type', 'framework2_topic']], 'groupBy': [], 'evidenceColumns': ['Feedback'], 'maxExamples': 12}
+hierarchical['execution'] = {'batchSize': 4, 'workers': 4}
+out_v2 = ROOT / 'examples/ebola-framework2-hierarchical.jev-config.json'
+with open(out_v2, 'w', encoding='utf-8') as target:
+    json.dump(hierarchical, target, ensure_ascii=False, indent=2)
+    target.write('\n')
+print(f'wrote {out_v2}')

@@ -15,7 +15,8 @@ def create_app():
     from insights.chat import bp as chat
     from insights.icd import bp as icd
     from insights.jev import bp as jev
-    for blueprint in (analysis, chat, icd, jev):
+    from insights.jev_report import bp as jev_report
+    for blueprint in (analysis, chat, icd, jev, jev_report):
         app.register_blueprint(blueprint)
 
     @app.errorhandler(413)

@@ -4,7 +4,7 @@
 // Everything here is pure: the DOM lives in app.js, the file format lives here.
 
 export const JEV_CONFIG_FORMAT = 'aidstack-insights-jev-config';
-export const JEV_CONFIG_VERSION = 1;
+export const JEV_CONFIG_VERSION = 2;
 
 export const QUESTION_TYPES = ['choice', 'score', 'noul'];
 export const DEFAULT_QUESTION_TYPE = 'choice';
@@ -19,12 +19,13 @@ const str = value => (typeof value === 'string' ? value : '');
 
 /** Split a textarea of options into a clean list, one per line. */
 export function parseOptions(text) {
+    if (str(text).trim().startsWith('[')) return JSON.parse(text);
     return str(text).split('\n').map(line => line.trim()).filter(Boolean);
 }
 
 /** Join an option list back into textarea content. */
 export function formatOptions(options) {
-    return (options || []).join('\n');
+    return (options || []).some(o => typeof o === 'object') ? JSON.stringify(options, null, 2) : (options || []).join('\n');
 }
 
 function normalizeType(value) {
@@ -41,9 +42,10 @@ function normalizeType(value) {
 export function validateQuestion(question) {
     const name = str(question.outputColumnName).trim();
     if (!name) return 'Give every result column a name.';
-    if (!str(question.instructions).trim()) {
+    if (!question.instructions || (typeof question.instructions === 'string' && !question.instructions.trim())) {
         return `"${name}" needs instructions telling Jev what to decide.`;
     }
+    if (question.branches) return null;
     const options = question.options || [];
     if (question.questionType === 'choice') {
         if (options.length < 2) {
@@ -65,24 +67,52 @@ export function validateQuestion(question) {
  * Build the portable document from the configuration currently on screen.
  * @param {object} state - { sourceColumns, includeConfidence, questions }
  */
+const QUESTION_FIELDS = ['outputColumnName', 'questionType', 'instructions', 'options', 'review', 'dependsOn', 'branches', 'criteria'];
+const ROOT_FIELDS = ['format', 'version', 'exportedAt', 'sheetName', 'sourceColumns', 'includeConfidence', 'questions', 'derived', 'report', 'execution', 'model'];
+const copy = value => JSON.parse(JSON.stringify(value));
 export function serializeJevConfig({ sourceColumns = [], includeConfidence = false,
-                                     sheetName = '', questions = [] } = {}) {
+                                     sheetName = '', questions = [], warnings, format, version, exportedAt, ...advanced } = {}) {
+    const unknown = Object.keys(advanced).filter(k => !['derived', 'report', 'execution', 'model'].includes(k));
+    if (unknown.length) throw new Error(`Unknown workflow fields: ${unknown.join(', ')}`);
+    for (const q of questions) {
+        const extras = Object.keys(q).filter(k => !QUESTION_FIELDS.includes(k));
+        if (extras.length) throw new Error(`Unknown question fields: ${extras.join(', ')}`);
+    }
     return {
-        format: JEV_CONFIG_FORMAT,
-        version: JEV_CONFIG_VERSION,
-        exportedAt: new Date().toISOString(),
-        // Recorded for the human reading the file and for the import warning
-        // about columns the new sheet does not have.
-        sheetName,
+        format: JEV_CONFIG_FORMAT, version: JEV_CONFIG_VERSION,
+        exportedAt: new Date().toISOString(), sheetName,
         sourceColumns: sourceColumns.filter(name => str(name).trim() !== ''),
         includeConfidence: !!includeConfidence,
+        ...Object.fromEntries(['derived', 'report', 'execution', 'model'].filter(k => advanced[k] !== undefined).map(k => [k, copy(advanced[k])])),
         questions: questions.map(q => ({
+            ...Object.fromEntries(QUESTION_FIELDS.filter(k => q[k] !== undefined).map(k => [k, copy(q[k])])),
             outputColumnName: str(q.outputColumnName).trim(),
             questionType: normalizeType(q.questionType),
-            instructions: str(q.instructions),
-            options: (q.options || []).map(o => str(o).trim()).filter(Boolean)
+            instructions: q.instructions || '', options: q.options || []
         }))
     };
+}
+
+export function validateReportConfig(config, columns) {
+    if (config.model !== undefined && (typeof config.model !== 'string' || !config.model.trim())) throw new Error('model must be a non-empty model name.');
+    if (config.derived !== undefined && !Array.isArray(config.derived)) throw new Error('derived must be an array.');
+    const report = config.report || {};
+    if (typeof report !== 'object' || Array.isArray(report)) throw new Error('report must be an object.');
+    const reportFields = ['title', 'instructions', 'groupBy', 'crossTabs', 'evidenceColumns', 'maxExamples', 'maxGroups', 'maxCategories'];
+    if (Object.keys(report).some(k => !reportFields.includes(k))) throw new Error('Unknown report setting. Check the JSON configuration guide.');
+    for (const field of ['title', 'instructions']) if (report[field] !== undefined && typeof report[field] !== 'string') throw new Error(`${field} must be text.`);
+    for (const field of ['groupBy', 'evidenceColumns', 'crossTabs']) if (report[field] !== undefined && !Array.isArray(report[field])) throw new Error(`${field} must be an array.`);
+    const execution = config.execution || {};
+    if (typeof execution !== 'object' || Array.isArray(execution) || Object.keys(execution).some(k => !['batchSize', 'workers', 'requestsPerMinute', 'tokensPerSecond', 'maxAttempts', 'structuredState'].includes(k))) throw new Error('Unknown execution setting.');
+    if (execution.structuredState !== undefined && typeof execution.structuredState !== 'boolean') throw new Error('structuredState must be true or false.');
+    const known = new Set([...columns, ...config.questions.map(q => q.outputColumnName), ...(config.derived || []).map(d => d.outputColumnName)]);
+    const fields = [...(report.groupBy || []), ...(report.evidenceColumns || []), ...(report.crossTabs || []).flat()];
+    for (const field of fields) if (!known.has(field)) throw new Error(`Report column "${field}" is not in this dataset or workflow.`);
+    if ((report.crossTabs || []).some(pair => !Array.isArray(pair) || pair.length !== 2)) throw new Error('Each crossTabs entry needs two columns.');
+    for (const key of ['maxExamples', 'maxGroups', 'maxCategories']) {
+        if (report[key] !== undefined && (!Number.isInteger(report[key]) || report[key] < 0 || report[key] > 1000)) throw new Error(`${key} must be an integer from 0 to 1000.`);
+    }
+    if (config.execution?.batchSize !== undefined && (!Number.isInteger(config.execution.batchSize) || config.execution.batchSize < 1 || config.execution.batchSize > 25)) throw new Error('batchSize must be from 1 to 25.');
 }
 
 /**
@@ -116,17 +146,21 @@ export function deserializeJevConfig(raw, availableColumns = []) {
     const names = requested.map(name => str(name).trim()).filter(Boolean);
     const missing = names.filter(name => !available.has(name));
 
-    const questions = raw.questions.map(entry => {
-        const source = entry && typeof entry === 'object' ? entry : {};
-        return {
-            outputColumnName: str(source.outputColumnName).trim(),
-            questionType: normalizeType(source.questionType),
-            instructions: str(source.instructions),
-            options: Array.isArray(source.options)
-                ? source.options.map(o => str(o).trim()).filter(Boolean)
-                : []
-        };
-    });
+    if (Number(raw.version) >= 2) {
+        const unknown = Object.keys(raw).filter(k => !ROOT_FIELDS.includes(k));
+        if (unknown.length) throw new Error(`Unknown configuration fields: ${unknown.join(', ')}`);
+        for (const q of raw.questions) {
+            const extras = Object.keys(q).filter(k => !QUESTION_FIELDS.includes(k));
+            if (extras.length) throw new Error(`Unknown question fields: ${extras.join(', ')}`);
+            if (!QUESTION_TYPES.includes(q.questionType)) throw new Error('Unknown question type.');
+        }
+    }
+    const questions = raw.questions.map(entry => ({
+        ...Object.fromEntries(QUESTION_FIELDS.filter(k => entry[k] !== undefined).map(k => [k, copy(entry[k])])),
+        outputColumnName: str(entry.outputColumnName).trim(),
+        questionType: normalizeType(entry.questionType), instructions: entry.instructions || '',
+        options: Array.isArray(entry.options) ? copy(entry.options) : []
+    }));
 
     const warnings = [];
     if (missing.length) {
@@ -137,6 +171,7 @@ export function deserializeJevConfig(raw, availableColumns = []) {
         includeConfidence: !!raw.includeConfidence,
         sheetName: str(raw.sheetName),
         questions,
+        ...Object.fromEntries(['derived', 'report', 'execution', 'model'].filter(k => raw[k] !== undefined).map(k => [k, copy(raw[k])])),
         warnings
     };
 }
@@ -153,8 +188,12 @@ export function jevConfigFilename(date = new Date()) {
  * reference a field by name, matching the docs' guidance to give each question
  * only the context it needs in a structured shape.
  */
-export function buildJevState(row, sourceColumns) {
+export function buildJevState(row, sourceColumns, structured = false) {
     const notEmpty = v => v !== null && v !== undefined && String(v).trim() !== '';
+    if (structured) {
+        const entries = (sourceColumns || []).filter(col => notEmpty(row[col])).map(col => [col, row[col]]);
+        return entries.length ? Object.fromEntries(entries) : null;
+    }
     const parts = (sourceColumns || [])
         .filter(col => notEmpty(row[col]))
         .map(col => `${col}: ${row[col]}`);

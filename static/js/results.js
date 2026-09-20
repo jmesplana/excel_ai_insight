@@ -1,3 +1,4 @@
+import { renderJevReport } from './jev-report-ui.js';
 import { escapeHtml, renderMarkdown } from './rendering.js';
 
 /** Owns result tables and chat controls. Dependencies are explicit. */
@@ -22,6 +23,7 @@ export function initResults({ getFileData, getChatDataset, streamChat, getLLMCon
 
             // Populate all tabs with data
             displayQuickInsights(data);
+            renderJevReport(Object.values(data.sheets)[0], {streamChat, getLLMConfig});
             displayInteractiveDataTable(data);
             setupChatInterface(currentAnalyzedFilename);
 
@@ -120,119 +122,28 @@ export function initResults({ getFileData, getChatDataset, streamChat, getLLMCon
 
     // Display interactive data table with search and sorting
     function displayInteractiveDataTable(data) {
-        const tableContainer = document.getElementById('result-preview');
-        const tableInfo = document.getElementById('table-info');
-
-        if (!data || !data.sheets) {
-            tableContainer.innerHTML = '<div class="alert alert-warning">No data available</div>';
-            return;
+        const sheet = Object.values(data.sheets)[0];
+        const container = document.getElementById('result-preview');
+        const info = document.getElementById('table-info');
+        const search = document.getElementById('table-search');
+        let page = 0, column = null, direction = 1;
+        function render() {
+            const term = search.value.toLowerCase();
+            let rows = sheet.data.filter(row => !term || sheet.columns.some(c => String(row[c] ?? '').toLowerCase().includes(term)));
+            if (column) rows = rows.slice().sort((a, b) => String(a[column] ?? '').localeCompare(String(b[column] ?? ''), undefined, {numeric: true}) * direction);
+            const pages = Math.max(1, Math.ceil(rows.length / 200));
+            page = Math.min(page, pages - 1);
+            info.textContent = `Showing ${Math.min(200, rows.length - page * 200)} of ${rows.length} rows (${sheet.data.length} total; matching search)`;
+            container.innerHTML = `<table class="table table-striped table-bordered" id="results-data-table"><thead><tr>${sheet.columns.map(c => `<th data-column="${escapeHtml(c)}" style="cursor:pointer">${escapeHtml(c)} ↕</th>`).join('')}</tr></thead><tbody id="table-body">${rows.slice(page * 200, (page + 1) * 200).map(row => `<tr>${sheet.columns.map(c => `<td>${escapeHtml(row[c] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table><div class="d-flex gap-2"><button id="results-prev" class="btn btn-sm btn-outline-secondary" ${page === 0 ? 'disabled' : ''}>Previous</button><span>Page ${page + 1} of ${pages}</span><button id="results-next" class="btn btn-sm btn-outline-secondary" ${page + 1 === pages ? 'disabled' : ''}>Next</button></div>`;
+            container.querySelectorAll('th').forEach(th => th.onclick = () => {
+                direction = column === th.dataset.column ? -direction : 1; column = th.dataset.column; render();
+            });
+            container.querySelector('#results-prev').onclick = () => { page--; render(); };
+            container.querySelector('#results-next').onclick = () => { page++; render(); };
         }
-
-        // Get the first sheet's data
-        const sheetName = Object.keys(data.sheets)[0];
-        const sheetData = data.sheets[sheetName];
-        const columns = sheetData.columns;
-        const rows = sheetData.data;
-
-        // Update info
-        tableInfo.textContent = `Showing ${rows.length} rows`;
-
-        // Create table with sortable headers
-        let tableHTML = `
-            <table class="table table-striped table-bordered table-hover" id="results-data-table">
-                <thead class="table-light">
-                    <tr>
-        `;
-
-        columns.forEach((col, index) => {
-            tableHTML += `<th style="cursor: pointer;" data-column="${escapeHtml(col)}">
-                ${escapeHtml(col)} <i class="bi bi-arrow-down-up"></i>
-            </th>`;
-        });
-
-        tableHTML += `
-                    </tr>
-                </thead>
-                <tbody id="table-body">
-        `;
-
-        // Add data rows
-        rows.forEach(row => {
-            tableHTML += '<tr>';
-            columns.forEach(col => {
-                const value = row[col];
-                tableHTML += `<td>${escapeHtml(value !== null && value !== undefined ? value : '')}</td>`;
-            });
-            tableHTML += '</tr>';
-        });
-
-        tableHTML += '</tbody></table>';
-        tableContainer.innerHTML = tableHTML;
-
-        // Add search functionality
-        const searchInput = document.getElementById('table-search');
-        if (searchInput) {
-            searchInput.addEventListener('input', function() {
-                const searchTerm = this.value.toLowerCase();
-                const tbody = document.getElementById('table-body');
-                const rows = tbody.getElementsByTagName('tr');
-
-                let visibleCount = 0;
-                Array.from(rows).forEach(row => {
-                    const text = row.textContent.toLowerCase();
-                    if (text.includes(searchTerm)) {
-                        row.style.display = '';
-                        visibleCount++;
-                    } else {
-                        row.style.display = 'none';
-                    }
-                });
-
-                tableInfo.textContent = `Showing ${visibleCount} of ${rows.length} rows`;
-            });
-        }
-
-        // Add sorting functionality
-        const headers = document.querySelectorAll('#results-data-table th');
-        headers.forEach((header, index) => {
-            header.addEventListener('click', function() {
-                const column = this.dataset.column;
-                sortTable(index, column);
-            });
-        });
-    }
-
-    // Sort table by column
-    function sortTable(columnIndex, columnName) {
-        const table = document.getElementById('results-data-table');
-        const tbody = table.querySelector('tbody');
-        const rows = Array.from(tbody.querySelectorAll('tr'));
-
-        // Determine sort direction
-        const currentDirection = table.dataset.sortDirection || 'asc';
-        const newDirection = currentDirection === 'asc' ? 'desc' : 'asc';
-        table.dataset.sortDirection = newDirection;
-
-        // Sort rows
-        rows.sort((a, b) => {
-            const aValue = a.cells[columnIndex].textContent.trim();
-            const bValue = b.cells[columnIndex].textContent.trim();
-
-            // Try to parse as numbers
-            const aNum = parseFloat(aValue);
-            const bNum = parseFloat(bValue);
-
-            if (!isNaN(aNum) && !isNaN(bNum)) {
-                return newDirection === 'asc' ? aNum - bNum : bNum - aNum;
-            } else {
-                return newDirection === 'asc'
-                    ? aValue.localeCompare(bValue)
-                    : bValue.localeCompare(aValue);
-            }
-        });
-
-        // Re-append sorted rows
-        rows.forEach(row => tbody.appendChild(row));
+        search.value = '';
+        search.oninput = () => { page = 0; render(); };
+        render();
     }
 
     // Setup chat interface
@@ -316,7 +227,7 @@ export function initResults({ getFileData, getChatDataset, streamChat, getLLMCon
             const contentEl = aiMessageDiv.querySelector('.markdown-content');
 
             await streamChat(
-                { columns: dataset.columns, rows: dataset.rows, question: question, ...getLLMConfig() },
+                { ...dataset, question: question, ...getLLMConfig() },
                 (full) => {
                     contentEl.innerHTML = renderMarkdown(full);
                     chatMessages.parentElement.scrollTop = chatMessages.parentElement.scrollHeight;
@@ -440,7 +351,7 @@ export function initResults({ getFileData, getChatDataset, streamChat, getLLMCon
             const contentEl = aiMessageDiv.querySelector('.markdown-content');
 
             await streamChat(
-                { columns: dataset.columns, rows: dataset.rows, question: question, ...getLLMConfig() },
+                { ...dataset, question: question, ...getLLMConfig() },
                 (full) => {
                     contentEl.innerHTML = renderMarkdown(full);
                     chatMessages.parentElement.scrollTop = chatMessages.parentElement.scrollHeight;
@@ -601,100 +512,11 @@ export function initResults({ getFileData, getChatDataset, streamChat, getLLMCon
             const dataset = getChatDataset();
             if (!dataset) throw new Error('No data loaded. Please upload a file first.');
 
-            // Use fetch for streaming response
-            const response = await fetch('/chat_with_data', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    columns: dataset.columns,
-                    rows: dataset.rows,
-                    question: question,
-                    ...getLLMConfig()
-                })
+            await streamChat({...dataset, question, ...getLLMConfig()}, full => {
+                const target = document.getElementById(contentDivId);
+                if (target) target.innerHTML = renderMarkdown(full);
+                container.scrollTop = container.scrollHeight;
             });
-
-            if (!response.ok) {
-                const errData = await readJson(response).catch(() => ({}));
-                throw new Error(errData.error || `HTTP error! status: ${response.status}`);
-            }
-
-            // Check if response is SSE stream
-            const contentType = response.headers.get('content-type');
-            if (contentType && contentType.includes('text/event-stream')) {
-                // Handle streaming response
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let accumulatedText = '';
-                let buffer = ''; // Buffer for incomplete lines
-                const streamingContent = document.getElementById(contentDivId);
-
-                if (streamingContent) {
-                    streamingContent.innerHTML = ''; // Clear loading message
-                }
-
-                while (true) {
-                    const { done, value } = await reader.read();
-
-                    if (done) break;
-
-                    // Decode chunk and add to buffer
-                    buffer += decoder.decode(value, { stream: true });
-
-                    // Split by double newline (SSE message separator)
-                    const messages = buffer.split('\n\n');
-
-                    // Keep the last potentially incomplete message in buffer
-                    buffer = messages.pop() || '';
-
-                    // Process complete messages
-                    for (const message of messages) {
-                        const lines = message.split('\n');
-                        for (const line of lines) {
-                            if (line.startsWith('data: ')) {
-                                try {
-                                    const jsonStr = line.substring(6);
-                                    const data = JSON.parse(jsonStr);
-
-                                    if (data.error) {
-                                        throw new Error(data.error);
-                                    }
-
-                                    if (data.content) {
-                                        accumulatedText += data.content;
-                                        // Update the display with accumulated markdown
-                                        if (streamingContent) {
-                                            streamingContent.innerHTML = renderMarkdown(accumulatedText);
-                                        }
-                                        // Auto-scroll
-                                        container.scrollTop = container.scrollHeight;
-                                    }
-
-                                    if (data.done) {
-                                        // Streaming complete
-                                        break;
-                                    }
-                                } catch (parseError) {
-                                    console.error('Error parsing SSE data:', parseError, 'Line:', line);
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                // Fallback to regular JSON response (for backward compatibility)
-                const result = await response.json();
-
-                if (result.error) {
-                    throw new Error(result.error);
-                }
-
-                const streamingContent = document.getElementById(contentDivId);
-                if (streamingContent) {
-                    streamingContent.innerHTML = renderMarkdown(result.answer || 'No response received');
-                }
-            }
 
         } catch (error) {
             console.error('Chat error:', error);

@@ -203,7 +203,8 @@ test('rejects files that are not Jev configurations, and configs from a newer ve
 });
 
 test('an unknown question type falls back to choice rather than reaching the API', () => {
-    const odd = { ...savedJevConfig, questions: [{ ...jevQuestion, questionType: 'freeform' }] };
+    const odd = { ...savedJevConfig, version: 1, questions: [{ ...jevQuestion, questionType: 'freeform' }] };
+    assert.throws(() => deserializeJevConfig({...odd, version: 2}), /Unknown question/);
     assert.equal(deserializeJevConfig(odd, ['Feedback']).questions[0].questionType, 'choice');
 });
 
@@ -232,4 +233,56 @@ test('row state labels each value so instructions can name the field', () => {
 
 test('the Jev filename is dated so repeated exports do not overwrite each other', () => {
     assert.equal(jevConfigFilename(new Date('2026-09-20T10:00:00Z')), 'aidstack-jev-config-2026-09-20.json');
+});
+
+/* Generic configuration and complete-dataset reporting. */
+import {buildJevReport, narrativePacket} from '../static/js/jev-report.js';
+import {validateReportConfig} from '../static/js/jev-config.js';
+
+test('v2 preserves structured questions, branches, lookups and reporting settings', () => {
+    const config = serializeJevConfig({sourceColumns: ['Text'], model: 'pinned',
+        questions: [{...jevQuestion, instructions: {question: 'Which?'}, options: [{label: 'A', description: {examples: ['a']}}, 'B'], review: {minConfidence: .8}},
+            {outputColumnName: 'Detail', questionType: 'choice', instructions: 'Detail?', dependsOn: ['Feedback type'], branches: [{when: {'Feedback type': 'A'}, options: ['One', 'Two']}]}],
+        derived: [{outputColumnName: 'Mapped', inputs: ['Detail'], table: [{when: {Detail: 'One'}, value: 'Value'}]}],
+        report: {groupBy: ['Region'], crossTabs: [['Region', 'Detail']], maxExamples: 3}, execution: {batchSize: 2}});
+    const decoded = deserializeJevConfig(config, ['Text', 'Region']);
+    assert.deepEqual(serializeJevConfig(decoded).questions, config.questions);
+    assert.deepEqual(decoded.report, config.report);
+    assert.deepEqual(decoded.derived, config.derived);
+    assert.equal(decoded.model, 'pinned');
+    assert.throws(() => validateReportConfig(decoded, ['Text']), /Region/);
+});
+
+function largeReportFixture() {
+    const config = {sourceColumns: ['Text'], questions: [{outputColumnName: 'Class', questionType: 'choice'}], report: {groupBy: ['Region'], crossTabs: [['Region', 'Class']], maxExamples: 2}};
+    const data = Array.from({length: 6001}, (_, i) => ({Text: `Record ${i}`, Region: i < 5000 ? 'North' : 'South', Class: i < 5000 ? 'A' : 'B'}));
+    const audit = data.map((row, i) => ({rowIndex: i, decisions: {Class: {status: 'ok', value: row.Class}}, calls: []}));
+    audit[0].decisions.Class = {status: 'error', value: null};
+    audit[1].decisions.Class = {status: 'review', value: 'A'};
+    return {sheetName: 'Different dataset', columns: ['Text', 'Region', 'Class'], data, jev: {config, totalRows: 6010, selectedRows: 6010, audit}};
+}
+
+test('report includes rows beyond 5000 and reconciles failures, review and partial coverage', () => {
+    const result = largeReportFixture();
+    const report = buildJevReport(result);
+    assert.equal(report.coverage.processed, 6001);
+    assert.equal(report.coverage.unprocessed, 9);
+    assert.equal(report.coverage.failed, 1);
+    assert.equal(report.coverage.review, 1);
+    assert.equal(report.distributions[0].denominator, 6000);
+    assert.equal(report.distributions[0].counts.find(c => c.value === 'B').count, 1001);
+    assert.equal(report.crossTabs[0].excluded, 1);
+    assert.equal(report.groups.find(g => g.fields[1] === 'South').count, 1001);
+    assert.equal(report.reviewRows[0].rowId, 1);
+    const packet = narrativePacket(report, {report: {maxCategories: 1}});
+    assert.equal(packet.distributions[0].categoriesOmitted, 1);
+    assert.equal(packet.coverage.processed, 6001);
+});
+
+test('post-analysis splitting preserves reporting against original records', () => {
+    const result = largeReportFixture();
+    result.data[0].Text = 'one||two';
+    const split = explodeColumn(result, 'Text', ['||']);
+    assert.equal(split.data.length, 6002);
+    assert.equal(buildJevReport(split).coverage.processed, 6001);
 });

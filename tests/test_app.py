@@ -42,8 +42,8 @@ class AppTests(unittest.TestCase):
 
     def test_jev_batch_asks_every_question_in_one_call_per_row(self):
         # One request per row, carrying all questions -- not one per cell.
-        answers = {'q0': {'choice': 'plainte', 'confidence': 0.91},
-                   'q1': {'score': 1.6, 'confidence': 0.55}}
+        answers = {'model': 'jev-test', 'answers': {'q0': {'type': 'choice', 'choice': 'plainte', 'confidence': 0.91, 'probabilities': {'plainte': .95, 'refus': .05}},
+                   'q1': {'type': 'score', 'score': 1.6, 'confidence': 0.55, 'probabilities': {'0': 0, '1': .4, '2': .6}}}}
         with patch.object(jev, 'ask', return_value=answers) as ask:
             response = self.client.post('/analyze_batch_jev', json={
                 'jevApiKey': 'secret-key', 'includeConfidence': True,
@@ -70,7 +70,7 @@ class AppTests(unittest.TestCase):
 
     def test_jev_row_failure_is_isolated_and_key_never_leaks(self):
         with self.assertLogs(level='ERROR') as logs, patch.object(
-                jev, 'ask', side_effect=[{'q0': {'choice': 'a', 'confidence': 0.9}},
+                jev, 'ask', side_effect=[{'model': 'jev-test', 'answers': {'q0': {'type': 'choice', 'choice': 'a', 'confidence': 0.9, 'probabilities': {'a': .95, 'b': .05}}}},
                                          RuntimeError('secret-key leaked')]):
             response = self.client.post('/analyze_batch_jev', json={
                 'jevApiKey': 'secret-key',
@@ -108,18 +108,16 @@ class AppTests(unittest.TestCase):
         self.assertEqual(sorted(decoder['labels'].values()),
                          sorted(['Appréciation', 'Appreciation', 'Refus']))
 
-    def test_jev_score_rounds_to_nearest_level_and_clamps(self):
+    def test_jev_score_rounds_and_rejects_out_of_range(self):
         _, decoder = jev_provider.build_question({
             'type': 'score', 'instructions': 'i', 'options': ['Low', 'Mid', 'High']})
-        self.assertEqual(jev_provider.decode_answer({'score': 0.4}, decoder)[0], 'Low')
-        self.assertEqual(jev_provider.decode_answer({'score': 1.4}, decoder)[0], 'Mid')
-        # Midpoints round *up* consistently: on an ordered severity scale
-        # built-in round() would send 0.5 down but 1.5 up (banker's rounding).
-        self.assertEqual(jev_provider.decode_answer({'score': 0.5}, decoder)[0], 'Mid')
-        self.assertEqual(jev_provider.decode_answer({'score': 1.5}, decoder)[0], 'High')
-        # An out-of-range score is clamped rather than raising an IndexError.
-        self.assertEqual(jev_provider.decode_answer({'score': 9.0}, decoder)[0], 'High')
-        self.assertEqual(jev_provider.decode_answer({'score': -2.0}, decoder)[0], 'Low')
+        def answer(score):
+            return {'type': 'score', 'score': score, 'confidence': .8, 'probabilities': {'0': .1, '1': .8, '2': .1}}
+        for raw, label in [(0.4, 'Low'), (1.4, 'Mid'), (.5, 'Mid'), (1.5, 'High')]:
+            self.assertEqual(jev_provider.decode_answer(answer(raw), decoder)[0], label)
+        for raw in [-2, 9, float('nan'), float('inf')]:
+            with self.assertRaises(jev_provider.JevError):
+                jev_provider.decode_answer(answer(raw), decoder)
 
     def test_jev_config_errors_are_shown_but_api_errors_stay_generic(self):
         # The user's own setup mistake must be readable...

@@ -1,0 +1,181 @@
+{
+  "format": "aidstack-insights-jev-config",
+  "version": 2,
+  "sourceColumns": [
+    "Feedback"
+  ],
+  "includeConfidence": true,
+  "questions": [
+    {
+      "outputColumnName": "Category",
+      "questionType": "choice",
+      "instructions": "What is the main purpose of the feedback?",
+      "options": [
+        {
+          "label": "Request",
+          "description": {
+            "includes": [
+              "Requests for information or assistance"
+            ],
+            "excludes": [
+              "Praise without a request"
+            ]
+          }
+        },
+        "Appreciation",
+        "Other"
+      ],
+      "review": {
+        "minConfidence": 0.7
+      }
+    },
+    {
+      "outputColumnName": "Request detail",
+      "questionType": "choice",
+      "instructions": "Classify the request in record. decisions.Category contains the accepted parent decision.",
+      "dependsOn": [
+        "Category"
+      ],
+      "branches": [
+        {
+          "when": {
+            "Category": "Request"
+          },
+          "options": [
+            "Information",
+            "Assistance",
+            "Other"
+          ]
+        },
+        {
+          "when": {
+            "Category": "Appreciation"
+          },
+          "options": [
+            "Service",
+            "Staff",
+            "Other"
+          ]
+        },
+        {
+          "when": {
+            "Category": "Other"
+          },
+          "options": [
+            "Concern",
+            "Suggestion",
+            "Other"
+          ]
+        }
+      ],
+      "review": {
+        "minConfidence": 0.6
+      }
+    },
+    {
+      "outputColumnName": "Urgency",
+      "questionType": "score",
+      "instructions": "How urgently does this feedback require a response?",
+      "options": [
+        "Routine: no time pressure",
+        "Soon: a response is needed but no immediate risk is described",
+        "Immediate: an explicit immediate risk or deadline is described"
+      ],
+      "review": {
+        "minConfidence": 0.6
+      }
+    },
+    {
+      "outputColumnName": "Impact",
+      "questionType": "score",
+      "instructions": "How much disruption is described?",
+      "options": [
+        "None or negligible",
+        "Some disruption",
+        "Severe disruption"
+      ],
+      "review": {
+        "minConfidence": 0.6
+      }
+    },
+    {
+      "outputColumnName": "Access barrier",
+      "questionType": "noul",
+      "instructions": "Does the feedback describe a barrier to accessing a service?",
+      "criteria": {
+        "true": "An explicit obstacle such as cost, distance, opening hours or exclusion",
+        "false": "No access obstacle is described"
+      },
+      "options": [
+        "Present",
+        "Absent"
+      ],
+      "review": {
+        "noMax": 0.15,
+        "yesMin": 0.85
+      }
+    }
+  ],
+  "derived": [
+    {
+      "outputColumnName": "Suggested queue",
+      "type": "lookup",
+      "inputs": [
+        "Category"
+      ],
+      "table": [
+        {
+          "when": {
+            "Category": "Request"
+          },
+          "value": "Response team"
+        },
+        {
+          "when": {
+            "Category": "Appreciation"
+          },
+          "value": "Feedback team"
+        },
+        {
+          "when": {
+            "Category": "Other"
+          },
+          "value": "Review team"
+        }
+      ]
+    },
+    {
+      "outputColumnName": "Priority index",
+      "type": "composite",
+      "weights": {
+        "Urgency": 2,
+        "Impact": 1
+      }
+    }
+  ],
+  "report": {
+    "title": "Feedback dataset summary",
+    "instructions": "Summarize the principal categories, access barriers, urgency and uncertainty. Cite supporting numbers and example record IDs. Separate findings from suggested follow-up.",
+    "groupBy": [],
+    "crossTabs": [
+      [
+        "Category",
+        "Access barrier"
+      ]
+    ],
+    "evidenceColumns": [
+      "Feedback"
+    ],
+    "maxExamples": 12,
+    "maxGroups": 100,
+    "maxCategories": 30
+  },
+  "execution": {
+    "batchSize": 4,
+    "workers": 4,
+    "requestsPerMinute": 600,
+    "tokensPerSecond": 100000,
+    "maxAttempts": 3,
+    "structuredState": true
+  }
+}

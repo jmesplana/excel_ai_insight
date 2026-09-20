@@ -157,3 +157,62 @@ test('a Jev configuration survives export and reimport onto another file', async
 
   if (errors.length) throw Error(errors.join('; '));
 });
+
+test('configurable report, failed-decision retry and checkpoint restore', async ({page}) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  let requests = 0;
+  await page.route('**/analyze_batch_jev', async route => {
+    const body = route.request().postDataJSON(); requests++;
+    const results = body.rows.map(row => {
+      const failure = row.rowIndex === 1 && !row.previous;
+      const value = row.rowIndex === 0 ? 'A' : 'B';
+      return {rowIndex: row.rowIndex, values: {Category: failure ? 'Error: retry' : value},
+        decisions: {Category: failure ? {status: 'error', value: null, reason: 'Temporary error'} :
+          {status: 'ok', value, confidence: .99, labels: {a:'A',b:'B'}, raw: {type:'choice',choice:value.toLowerCase(),confidence:.99,probabilities:{a:value==='A'?1:0,b:value==='B'?1:0}}, model:'jev-pinned'}},
+        calls:[{model:'jev-pinned', usage:{input_tokens:10}}]};
+    });
+    await route.fulfill({json:{results,errors:requests===1?1:0}});
+  });
+  await openJevConfig(page);
+  const config = {format:'aidstack-insights-jev-config', version:2, sourceColumns:['Feedback'], questions:[
+    {outputColumnName:'Category', questionType:'choice', instructions:{question:'Which category?'},
+      options:[{label:'A', description:{examples:['first']}},'B'], review:{minConfidence:.8}}],
+    report:{title:'Custom dataset report',groupBy:['type_of_feedback'],crossTabs:[['type_of_feedback','Category']],maxExamples:2},
+    execution:{batchSize:4}};
+  await page.locator('#jev-import-config-input').setInputFiles({name:'config.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(config))});
+  const exported = page.waitForEvent('download');
+  await page.locator('#jev-export-config-btn').click();
+  const doc = JSON.parse(fs.readFileSync(await (await exported).path(),'utf8'));
+  expect(doc.report).toEqual(config.report);
+  expect(doc.questions).toEqual(config.questions);
+  await page.locator('#jev-run-btn').click();
+  await expect(page.locator('#jev-dataset-report')).toContainText('Custom dataset report');
+  await expect(page.locator('#jev-coverage')).toContainText('1 failed');
+  await page.locator('#jev-retry-results').click();
+  await expect(page.locator('#jev-coverage')).toContainText('0 failed');
+  expect(requests).toBe(2);
+  // The narrative receives full aggregates and explicit coverage, not rows.
+  await page.route('**/jev_report', async route => {
+    const body = route.request().postDataJSON();
+    expect(body.report.coverage.processed).toBe(3);
+    expect(body.report.distributions[0].counts.find(c=>c.value==='B').count).toBe(2);
+    expect(body.rows).toBeUndefined();
+    await route.fulfill({contentType:'text/event-stream',body:'data: {"content":"Three records analyzed."}\n\ndata: {"done":true}\n\n'});
+  });
+  await page.locator('#jev-narrative-generate').click();
+  await expect(page.locator('#jev-narrative')).toContainText('Three records analyzed.');
+  await page.reload();
+  await page.locator('#start-analyzing-btn').click();
+  await page.locator('#mode-card-jev').click();
+  await page.locator('#jev-restore-start-btn').click();
+  await expect(page.locator('#jev-coverage')).toContainText('3 of 3');
+  await expect(page.locator('#jev-coverage')).toContainText('0 failed');
+  expect(requests).toBe(2);
+  const downloaded = page.waitForEvent('download');
+  await page.locator('#download-link').click();
+  const file = await (await downloaded).path();
+  const buffer = fs.readFileSync(file);
+  const sheets = await page.evaluate(bytes => XLSX.read(new Uint8Array(bytes),{type:'array'}).SheetNames, Array.from(buffer));
+  expect(sheets).toContain('Summary'); expect(sheets).toContain('Decision audit'); expect(sheets).toContain('Run metadata');
+  expect(errors).toEqual([]);
+});

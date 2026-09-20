@@ -531,3 +531,9 @@ review filter changes the on-screen view; exports include every result row.
 DOMPurify is vendored at `static/vendor/purify.es.mjs` (version and license in its
 header). All AI Markdown must go through `renderMarkdown`; spreadsheet text and
 attribute values must use `escapeHtml` or DOM `textContent`.
+
+## Configurable Jev workflows and dataset reports
+
+Jev results now include a whole-dataset statistical report, an optional OpenAI/Azure written report, decision probabilities, review queues and audited Excel exports. JSON configuration controls the codebook, dependency branches, lookups, composite scores, thresholds and report breakdowns. Browser checkpoints support restoring runs and retrying failed decisions.
+
+See [the configuration guide](JEV_CONFIGURATION.md) and [generic import example](examples/configurable-workflow.jev-config.json). Existing v1 configurations remain supported. For the included Ebola taxonomy, the optional [hierarchical example](examples/ebola-framework2-hierarchical.jev-config.json) adds leaf codes and a validated sous-dimension lookup.

@@ -5,9 +5,12 @@ import { escapeHtml, renderMarkdown } from './rendering.js';
 import { parseWorkbook, exportResults, explodeColumn } from './spreadsheet.js';
 import { BatchRun } from './batch-runner.js';
 import { serializeConfig, deserializeConfig, configFilename } from './analysis-config.js';
-import { getJevConfig, hasJevCredentials, JEV_API_KEY_STORAGE_KEY, JEV_MODEL_STORAGE_KEY } from './provider-settings.js';
+import { getJevConfig, JEV_API_KEY_STORAGE_KEY, JEV_MODEL_STORAGE_KEY } from './provider-settings.js';
 import { serializeJevConfig, deserializeJevConfig, jevConfigFilename, parseOptions,
-    formatOptions, validateQuestion, buildJevState, DEFAULT_QUESTION_TYPE } from './jev-config.js';
+    formatOptions, validateQuestion, validateReportConfig, buildJevState, DEFAULT_QUESTION_TYPE } from './jev-config.js';
+
+import {buildJevReport, narrativePacket} from './jev-report.js';
+import {checkpoint} from './jev-checkpoint.js';
 
 /* Global variables */
 let availableColumns = [];
@@ -42,9 +45,6 @@ function icdLangOptionsHtml(defaultCode) {
 // Holds the analyzed dataset in memory: { sheetName, columns: [...], data: [...] }
 let analyzedResult = null;
 const ANALYZE_BATCH_SIZE = 20;     // rows per /analyze_batch request
-// Jev spends one request per row rather than per cell, and the API allows
-// 1,200 requests/minute, so a batch can safely be larger than the LLM path's.
-const JEV_BATCH_SIZE = 25;         // rows per /analyze_batch_jev request
 const MAX_CHAT_ROWS = 5000;        // cap rows sent to /chat_with_data (Vercel body limit)
 
 // Build the input text for one (row, config) cell, mirroring the server's
@@ -62,6 +62,7 @@ function buildAnalysisInput(row, config) {
 // Return { columns, rows } for the chat endpoint from the analyzed data if
 // present, otherwise from the currently selected sheet of the uploaded file.
 function getChatDataset() {
+    if (analyzedResult?.jev) return {report: narrativePacket(buildJevReport(analyzedResult), analyzedResult.jev.config)};
     if (analyzedResult) {
         return { columns: analyzedResult.columns, rows: analyzedResult.data.slice(0, MAX_CHAT_ROWS) };
     }
@@ -78,7 +79,7 @@ function getChatDataset() {
 // POST a chat question and consume the SSE stream. Calls onToken(fullText)
 // as content arrives; resolves with the full accumulated answer.
 async function streamChat(payload, onToken) {
-    const response = await fetch('/chat_with_data', {
+    const response = await fetch(payload.report ? '/jev_report' : '/chat_with_data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -89,7 +90,7 @@ async function streamChat(payload, onToken) {
     }
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    let buffer = '', full = '';
+    let buffer = '', full = '', completed = false;
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -102,9 +103,11 @@ async function streamChat(payload, onToken) {
             let data;
             try { data = JSON.parse(trimmed.slice(5).trim()); } catch (e) { continue; }
             if (data.error) throw new Error(data.error);
+            if (data.done) completed = true;
             if (data.content) { full += data.content; if (onToken) onToken(full); }
         }
     }
+    if (!completed) throw new Error('The response stream ended before completion. Please retry.');
     return full;
 }
 
@@ -1813,7 +1816,8 @@ function addJevQuestion(preset = null) {
     // is relabelled rather than shown as three separate controls.
     function syncType() {
         const type = typeSelect.value;
-        const count = parseOptions(optionsField.value).length;
+        let count;
+        try { count = parseOptions(optionsField.value).length; } catch { count = 'Invalid JSON'; }
         if (type === 'score') {
             optionsLabel.innerHTML = 'Levels <span class="text-muted">(one per line, lowest first)</span>';
             optionsHelp.textContent = `Between 2 and 10 ordered levels, lowest first. Describe each one — "Low: a general comment" works better than "Low". ${count} entered.`;
@@ -1861,6 +1865,9 @@ function addJevQuestion(preset = null) {
         showAlert('jev-message', `Filled ${categories.length} options from the detected categories.`, 'success');
     });
 
+    const advanced = document.createElement('details');
+    advanced.innerHTML = '<summary>Question rules (JSON)</summary><textarea class="form-control jev-question-advanced" rows="4" aria-label="Question rules JSON">{}</textarea><div class="form-text">Optional review thresholds, dependsOn, branches, or Noul criteria. Import a configuration to populate these rules.</div>';
+    card.appendChild(advanced);
     if (preset) applyJevPreset(card, preset);
     syncType();
     container.appendChild(card);
@@ -1872,7 +1879,9 @@ function addJevQuestion(preset = null) {
 function applyJevPreset(card, preset) {
     card.querySelector('[name="jev-output-column-name"]').value = preset.outputColumnName || '';
     card.querySelector('[name="jev-question-type"]').value = preset.questionType || DEFAULT_QUESTION_TYPE;
-    card.querySelector('[name="jev-instructions"]').value = preset.instructions || '';
+    card.querySelector('[name="jev-instructions"]').value = typeof preset.instructions === 'object' ? JSON.stringify(preset.instructions, null, 2) : preset.instructions || '';
+    const extras = Object.fromEntries(['review', 'dependsOn', 'branches', 'criteria'].filter(k => preset[k] !== undefined).map(k => [k, preset[k]]));
+    card.querySelector('.jev-question-advanced').value = JSON.stringify(extras, null, 2);
     card.querySelector('.jev-options').value = formatOptions(preset.options);
     card.querySelector('.jev-options').dispatchEvent(new Event('input'));
 }
@@ -1880,20 +1889,34 @@ function applyJevPreset(card, preset) {
 /* Read every Jev question card off the page, in display order. */
 function readJevQuestions() {
     return Array.from(document.querySelectorAll('.jev-question-container')).map(card => ({
+        ...JSON.parse(card.querySelector('.jev-question-advanced').value || '{}'),
         outputColumnName: card.querySelector('[name="jev-output-column-name"]').value.trim(),
         questionType: card.querySelector('[name="jev-question-type"]').value,
-        instructions: card.querySelector('[name="jev-instructions"]').value,
+        instructions: parseJevInstructions(card.querySelector('[name="jev-instructions"]').value),
         options: parseOptions(card.querySelector('.jev-options').value)
     }));
 }
 
+function parseJevInstructions(text) {
+    return /^[\[{]/.test(text.trim()) ? JSON.parse(text) : text;
+}
+function jevAdvanced() {
+    return JSON.parse(document.getElementById('jev-workflow-json').value || '{}');
+}
+function currentJevDocument() {
+    return serializeJevConfig({...jevAdvanced(), sourceColumns: readJevSourceColumns(),
+        includeConfidence: document.getElementById('jev-include-confidence').checked,
+        sheetName: document.getElementById('sheet-select').value, questions: readJevQuestions()});
+}
 function exportJevConfig() {
+    try {
     const questions = readJevQuestions();
-    if (!questions.some(q => q.outputColumnName || q.instructions.trim() || q.options.length)) {
+    if (!questions.some(q => q.outputColumnName || (typeof q.instructions === 'string' ? q.instructions.trim() : q.instructions) || q.options.length)) {
         showAlert('jev-message', 'Nothing to export yet — configure at least one result column first.', 'warning');
         return;
     }
     const doc = serializeJevConfig({
+        ...jevAdvanced(),
         sourceColumns: readJevSourceColumns(),
         includeConfidence: document.getElementById('jev-include-confidence')?.checked,
         sheetName: document.getElementById('sheet-select').value,
@@ -1906,6 +1929,7 @@ function exportJevConfig() {
     link.click();
     URL.revokeObjectURL(url);
     showAlert('jev-message', `Configuration exported (${doc.questions.length} result column(s)).`, 'success');
+    } catch (error) { showAlert('jev-message', escapeHtml(error.message), 'danger'); }
 }
 
 async function importJevConfig(event) {
@@ -1924,6 +1948,11 @@ async function importJevConfig(event) {
         return;
     }
 
+    applyImportedJevConfig(imported);
+}
+function applyImportedJevConfig(imported) {
+    document.getElementById('jev-workflow-json').value = JSON.stringify(Object.fromEntries(
+        ['derived', 'report', 'execution', 'model'].filter(k => imported[k] !== undefined).map(k => [k, imported[k]])), null, 2);
     const selected = new Set(imported.sourceColumns);
     document.querySelectorAll('.jev-source-column').forEach(input => {
         input.checked = selected.has(input.value);
@@ -1945,144 +1974,140 @@ let activeJevRun = null;
 
 async function runJevClassification(isTestRun = false) {
     if (activeJevRun?.running) return;
-
-    if (!hasJevCredentials()) {
-        showAlert('jev-message',
-            'No Jev API key configured locally — attempting to use the server configuration. Open API Settings if this fails.',
-            'info');
-    }
-
-    const sourceColumns = readJevSourceColumns();
-    if (!sourceColumns.length) {
-        showAlert('jev-message', 'Select at least one column to send to Jev.', 'danger');
-        return;
-    }
-
-    const questions = readJevQuestions();
-    if (!questions.length) {
-        showAlert('jev-message', 'Configure at least one result column.', 'danger');
-        return;
-    }
-    // Validate here rather than at the API so a long option list is corrected
-    // before any request is spent.
-    for (const question of questions) {
-        const problem = validateQuestion(question);
-        if (problem) { showAlert('jev-message', problem, 'danger'); return; }
-    }
-    const names = questions.map(q => q.outputColumnName);
-    if (new Set(names).size !== names.length) {
-        showAlert('jev-message', 'Result column names must be unique.', 'danger');
-        return;
-    }
-
-    const selectedSheet = document.getElementById('sheet-select').value;
-    const sheet = fileData.sheets[selectedSheet];
-    if (!sheet || !sheet.data) {
-        showAlert('jev-message', 'No data available for the selected sheet', 'danger');
-        return;
-    }
-    const allRows = sheet.data;
-    if (!allRows.length) { showAlert('jev-message', 'This sheet has no data rows.', 'warning'); return; }
-    const rowCount = isTestRun ? testRowCount('jev-test-rows', 5, allRows.length) : allRows.length;
-
-    // Resolve output names against the sheet's existing columns, as the LLM
-    // path does, so a question never silently overwrites a source column.
-    const existing = new Set(sheet.columns);
-    questions.forEach(question => {
-        let name = question.outputColumnName;
-        const base = name;
-        let counter = 1;
-        while (existing.has(name)) { name = `${base}_${counter++}`; }
-        existing.add(name);
-        question.resolvedName = name;
-    });
-
-    const includeConfidence = !!document.getElementById('jev-include-confidence')?.checked;
-    const serverConfigs = questions.map(q => ({
-        outputColumnName: q.resolvedName,
-        questionType: q.questionType,
-        instructions: q.instructions,
-        options: q.options
-    }));
-
-    // Confidence columns are appended next to the value they describe.
-    const outColumns = sheet.columns.slice();
-    const outputColumns = [];
-    questions.forEach(q => {
-        outColumns.push(q.resolvedName);
-        outputColumns.push(q.resolvedName);
-        if (includeConfidence) {
-            outColumns.push(`${q.resolvedName}__confidence`);
-            outputColumns.push(`${q.resolvedName}__confidence`);
-            if (q.questionType === 'score' || q.questionType === 'noul') {
-                outColumns.push(`${q.resolvedName}__score`);
-                outputColumns.push(`${q.resolvedName}__score`);
+    try {
+        const config = currentJevDocument();
+        // Also validates field names/version rules for documents created in the UI.
+        deserializeJevConfig(config, availableColumns);
+        if (!config.sourceColumns.length) throw new Error('Select at least one source column.');
+        const sheetName = document.getElementById('sheet-select').value;
+        const sheet = fileData.sheets[sheetName];
+        if (!sheet?.data.length) throw new Error('This sheet has no data rows.');
+        validateReportConfig(config, sheet.columns);
+        const names = new Set(sheet.columns);
+        const outputColumns = [];
+        for (const question of [...config.questions, ...(config.derived || [])]) {
+            const columns = [question.outputColumnName];
+            if (config.includeConfidence && question.questionType) {
+                columns.push(question.outputColumnName + '__confidence');
+                if (['score', 'noul'].includes(question.questionType)) columns.push(question.outputColumnName + '__score');
+            }
+            for (const name of columns) {
+                if (names.has(name)) throw new Error(`Output column "${name}" collides with another column. Rename it in the configuration.`);
+                names.add(name); outputColumns.push(name);
             }
         }
-    });
-
-    const jevConfig = getJevConfig();
-    activeJevRun = new BatchRun({
-        rows: allRows.slice(0, rowCount), batchSize: JEV_BATCH_SIZE,
-        processBatch: async (batch, start) => {
-            const rows = batch.map((row, offset) => ({
-                rowIndex: start + offset,
-                state: buildJevState(row, sourceColumns)
-            }));
-            const response = await fetch('/analyze_batch_jev', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...jevConfig, includeConfidence,
-                    isFirstBatch: start === 0, configs: serverConfigs, rows })
-            });
-            const result = await readJson(response);
-            if (!response.ok || result.error) throw new Error(result.error || 'Classification failed.');
-            const values = new Map((result.results || []).map(r => [r.rowIndex, r.values]));
-            if (rows.some(row => !values.has(row.rowIndex))) throw new Error('Incomplete batch response. Resume to retry.');
-            return { rows: batch.map((row, i) => ({ ...row, ...values.get(start + i) })), errors: result.errors };
-        },
-        onProgress: run => {
-            analyzedResult = { sheetName: selectedSheet, columns: outColumns,
-                data: run.results, partial: !run.complete, outputColumns };
-            updateProgress(Math.round(run.cursor / rowCount * 100), run.cursor, rowCount,
-                `Classified ${run.cursor} of ${rowCount} rows`);
-        }
-    });
-    activeJevRun.isTestRun = isTestRun;
-    analyzedResult = null;
-    // A new run invalidates any split staged against the previous results.
-    cleanDataResults?.reset();
-    await continueJevRun();
+        const validation = await fetch('/validate_jev_config', {method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({configs: config.questions, derived: config.derived})});
+        const check = await readJson(validation);
+        if (!validation.ok) throw new Error(check.error || 'Invalid workflow configuration.');
+        const count = isTestRun ? testRowCount('jev-test-rows', 5, sheet.data.length) : sheet.data.length;
+        activeJevRun = {version: 1, runId: crypto.randomUUID(), filename: fileData.filename, sheetName,
+            sourceColumns: sheet.columns, columns: [...sheet.columns, ...outputColumns], outputColumns,
+            rows: sheet.data.slice(0, count), totalRows: sheet.data.length,
+            ...(isTestRun ? {sourceRows: sheet.data} : {}),
+            config, isTestRun, cursor: 0, results: [], audit: [], running: false, stopped: false};
+        await checkpoint('start', activeJevRun);
+        analyzedResult = null;
+        cleanDataResults?.reset();
+        await continueJevRun();
+    } catch (error) { showAlert('jev-message', escapeHtml(error.message), 'danger'); }
 }
 
-async function continueJevRun() {
+function syncJevResult() {
+    const run = activeJevRun;
+    analyzedResult = {sheetName: run.sheetName, columns: run.columns, outputColumns: run.outputColumns,
+        data: run.results, partial: run.cursor < run.totalRows,
+        jev: {runId: run.runId, config: run.config, totalRows: run.totalRows, selectedRows: run.rows.length, audit: run.audit}};
+}
+
+async function continueJevRun(retryFailed = false) {
+    // Click events are not the retry flag.
+    retryFailed = retryFailed === true;
     const run = activeJevRun;
     if (!run || run.running) return;
+    run.running = true; run.stopped = false;
+    const pending = retryFailed ? run.audit.flatMap((a, i) => Object.values(a.decisions || {}).some(d => ['error', 'blocked'].includes(d.status)) ? [i] : [])
+        : Array.from({length: run.rows.length - run.cursor}, (_, i) => run.cursor + i);
+    showSpinner(true, retryFailed ? 'Retrying unfinished decisions…' : 'Classifying rows…', true);
+    const stop = document.getElementById('stop-analysis-btn');
+    stop.classList.remove('hidden'); stop.disabled = false; stop.textContent = 'Stop after current batch';
+    stop.onclick = () => { run.stopped = true; stop.disabled = true; };
     document.querySelectorAll('.test-run-preview-panel').forEach(panel => panel.remove());
-    showSpinner(true, 'Classifying rows…', true);
-    const stopButton = document.getElementById('stop-analysis-btn');
-    stopButton.classList.remove('hidden');
-    stopButton.disabled = false;
-    stopButton.textContent = 'Stop after current batch';
-    stopButton.onclick = () => { run.stop(); stopButton.disabled = true; stopButton.textContent = 'Stopping after current batch…'; };
-    document.getElementById('jev-recovery').classList.add('hidden');
     let failure = null;
-    try { await run.run(); } catch (error) { failure = error; }
-    finally { showSpinner(false); stopButton.classList.add('hidden'); }
-    const message = `${run.complete ? 'Classification complete' : 'Classification paused'}: ${run.cursor} of ${run.rows.length} rows. ${run.errors} row(s) had errors.`;
-    showAlert('jev-message', failure ? `${message} ${failure.message}` : message,
-        failure ? 'danger' : run.complete ? 'success' : 'info');
-    const recovery = document.getElementById('jev-recovery');
-    recovery.classList.toggle('hidden', run.complete);
+    try {
+        if (run.needsCheckpointStart) { await checkpoint('start', run); run.needsCheckpointStart = false; }
+        const batchSize = run.config.execution?.batchSize ?? 4;
+        for (let offset = 0; offset < pending.length && !run.stopped; offset += batchSize) {
+            const indices = pending.slice(offset, offset + batchSize);
+            const rows = indices.map(i => ({rowIndex: i, state: buildJevState(run.rows[i], run.config.sourceColumns, run.config.execution?.structuredState),
+                previous: retryFailed ? run.audit[i]?.decisions : undefined}));
+            const response = await fetch('/analyze_batch_jev', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({...getJevConfig(), ...(run.config.model ? {jevModel: run.config.model} : {}),
+                    configs: run.config.questions, derived: run.config.derived, execution: run.config.execution,
+                    includeConfidence: run.config.includeConfidence, rows})});
+            const result = await readJson(response);
+            if (!response.ok) throw new Error(result.error || 'Classification failed.');
+            if (!run.config.model) {
+                const model = result.results?.flatMap(r => r.calls || []).find(c => c.model)?.model;
+                if (model) run.config.model = model;
+            }
+            const answers = new Map((result.results || []).map(r => [r.rowIndex, r]));
+            if (answers.size !== indices.length || indices.some(i => !answers.has(i))) throw new Error('Incomplete batch response. Resume to retry this batch.');
+            for (const i of indices) {
+                const answer = answers.get(i);
+                run.results[i] = {...run.rows[i], ...answer.values};
+                run.audit[i] = {rowIndex: i, decisions: answer.decisions || {}, calls: [...(run.audit[i]?.calls || []), ...(answer.calls || [])]};
+            }
+            if (!retryFailed) run.cursor += indices.length;
+            syncJevResult();
+            updateProgress(Math.round(run.cursor / run.rows.length * 100), run.cursor, run.rows.length, `Classified ${run.cursor} of ${run.rows.length} rows`);
+            try { await checkpoint('put', run, indices); }
+            catch (error) { throw new Error('Results are in memory, but local checkpoint storage failed. Download completed rows before leaving this page.'); }
+        }
+    } catch (error) { failure = error; }
+    finally { run.running = false; showSpinner(false); stop.classList.add('hidden'); }
+    const errors = run.audit.filter(a => Object.values(a.decisions).some(d => d.status === 'error')).length;
+    const complete = run.cursor === run.rows.length;
+    const message = `${complete ? 'Classification complete' : 'Classification paused'}: ${run.cursor} of ${run.rows.length} rows. ${errors} row(s) had errors.`;
+    showAlert('jev-message', escapeHtml(failure ? `${message} ${failure.message}` : message), failure ? 'danger' : complete ? 'success' : 'info');
+    document.getElementById('jev-recovery').classList.toggle('hidden', complete);
     document.getElementById('jev-partial-download-btn').disabled = !run.cursor;
-    if (!analyzedResult) return;
-    document.getElementById('result-message').textContent = message;
-    const downloadLink = document.getElementById('download-link');
-    downloadLink.href = '#';
-    downloadLink.onclick = event => { event.preventDefault(); downloadAnalyzedFile(); };
-    if (run.isTestRun && run.complete) previewAnalyzedData(run.results, true);
-    else if (run.complete) {
-        resultsUI.load({ sheets: { [analyzedResult.sheetName]: analyzedResult } });
+    if (!run.cursor) return;
+    syncJevResult();
+    document.getElementById('result-message').textContent = failure ? `${message} ${failure.message}` : message;
+    document.getElementById('download-link').onclick = event => { event.preventDefault(); downloadAnalyzedFile(); };
+    if (run.isTestRun && complete && !retryFailed) previewAnalyzedData(run.results, true);
+    else {
+        resultsUI.load({sheets: {[run.sheetName]: analyzedResult}});
         goToStep(5);
+    }
+}
+
+async function restoreJevRun() {
+    if (activeJevRun?.running) return;
+    try {
+        const saved = await checkpoint('get');
+        if (!saved) throw new Error('No saved Jev run in this browser.');
+        activeJevRun = {...saved, running: false, stopped: false};
+        appMode = 'jev';
+        document.getElementById('mode-jev').checked = true;
+        fileData = {filename: saved.filename, sheets: {[saved.sheetName]: {columns: saved.sourceColumns, data: saved.sourceRows || saved.rows}}};
+        availableColumns = saved.sourceColumns;
+        const select = document.getElementById('sheet-select');
+        select.innerHTML = `<option>${escapeHtml(saved.sheetName)}</option>`;
+        goToStep(4);
+        applyImportedJevConfig({...saved.config, warnings: []});
+        if (saved.cursor) {
+            syncJevResult();
+            resultsUI.load({sheets: {[saved.sheetName]: analyzedResult}});
+            document.getElementById('result-message').textContent = `Restored ${saved.cursor} of ${saved.rows.length} processed records. Use Continue or Retry failed decisions.`;
+            document.getElementById('download-link').onclick = event => { event.preventDefault(); downloadAnalyzedFile(); };
+            goToStep(5);
+        }
+        document.getElementById('jev-recovery').classList.toggle('hidden', saved.cursor === saved.rows.length);
+    } catch (error) {
+        showAlert('jev-message', escapeHtml(error.message), 'danger');
+        showAlert('jev-restore-message', escapeHtml(error.message), 'danger');
     }
 }
 
@@ -2510,6 +2535,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (jevTestRunBtn) jevTestRunBtn.addEventListener('click', () => runJevClassification(true));
     if (jevBackBtn) jevBackBtn.addEventListener('click', () => goToStep(3));
     if (jevResumeBtn) jevResumeBtn.addEventListener('click', continueJevRun);
+    document.getElementById('jev-restore-btn').onclick = restoreJevRun;
+    document.getElementById('jev-restore-start-btn').onclick = restoreJevRun;
+    document.getElementById('jev-forget-btn').onclick = async () => {
+        if (activeJevRun?.running) return;
+        try { await checkpoint('delete'); if (activeJevRun) activeJevRun.needsCheckpointStart = true; showAlert('jev-message', 'Saved checkpoint removed from this browser.', 'success'); }
+        catch (error) { showAlert('jev-message', escapeHtml(error.message), 'danger'); }
+    };
+    document.addEventListener('jev-retry', () => continueJevRun(true));
+    document.addEventListener('jev-continue', () => continueJevRun());
     if (jevPartialDownloadBtn) jevPartialDownloadBtn.addEventListener('click', downloadAnalyzedFile);
 
     if (togglePatternBtn && typeof togglePatternDetection === 'function') {

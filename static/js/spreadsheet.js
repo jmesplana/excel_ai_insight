@@ -1,3 +1,4 @@
+import {buildJevReport} from './jev-report.js';
 /** Workbook parsing and results export, independent of UI state. */
 export function parseWorkbook(workbook, xlsx = XLSX) {
     const sheets = {};
@@ -23,6 +24,29 @@ export function exportResults(result, filename, prefix = 'analyzed', xlsx = XLSX
     const ws = xlsx.utils.json_to_sheet(result.data, { header: result.columns });
     const wb = xlsx.utils.book_new();
     xlsx.utils.book_append_sheet(wb, ws, (result.sheetName || 'Sheet1').slice(0, 31));
+    if (result.jev) {
+        const report = buildJevReport(result);
+        const add = (name, rows) => {
+            let unique = name, n = 2;
+            while (wb.SheetNames.includes(unique)) unique = `${name} ${n++}`;
+            xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet(rows), unique);
+        };
+        add('Summary', report.distributions.flatMap(d => d.counts.map(c => ({question: d.name, ...c, denominator: d.denominator,
+            uncertain: d.statuses.review, errors: d.statuses.error, blocked: d.statuses.blocked, empty: d.statuses.empty}))));
+        add('Scores', report.distributions.filter(d => d.numeric.count).map(d => ({question: d.name, type: d.type, ...d.numeric})));
+        add('Breakdowns', report.groups.map(g => ({groupColumn: g.fields[0], group: g.fields[1], question: g.fields[2], value: g.fields[3], count: g.count})));
+        add('Cross tabs', report.crossTabs.flatMap(t => t.counts.map(c => ({column1: t.fields[0], column2: t.fields[1], value1: c.values[0], value2: c.values[1], count: c.count}))));
+        add('Review', report.reviewRows.flatMap(r => r.issues.map(issue => ({rowId: r.rowId, ...issue}))));
+        const audited = result.jev.sourceResult || result;
+        add('Decision audit', audited.jev.audit.flatMap(a => Object.entries(a.decisions).map(([question, d]) => ({
+            rowId: a.rowIndex + 1, question, status: d.status, value: d.value, confidence: d.confidence, rawScore: d.detail,
+            model: d.model, reason: d.reason, probabilities: JSON.stringify(d.raw?.probabilities || {}), labels: JSON.stringify(d.labels || {})}))));
+        const metadata = JSON.stringify({runId: report.runId, sheet: report.sheet, coverage: report.coverage, models: report.models,
+            inputTokens: report.inputTokens, config: result.jev.config, notes: report.notes}, null, 2);
+        const chunks = text => Array.from({length: Math.ceil(text.length / 30000)}, (_, i) => ({part: i + 1, text: text.slice(i * 30000, (i + 1) * 30000)}));
+        add('Run metadata', chunks(metadata));
+        if (result.jev.narrative) add('Written report', chunks(result.jev.narrative));
+    }
     const base = filename.replace(/\.(xlsx|xls|csv)$/i, '');
     xlsx.writeFile(wb, `${prefix}_${base}.xlsx`);
 }
@@ -92,5 +116,6 @@ export function explodeColumn(result, column, separators, options = {}) {
         }
         for (const value of values) data.push(buildRow(row, value));
     }
-    return { ...result, columns, data, partial: result.partial };
+    return { ...result, columns, data, partial: result.partial,
+        ...(result.jev ? {jev: {...result.jev, sourceResult: result.jev.sourceResult || result}} : {}) };
 }

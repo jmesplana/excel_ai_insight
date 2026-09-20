@@ -86,7 +86,7 @@
                                 </div>
                                 
                                 <div id="analysis-recovery" class="alert alert-info hidden" role="status">
-                                    <p>Completed batches are available while this page stays open. Resume uses the original settings.</p>
+                                    <p>Completed batches are saved in this browser. Resume uses the original settings; restore the saved run after a reload.</p>
                                     <button type="button" id="resume-analysis-btn" class="btn btn-primary">Resume analysis</button>
                                     <button type="button" id="partial-download-btn" class="btn btn-outline-primary">Download completed rows</button>
                                 </div>
@@ -118,7 +118,7 @@
                                 <!-- Jev Classification Config (hidden unless appMode === 'jev') -->
                                 <div id="jev-config" class="hidden">
                                     <div class="alert alert-primary">
-                                        <i class="bi bi-shield-check"></i> Each result column below is one question Jev answers about every row. All questions for a row are asked in a single request, so adding columns costs little extra time.
+                                        <i class="bi bi-shield-check"></i> Each result column below is one question Jev answers about every row. Independent questions for a row are asked together. Conditional questions run after their dependencies.
                                     </div>
 
                                     <div class="mb-3">
@@ -129,7 +129,7 @@
                                         <div id="jev-source-columns" class="border rounded p-2">
                                             <!-- Source column checkboxes are inserted here -->
                                         </div>
-                                        <div class="form-text">Each selected column is sent as <code>name: value</code>, so the question instructions can refer to it by name.</div>
+                                        <div class="form-text">Selected columns are labeled by name in the row context. Imported execution settings can preserve them as structured JSON.</div>
                                     </div>
 
                                     <div id="jev-question-configs">
@@ -153,6 +153,13 @@
                                         <input type="file" id="jev-import-config-input" accept="application/json,.json" class="hidden">
                                     </div>
 
+                                    <details class="mb-3"><summary>Workflow and report settings (JSON)</summary>
+                                        <textarea id="jev-workflow-json" class="form-control" rows="8" aria-label="Workflow and report settings JSON">{}</textarea>
+                                        <div class="form-text">Configure model, derived lookups, report breakdowns and execution settings. Import/export preserves these settings and each question's rules.</div>
+                                    </details>
+                                    <div class="mb-3"><button id="jev-restore-btn" class="btn btn-outline-secondary">Restore saved run</button>
+                                        <button id="jev-forget-btn" class="btn btn-outline-secondary">Remove saved checkpoint</button>
+                                        <p class="form-text">Each completed batch is saved on this browser, including source records and raw answers, without API keys. Restoring a run does not start API calls.</p></div>
                                     <div class="form-check mb-3">
                                         <input class="form-check-input" type="checkbox" id="jev-include-confidence">
                                         <label class="form-check-label" for="jev-include-confidence">
@@ -163,7 +170,7 @@
                                     </div>
 
                                     <div id="jev-recovery" class="alert alert-info hidden" role="status">
-                                        <p>Completed batches are available while this page stays open. Resume uses the original settings.</p>
+                                        <p>Completed batches are saved in this browser. Resume uses the original settings; restore the saved run after a reload.</p>
                                         <button type="button" id="jev-resume-btn" class="btn btn-primary">Resume analysis</button>
                                         <button type="button" id="jev-partial-download-btn" class="btn btn-outline-primary">Download completed rows</button>
                                     </div>

@@ -4,8 +4,7 @@ Jev (typesafe.ai) System One provider.
 Where the OpenAI/Azure path asks a model for free text and takes whatever prose
 comes back, Jev answers *typed* questions: every answer is constrained to a list
 the caller supplied, and comes with a probability per option plus a confidence
-statistic. Nothing outside the supplied options can ever be returned, so the
-value that lands in a spreadsheet cell needs no parsing or cleanup.
+statistic. The adapter validates the declared schema before accepting any response.
 
 Confidence (0-1) summarises how concentrated that probability distribution is,
 not how likely the answer is to be correct: the API documents it as a
@@ -29,6 +28,11 @@ their own key without the server needing one.
 """
 
 import math
+import time
+import threading
+import json
+from email.utils import parsedate_to_datetime
+from datetime import datetime, timezone
 import os
 import re
 import unicodedata
@@ -147,15 +151,21 @@ def build_question(spec):
             f"Unknown question type '{qtype}'. Expected choice, score or noul."
         )
 
-    instructions = _clean(spec.get("instructions"))
-    if not instructions:
+    instructions = spec.get("instructions")
+    if not isinstance(instructions, (str, dict, list)) or not instructions or (isinstance(instructions, str) and not instructions.strip()):
         raise JevConfigError("Each Jev question needs instructions.")
+    options = spec.get("options") or []
+    if not isinstance(options, list):
+        raise JevConfigError("Options must be an array.")
+    labels = [o.get("label") if isinstance(o, dict) else o for o in options]
+    if any(not isinstance(label, str) or not label.strip() for label in labels):
+        raise JevConfigError("Every option needs a non-empty label.")
+    if len(set(labels)) != len(labels):
+        raise JevConfigError("Option labels must be unique.")
+    descriptions = [o.get("description", o["label"]) if isinstance(o, dict) else o for o in options]
 
-    options = [
-        str(option).strip()
-        for option in (spec.get("options") or [])
-        if str(option).strip()
-    ]
+    if any(d is not None and not isinstance(d, (str, dict, list)) for d in descriptions):
+        raise JevConfigError("Option descriptions must be text, objects, arrays or null.")
 
     if qtype == "choice":
         if len(options) < 2:
@@ -168,16 +178,15 @@ def build_question(spec):
                 f"({len(options)} given)."
             )
         criteria = {}
-        labels = {}
-        for label in options:
+        label_map = {}
+        for label, description in zip(labels, descriptions):
             slug = slugify(label, criteria)
-            # The label doubles as the option's description: these lists come
-            # from the user's own codebook, where the label *is* the meaning.
-            criteria[slug] = label
-            labels[slug] = label
+            # Structured descriptions can explain each label and its boundaries.
+            criteria[slug] = description
+            label_map[slug] = label
         return (
             {"type": "choice", "instructions": instructions, "criteria": criteria},
-            {"type": "choice", "labels": labels},
+            {"type": "choice", "labels": label_map},
         )
 
     if qtype == "score":
@@ -187,16 +196,27 @@ def build_question(spec):
                 f"{MAX_SCORE_LEVELS} levels ({len(options)} given)."
             )
         return (
-            {"type": "score", "instructions": instructions, "criteria": list(options)},
-            {"type": "score", "labels": list(options)},
+            {"type": "score", "instructions": instructions, "criteria": descriptions},
+            {"type": "score", "labels": labels},
         )
 
-    return (
-        {"type": "noul", "instructions": instructions},
-        {"type": "noul",
-         "yes": options[0] if len(options) > 0 else "Yes",
-         "no": options[1] if len(options) > 1 else "No"},
-    )
+    if len(labels) not in (0, 2):
+        raise JevConfigError("Noul accepts either no labels or exactly two: yes then no.")
+    question = {"type": "noul", "instructions": instructions}
+    if "criteria" in spec:
+        criteria = spec["criteria"]
+        if not isinstance(criteria, dict) or set(criteria) != {"true", "false"}:
+            raise JevConfigError("Noul criteria must contain true and false descriptions.")
+        question["criteria"] = criteria
+    return question, {"type": "noul", "yes": labels[0] if labels else "Yes",
+                      "no": labels[1] if labels else "No"}
+
+
+def number(value, low, high, field):
+    if (isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(value) or not low <= value <= high):
+        raise JevError(f"Invalid {field} in Jev response.")
+    return float(value)
 
 
 def decode_answer(answer, decoder):
@@ -212,89 +232,95 @@ def decode_answer(answer, decoder):
     if not isinstance(answer, dict):
         raise JevError("Malformed answer from Jev.")
 
-    confidence = answer.get("confidence")
-
-    if decoder["type"] == "choice":
+    kind = decoder["type"]
+    if answer.get("type") != kind:
+        raise JevError("Jev answer type does not match the question.")
+    if kind == "noul":
+        probability = number(answer.get("noul"), 0, 1, "Noul probability")
+        return decoder["yes"] if probability >= 0.5 else decoder["no"], None, probability
+    confidence = number(answer.get("confidence"), 0, 1, "confidence")
+    expected = set(decoder["labels"]) if kind == "choice" else {str(i) for i in range(len(decoder["labels"]))}
+    probabilities = answer.get("probabilities")
+    if not isinstance(probabilities, dict) or set(probabilities) != expected:
+        raise JevError("Jev probability keys do not match the options.")
+    total = sum(number(v, 0, 1, "probability") for v in probabilities.values())
+    if abs(total - 1) > 0.01:
+        raise JevError("Jev probabilities do not sum to one.")
+    if kind == "choice":
         key = answer.get("choice")
-        # Fall back to the raw key if a label lookup misses, so an unexpected
-        # key still lands in the cell rather than blanking it.
-        return decoder["labels"].get(key, key), confidence, None
+        if key not in expected:
+            raise JevError("Jev returned an unknown choice.")
+        return decoder["labels"][key], confidence, None
+    raw = number(answer.get("score"), 0, len(decoder["labels"]) - 1, "score")
+    return decoder["labels"][math.floor(raw + 0.5)], confidence, raw
 
-    if decoder["type"] == "score":
-        labels = decoder["labels"]
-        raw = answer.get("score")
-        if raw is None:
-            raise JevError("Score answer missing a score.")
-        # Round half *up*, not to even: these levels are ordered severities, so
-        # an exact midpoint must always resolve to the higher one. Python's
-        # built-in round() would send 0.5 down to level 0 but 1.5 up to level 2.
-        index = math.floor(float(raw) + 0.5)
-        index = max(0, min(len(labels) - 1, index))
-        return labels[index], confidence, float(raw)
 
-    probability = answer.get("noul")
-    if probability is None:
-        raise JevError("Noul answer missing a probability.")
-    probability = float(probability)
-    label = decoder["yes"] if probability >= 0.5 else decoder["no"]
-    return label, confidence, probability
+# Process-wide pacing shared by workers. Multiple server instances still need
+# an account-wide queue for guaranteed quota enforcement.
+_pace_lock = threading.Lock()
+_next_request = 0.0
 
 
 def ask(state, questions, *, api_key, model=DEFAULT_JEV_MODEL,
-        timeout=REQUEST_TIMEOUT, session=None):
-    """
-    Send one System One request and return its `answers` object.
-
-    Args:
-        state: the row context -- a string or a JSON-serializable dict.
-        questions: {question_key: question} as built by build_question().
-
-    Raises:
-        JevError: on an API error or an unreadable response body.
-    """
+        timeout=10, session=None, details=False, deadline=None,
+        requests_per_minute=600, tokens_per_second=100000, max_attempts=3):
+    """Bounded transient retries; retain model and usage when details=True."""
+    global _next_request
+    deadline = deadline or time.monotonic() + 40
+    payload = {"model": model, "state": state, "questions": questions}
+    # Conservative byte-based estimate for pacing; actual usage is retained.
+    estimated_tokens = len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+    interval = max(60 / requests_per_minute, estimated_tokens / tokens_per_second)
     poster = session.post if session is not None else requests.post
-    try:
-        response = poster(
-            TYPESAFE_URL,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={"model": model, "state": state, "questions": questions},
-            timeout=timeout,
-        )
-    except requests.Timeout:
-        raise JevError("Jev request timed out.")
-    except requests.RequestException as e:
-        raise JevError(f"Could not reach Jev: {type(e).__name__}")
-
-    if response.status_code == 401 or response.status_code == 403:
-        raise JevError("Invalid Jev API key.")
-    if response.status_code == 429:
-        raise JevError("Jev rate limit reached. Wait a moment and resume.")
-    if not response.ok:
-        raise JevError(_api_error_message(response))
-
-    try:
-        body = response.json()
-    except ValueError:
-        raise JevError("Jev returned a response that was not JSON.")
-
-    answers = body.get("answers")
-    if not isinstance(answers, dict):
-        raise JevError("Jev response did not contain any answers.")
-    return answers
-
-
-def _api_error_message(response):
-    """Best-effort human-readable message from a failed API response."""
-    try:
-        body = response.json()
-    except ValueError:
-        return f"Jev error (HTTP {response.status_code})."
-    detail = body.get("error") or body.get("message") or body.get("detail")
-    if isinstance(detail, dict):
-        detail = detail.get("message")
-    if detail:
-        return f"Jev error: {detail}"
-    return f"Jev error (HTTP {response.status_code})."
+    for attempt in range(max_attempts):
+        with _pace_lock:
+            now = time.monotonic()
+            slot = max(now, _next_request)
+            if slot + 1 >= deadline:
+                raise JevError("Batch time budget reached. Retry unfinished rows.")
+            _next_request = slot + interval
+        time.sleep(max(0, slot - time.monotonic()))
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise JevError("Batch time budget reached. Retry unfinished rows.")
+        delay = min(2 ** attempt, 8)
+        try:
+            response = poster(TYPESAFE_URL,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload, timeout=min(timeout, remaining))
+        except (requests.Timeout, requests.ConnectionError):
+            if attempt + 1 == max_attempts:
+                raise JevError("Could not reach Jev after retries. Retry unfinished rows.")
+        except requests.RequestException:
+            raise JevError("Could not reach Jev.")
+        else:
+            if response.status_code in (401, 403):
+                raise JevError("Invalid Jev API key.")
+            if response.status_code in (429, 500, 502, 503, 504, 529):
+                try:
+                    delay = max(delay, float(response.headers.get("Retry-After", 0)))
+                except (ValueError, TypeError):
+                    try:
+                        until = parsedate_to_datetime(response.headers.get("Retry-After", ""))
+                        delay = max(delay, (until - datetime.now(timezone.utc)).total_seconds())
+                    except (ValueError, TypeError, OverflowError):
+                        pass
+                if attempt + 1 == max_attempts:
+                    raise JevError("Jev is busy or rate limited. Retry unfinished rows.")
+            elif not response.ok:
+                # Do not echo provider-controlled bodies which can contain input.
+                raise JevError(f"Jev rejected the request (HTTP {response.status_code}).")
+            else:
+                try:
+                    body = response.json()
+                except ValueError:
+                    raise JevError("Jev returned a response that was not JSON.")
+                if not isinstance(body, dict) or not isinstance(body.get("answers"), dict):
+                    raise JevError("Jev response did not contain answers.")
+                if set(body["answers"]) != set(questions):
+                    raise JevError("Jev response has missing or unexpected answers.")
+                return body if details else body["answers"]
+        if time.monotonic() + delay + 1 >= deadline:
+            raise JevError("Retry delay exceeds batch time budget. Retry unfinished rows later.")
+        time.sleep(delay)
+    raise JevError("Jev request failed.")

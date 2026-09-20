@@ -1,0 +1,1696 @@
+{
+  "format": "aidstack-insights-jev-config",
+  "version": 2,
+  "exportedAt": "2026-09-20T20:58:33.302Z",
+  "sheetName": "Sheet1",
+  "sourceColumns": [
+    "Feedback"
+  ],
+  "includeConfidence": true,
+  "questions": [
+    {
+      "outputColumnName": "framework2_type",
+      "questionType": "choice",
+      "instructions": "Choisis le type de feedback dominant selon le Framework 2 (Ebola) — l'acte de langage, indépendamment du sujet. Un seul type. Si plusieurs sujets sont présents, choisis celui qui nécessite l'action la plus importante.",
+      "options": [
+        "Observations, perceptions ou croyances",
+        "Questions",
+        "Suggestions",
+        "Appréciations",
+        "Demandes",
+        "Signalements et préoccupations",
+        "Allégations et Signalement d’incident"
+      ]
+    },
+    {
+      "outputColumnName": "framework2_topic",
+      "questionType": "choice",
+      "instructions": "Choisis le sujet dominant dans record pour le type accepté dans decisions.framework2_type.",
+      "dependsOn": [
+        "framework2_type"
+      ],
+      "branches": [
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances"
+          },
+          "options": [
+            "Maladie",
+            "Épidémie",
+            "Impact de l'épidémie",
+            "Comportements",
+            "MSP",
+            "Traitement",
+            "Services de santé",
+            "Vaccins",
+            "Réponse",
+            "Acteurs de la réponse",
+            "Sûreté et sécurité",
+            "Autres"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Questions"
+          },
+          "options": [
+            "Maladie",
+            "Épidémie",
+            "Impact de l'épidémie",
+            "Comportements",
+            "MSP",
+            "Traitement",
+            "Services de santé",
+            "Vaccins",
+            "Réponse",
+            "Acteurs de la réponse",
+            "Sûreté et sécurité",
+            "Autres"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions"
+          },
+          "options": [
+            "Impact de l'épidémie",
+            "Comportements",
+            "MSP",
+            "Traitement",
+            "Services de santé",
+            "Vaccins",
+            "Réponse",
+            "Acteurs de la réponse",
+            "Sûreté et sécurité"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Appréciations"
+          },
+          "options": [
+            "MSP",
+            "Services de santé",
+            "Vaccins",
+            "Réponse",
+            "Acteurs de la réponse"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes"
+          },
+          "options": [
+            "Maladie",
+            "Épidémie",
+            "Impact de l'épidémie",
+            "Comportements",
+            "MSP",
+            "Traitement",
+            "Services de santé",
+            "Vaccins",
+            "Réponse",
+            "Acteurs de la réponse",
+            "Sûreté et sécurité",
+            "Autres"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations"
+          },
+          "options": [
+            "Maladie",
+            "Impact de l'épidémie",
+            "MSP",
+            "Traitement",
+            "Services de santé",
+            "Vaccins",
+            "Réponse",
+            "Acteurs de la réponse",
+            "Sûreté et sécurité"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Allégations et Signalement d’incident"
+          },
+          "options": [
+            "Réponse",
+            "Acteurs de la réponse"
+          ]
+        }
+      ],
+      "review": {
+        "minConfidence": 0.6
+      }
+    },
+    {
+      "outputColumnName": "feedback_sensibilite",
+      "questionType": "score",
+      "instructions": "Classe la sensibilité du feedback indépendamment de sa véracité.",
+      "options": [
+        "Non sensible : commentaire ordinaire sans enjeu de protection, de sécurité ou de confidentialité",
+        "Sensible : stigmatisation, discrimination, conflit, plainte grave non nominative, ou question de protection ou de sécurité sans personne identifiable",
+        "Très sensible / confidentiel : allégation d'exploitation ou d'abus sexuels, informations personnelles identifiables, menace ciblée, violence, risque immédiat pour une personne, accusation grave identifiable, ou information médicale individuelle"
+      ]
+    },
+    {
+      "outputColumnName": "feedback_criticalite",
+      "questionType": "score",
+      "instructions": "Évalue l'urgence opérationnelle du feedback, indépendamment de sa sensibilité et sans supposer que l'affirmation est vraie.",
+      "options": [
+        "Faible : appréciation, commentaire général ou suggestion non urgente",
+        "Moyenne : question, inquiétude, demande ou rumeur nécessitant une réponse ou vérification, sans danger immédiat",
+        "Élevée : refus collectif, forte méfiance susceptible de perturber la riposte, problème sérieux d'accès aux soins, stigmatisation importante ou rumeur dangereuse",
+        "Critique / Urgente : alerte de cas ou décès suspect, menace ou violence imminente, risque immédiat pour la sécurité, abus grave, ou événement exigeant une escalade immédiate"
+      ]
+    },
+    {
+      "outputColumnName": "feedback_action",
+      "questionType": "choice",
+      "instructions": "Choisis UNE seule action principale à entreprendre. N'affirme pas qu'une action a déjà été réalisée. Priorise la sécurité et les alertes sanitaires lorsqu'elles sont présentes.",
+      "options": [
+        "Aucune action",
+        "Fournir une information / réponse",
+        "Adapter les messages RCCE",
+        "Vérifier l'information",
+        "Investiguer",
+        "Référer au secteur concerné",
+        "Déclencher une alerte",
+        "Mobilisation communautaire",
+        "Dialogue communautaire",
+        "Suivi individuel",
+        "Escalade immédiate",
+        "Adapter une activité / un service",
+        "Documenter et surveiller la tendance"
+      ]
+    },
+    {
+      "outputColumnName": "feedback_secteur",
+      "questionType": "choice",
+      "instructions": "Choisis le secteur principalement responsable. Si plusieurs secteurs sont concernés, choisis celui qui doit agir en premier.",
+      "options": [
+        "RCCE/CEA",
+        "Surveillance",
+        "Vaccination",
+        "Prise en charge clinique",
+        "PCI",
+        "WASH",
+        "EDS/SDB",
+        "Protection",
+        "Sécurité",
+        "Logistique",
+        "Santé",
+        "Coordination",
+        "MHPSS",
+        "Assistance / programmes"
+      ]
+    },
+    {
+      "outputColumnName": "feedback_referent",
+      "questionType": "choice",
+      "instructions": "Choisis le référent principal auquel orienter ce feedback. Si plusieurs sont possibles, choisis celui qui a le mandat opérationnel le plus direct.",
+      "options": [
+        "RCCE/CEA",
+        "Surveillance",
+        "Commission vaccination",
+        "Prise en charge / Case Management",
+        "PCI/WASH",
+        "EDS/SDB",
+        "Protection",
+        "Sécurité",
+        "Coordination Ebola / Incident Management",
+        "Ministère de la Santé / DPS",
+        "Croix-Rouge",
+        "Partenaire compétent"
+      ]
+    },
+    {
+      "outputColumnName": "framework2_code",
+      "questionType": "choice",
+      "instructions": "Choisis le code précis correspondant au feedback dans record, pour le type et sujet acceptés dans decisions. Choisis la catégorie de repli si aucun code ne convient.",
+      "dependsOn": [
+        "framework2_type",
+        "framework2_topic"
+      ],
+      "branches": [
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Maladie"
+          },
+          "options": [
+            "Croyances concernant l’existence de la maladie",
+            "Croyances concernant la non-existence de la maladie",
+            "Croyances indiquant le déni de la maladie",
+            "Croyances concernant l’agent infectieux (virus ou bactérie)",
+            "Croyances concernant la résistance du virus",
+            "Croyances concernant les symptômes",
+            "Croyances indiquant l’ignorance des symptômes",
+            "Croyances concernant la comparaison avec d’autres maladies",
+            "Croyances concernant les modes de transmission",
+            "Croyances concernant la transmission de personne à personne",
+            "Croyances concernant la transmission à partir de corps morts",
+            "Croyances concernant les matériaux contaminés",
+            "Croyances concernant l’eau contaminée",
+            "Croyances concernant les transmissions par les animaux",
+            "Croyances selon lesquelles certains groupes de personnes sont les propagateurs de la maladie",
+            "Croyances relatives aux comportements à risque de contamination",
+            "Croyances concernant d’autres modes de transmission",
+            "Croyances ou commentaires concernant le risque et la gravité",
+            "Peurs d’être contaminé",
+            "Croyances concernant le fait d’être contaminé",
+            "Croyances selon lesquelles quelqu’un est contaminé",
+            "Croyances selon lesquelles certaines communautés sont plus exposées au virus",
+            "Croyances concernant la gravité de la maladie",
+            "Observations ou croyances concernant le rétablissement",
+            "Croyances concernant les personnes rétablies de la maladie",
+            "Croyances selon lesquelles les personnes rétablies pourraient propager le virus",
+            "Autres croyances concernant la maladie",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Épidémie"
+          },
+          "options": [
+            "Croyances concernant l’origine de l’épidémie",
+            "Croyances concernant l’origine zoonotique de l’épidémie",
+            "Croyances selon lesquelles l’épidémie est d’origine surnaturelle",
+            "Croyances selon lesquelles l’épidémie fait partie d’un complot",
+            "Croyances selon lesquelles l’épidémie a été apportée par des étrangers",
+            "Croyances concernant l’évolution de l’épidémie",
+            "Croyances selon lesquelles l’épidémie n’existe pas dans cette région ou ce pays",
+            "Croyances concernant le nombre de cas et les tendances",
+            "Croyances concernant la durée de l’épidémie",
+            "Croyances selon lesquelles l’épidémie est terminée",
+            "Autres croyances concernant l’épidémie",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Impact de l'épidémie"
+          },
+          "options": [
+            "Observations sur l'impact de l'épidémie",
+            "Observations concernant l’impact social",
+            "Préoccupations liées à la stigmatisation due à la maladie",
+            "Préoccupations concernant la stigmatisation ethnique ou culturelle",
+            "Préoccupations concernant la stigmatisation des agents de santé",
+            "Préoccupations concernant la stigmatisation de la famille ou des contacts du cas",
+            "Préoccupations concernant la stigmatisation des personnes rétablies",
+            "Observations concernant l’impact sur la cohésion sociale",
+            "Observations concernant l’impact économique",
+            "Observations concernant l’impact sur les moyens de subsistance",
+            "Observations concernant la sécurité alimentaire",
+            "Observations concernant l’impact sur l’emploi",
+            "Observations concernant les conséquences sur les services de base",
+            "Observations concernant l’impact sur les services administratifs",
+            "Observations concernant l’impact sur les services de santé",
+            "Observations concernant l’impact sur l’éducation",
+            "Observations concernant les conséquences sur la santé mentale",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Comportements"
+          },
+          "options": [
+            "Croyances concernant les comportements préventifs",
+            "Croyances concernant le nettoyage et la désinfection des surfaces touchées",
+            "Croyances concernant le lavage des mains",
+            "Croyances concernant la distanciation sociale",
+            "Croyances concernant les pratiques sexuelles sans risque",
+            "Croyances concernant la grossesse et l’allaitement",
+            "Croyances concernant les cas suspects",
+            "Croyances concernant l’isolement avec une personne malade",
+            "Croyances concernant les comportements culturels et traditionnels",
+            "Croyances concernant la prière comme mesure préventive",
+            "Croyances concernant l’éradication des animaux comme mesure préventive",
+            "Croyances concernant les enterrements et comportements funéraires traditionnels",
+            "Croyances concernant l’utilisation de remèdes naturels pour la prévention",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "MSP"
+          },
+          "options": [
+            "Observation concernant les mesures de santé",
+            "Observations concernant la campagne de communication sur l’épidémie",
+            "Observations sur l’adhésion aux mesures de santé",
+            "Observations sur les obstacles à l’application des mesures de santé",
+            "Observations ou croyances concernant le traçage des contacts",
+            "Observations ou croyances concernant les enterrements sûrs et dignes",
+            "Observations ou croyances concernant les restrictions",
+            "Observations ou croyances concernant les restrictions de mouvement",
+            "Observations ou croyances concernant les voyages internationaux",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Traitement"
+          },
+          "options": [
+            "Croyances concernant les centres de traitement",
+            "Observations concernant l’accès aux centres de traitement",
+            "Observations ou croyances concernant la sécurité des centres de traitement",
+            "Croyances concernant les traitements approuvés",
+            "Croyances concernant la disponibilité des traitements approuvés",
+            "Croyances concernant l’utilisation de médicaments spécifiques",
+            "Croyances concernant l’efficacité des traitements approuvés",
+            "Croyances concernant les effets secondaires des traitements approuvés",
+            "Croyances concernant l’utilisation de traitements non approuvés",
+            "Croyances concernant l’utilisation de remèdes naturels pour le traitement",
+            "Croyances concernant l’utilisation de la médecine traditionnelle pour le traitement",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Services de santé"
+          },
+          "options": [
+            "Croyances concernant l’accès aux soins de santé",
+            "Croyances concernant la qualité des soins de santé",
+            "Croyances selon lesquelles les structures de santé ne sont pas sûres",
+            "Croyances concernant la gestion des décès dans les structures de santé",
+            "Croyances concernant les agents de santé",
+            "Croyances concernant le rôle des agents de santé",
+            "Croyances concernant le rôle des agents de santé communautaires",
+            "Croyances concernant les compétences des agents de santé",
+            "Croyances concernant les équipements de protection pour les agents de santé",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Vaccins"
+          },
+          "options": [
+            "Observations ou croyances concernant les campagnes de vaccination",
+            "Observations ou croyances concernant les informations reçues sur le vaccin",
+            "Déclarations indiquant la non-acceptation du vaccin",
+            "Observations ou croyances concernant le développement des vaccins",
+            "Observations ou croyances concernant la disponibilité du vaccin",
+            "Observations ou croyances concernant l’accès au vaccin",
+            "Observations ou croyances concernant les structures de vaccination",
+            "Observations ou croyances concernant le prix du vaccin",
+            "Observations ou croyances concernant la qualité du vaccin",
+            "Observations ou croyances concernant l’efficacité du vaccin",
+            "Observations ou croyances concernant les effets secondaires du vaccin",
+            "Déclarations indiquant une suspicion envers le vaccin",
+            "Autres croyances et observations concernant les vaccins",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Réponse"
+          },
+          "options": [
+            "Observations concernant l’information sur la réponse",
+            "Déclarations concernant le manque d’information",
+            "Observations concernant les rumeurs dans la communauté",
+            "Croyances selon lesquelles les informations reçues sont fausses",
+            "Observations sur l’accès à l’assistance",
+            "Observations sur la fourniture d’une assistance sanitaire",
+            "Observations sur la fourniture d’articles de prévention des maladies",
+            "Observations ou croyances concernant les activités de réponse pour des groupes spécifiques",
+            "Observations ou croyances concernant le processus de sélection de l’assistance",
+            "Observations ou croyances concernant l’accès au soutien des moyens de subsistance",
+            "Observations sur la qualité de la réponse",
+            "Observations sur les compétences des acteurs de la réponse",
+            "Observations sur le calendrier de l’action",
+            "Observations sur l’efficacité de l’action",
+            "Observations sur l’engagement communautaire",
+            "Observations sur la localisation de la réponse",
+            "Observations sur l’implication des membres de la communauté dans la réponse",
+            "Observations sur les solutions dirigées par la communauté",
+            "Déclarations concernant la non-acceptation de la réponse",
+            "Déclarations concernant la fatigue face à la réponse",
+            "Déclarations concernant le rejet de la réponse",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Acteurs de la réponse"
+          },
+          "options": [
+            "Déclarations indiquant une suspicion envers les acteurs et intervenants",
+            "Déclarations indiquant une suspicion envers le gouvernement",
+            "Déclarations indiquant une suspicion envers la science",
+            "Déclarations indiquant une suspicion envers les médias et la presse",
+            "Déclarations indiquant une suspicion envers les leaders locaux",
+            "Déclarations indiquant une suspicion envers les agents de santé",
+            "Déclarations indiquant une suspicion envers les acteurs humanitaires",
+            "Croyances selon lesquelles certaines personnes/organisations gagnent de l’argent à cause de l’épidémie",
+            "Croyances selon lesquelles la maladie est propagée par les acteurs de la réponse",
+            "Observations sur le rôle des acteurs et intervenants",
+            "Observations ou croyances concernant le gouvernement",
+            "Observations ou croyances concernant les organisations internationales",
+            "Observations ou croyances concernant la Croix-Rouge",
+            "Observations ou croyances concernant les acteurs locaux",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Sûreté et sécurité"
+          },
+          "options": [
+            "Observations sur la sûreté et la sécurité",
+            "Déclarations concernant les conditions de sécurité",
+            "Déclarations concernant le sentiment de menace",
+            "Déclarations concernant les routes ou accès dangereux",
+            "Déclarations concernant la violence",
+            "Déclarations concernant le SEA ou les atteintes à la dignité",
+            "Déclarations concernant la discrimination",
+            "Déclarations concernant les protestations violentes",
+            "Déclarations concernant les violences communautaires",
+            "Déclarations concernant les groupes armés",
+            "Déclarations concernant les forces de sécurité",
+            "Déclarations concernant les personnes disparues",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Autres"
+          },
+          "options": [
+            "Autres observations, perceptions ou croyances",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Maladie"
+          },
+          "options": [
+            "Questions sur l’existence de la maladie",
+            "Questions sur la négation de la maladie",
+            "Questions sur l’agent infectieux (virus, bactérie)",
+            "Questions sur la résistance du virus",
+            "Questions sur les symptômes",
+            "Questions sur la comparaison avec d’autres maladies",
+            "Questions sur la transmission",
+            "Questions sur la transmission de personne à personne",
+            "Questions sur la transmission par les corps des défunts",
+            "Questions sur les matériaux contaminés",
+            "Questions sur l’eau contaminée",
+            "Questions sur les transmissions animales",
+            "Questions sur qui propage la maladie",
+            "Questions sur les comportements à risque de contamination",
+            "Questions sur d’autres modes de transmission",
+            "Questions sur le risque et la gravité",
+            "Questions sur le risque d’être contaminé",
+            "Questions sur le fait d’avoir des symptômes",
+            "Questions sur une personne présentant des symptômes",
+            "Questions sur les communautés à risque",
+            "Questions sur la gravité de la maladie",
+            "Questions sur la guérison",
+            "Questions sur les personnes guéries de la maladie",
+            "Questions sur la transmission par les personnes guéries",
+            "Autres questions sur la maladie",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Épidémie"
+          },
+          "options": [
+            "Questions sur l’origine de l’épidémie",
+            "Questions sur l’origine zoonotique de l’épidémie",
+            "Questions sur le rôle surnaturel dans l’origine de l’épidémie",
+            "Questions indiquant que l’épidémie fait partie d’un complot",
+            "Questions sur l’introduction de l’épidémie par des étrangers",
+            "Questions sur l’évolution de l’épidémie",
+            "Autre question sur l’épidémie",
+            "Questions sur l’existance de l’épidémie",
+            "Question concernant la fin de l'épidémie.",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Impact de l'épidémie"
+          },
+          "options": [
+            "Impact social",
+            "Questions sur l’impact social",
+            "Questions sur l’exclusion sociale ou la stigmatisation due à la maladie",
+            "Questions sur la stigmatisation ethnique ou culturelle",
+            "Questions sur la stigmatisation des agents de santé",
+            "Questions sur la stigmatisation de la famille ou des contacts du cas",
+            "Questions sur la stigmatisation des personnes guéries",
+            "Questions sur l’impact sur la cohésion sociale",
+            "Impact économique",
+            "Questions sur l’impact économique",
+            "Questions sur l’impact sur les moyens de subsistance",
+            "Questions sur la sécurité alimentaire",
+            "Questions sur l’impact sur l’emploi",
+            "Services basiques",
+            "Questions sur les conséquences sur les services de base",
+            "Questions sur l’impact sur les services administratifs",
+            "Questions sur l’impact sur les services de santé",
+            "Questions sur l’impact sur l’éducation",
+            "Santé mentale",
+            "Questions sur les conséquences sur la santé mentale",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Comportements"
+          },
+          "options": [
+            "Questions sur les comportements préventifs",
+            "Questions sur le nettoyage et la désinfection des surfaces touchées",
+            "Questions sur le lavage des mains",
+            "Questions sur la distanciation sociale",
+            "Questions sur les pratiques sexuelles sûres",
+            "Questions sur la grossesse et l’allaitement",
+            "Questions sur ce qu’il faut faire si l’on soupçonne quelqu’un d’être malade",
+            "Questions sur l’isolement des personnes malades",
+            "Questions sur les comportements culturels et traditionnels",
+            "Questions sur la prière comme mesure préventive",
+            "Questions sur l’éradication des animaux comme mesure préventive",
+            "Questions sur les enterrements et pratiques funéraires traditionnels",
+            "Questions sur l’utilisation de remèdes naturels pour la prévention",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "MSP"
+          },
+          "options": [
+            "Questions sur les mesures de santé",
+            "Questions sur la campagne de communication autour de l’épidémie",
+            "Questions sur la manière de faire appliquer les mesures de santé",
+            "Questions sur le traçage des contacts",
+            "Questions sur les enterrements sûrs et dignes",
+            "Questions sur les restrictions",
+            "Questions sur les restrictions de mouvement",
+            "Observations ou croyances concernant les voyages internationaux",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Traitement"
+          },
+          "options": [
+            "Questions sur les centres de traitement",
+            "Questions sur l’accès aux centres de traitement",
+            "Questions sur la sécurité des centres de traitement",
+            "Questions concernant les raison pour lesquelles les gens meurent a l’hopitale",
+            "Questions sur les traitements approuvés pour la maladie",
+            "Questions sur la disponibilité des traitements approuvés",
+            "Questions sur l’utilisation de médicaments spécifiques",
+            "Questions sur l’efficacité des traitements approuvés",
+            "Questions sur les effets secondaires des traitements approuvés",
+            "Questions sur l’utilisation de traitements non approuvés",
+            "Questions sur l’utilisation de remèdes naturels pour le traitement",
+            "Questions sur l’utilisation de la médecine traditionnelle pour le traitement",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Services de santé"
+          },
+          "options": [
+            "Questions sur l’accès aux soins de santé",
+            "Questions sur la qualité des soins de santé",
+            "Questions sur la sécurité dans les établissements de santé",
+            "Questions sur la gestion des décès dans les établissements de santé",
+            "Questions sur les agents de santé",
+            "Questions sur le rôle des agents de santé",
+            "Questions sur le rôle des agents de santé communautaires",
+            "Questions sur les compétences des agents de santé",
+            "Questions sur les équipements de protection pour les agents de santé",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Vaccins"
+          },
+          "options": [
+            "Questions sur les campagnes de vaccination",
+            "Questions sur les informations reçues sur le vaccin",
+            "Questions sur la non-acceptation",
+            "Questions sur le développement du vaccin",
+            "Questions sur l’existence d’un vaccin pour la maladie",
+            "Questions sur l’accès au vaccin",
+            "Questions sur les infrastructures liées au vaccin",
+            "Questions sur le prix du vaccin",
+            "Questions sur la qualité du vaccin",
+            "Questions sur l’efficacité du vaccin",
+            "Questions sur les effets secondaires du vaccin",
+            "Questions indiquant une suspicion à l’égard du vaccin",
+            "Autres questions sur les vaccins",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Réponse"
+          },
+          "options": [
+            "Questions sur les informations concernant la réponse",
+            "Questions liées aux fausses nouvelles suspectées ou aux rumeurs dans la communauté",
+            "Questions sur la confiance dans les informations reçues",
+            "Questions sur l’accès à l’assistance",
+            "Questions sur la fourniture d’une assistance sanitaire",
+            "Questions sur la fourniture d’autres articles de prévention des maladies",
+            "Questions sur les activités de réponse pour des groupes spécifiques",
+            "Questions sur le processus de sélection de l’assistance",
+            "Questions sur l’accès au soutien des moyens de subsistance",
+            "Questions relatives à la qualité de la réponse",
+            "Questions sur le calendrier des actions",
+            "Questions sur l’efficacité des actions",
+            "Questions sur l’engagement communautaire",
+            "Questions sur la localisation de la réponse",
+            "Questions sur la manière de participer à la réponse",
+            "Questions sur les solutions menées par la communauté",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Acteurs de la réponse"
+          },
+          "options": [
+            "Questions révélant une méfiance envers des personnes ou des institutions",
+            "Questions révélant une méfiance envers le gouvernement",
+            "Questions révélant une méfiance envers la science",
+            "Questions révélant une méfiance envers les médias",
+            "Questions révélant une méfiance envers les dirigeants locaux",
+            "Questions révélant une méfiance envers les agents de santé",
+            "Questions révélant une méfiance envers les acteurs humanitaires",
+            "Questions révélant que les acteurs humanitaires profitent financièrement de l’épidémie",
+            "Questions sur le rôle des acteurs de la réponse",
+            "Questions sur le rôle du gouvernement",
+            "Questions sur le rôle des organisations internationales",
+            "Questions sur le rôle de la Croix-Rouge",
+            "Questions sur le rôle des acteurs locaux",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Sûreté et sécurité"
+          },
+          "options": [
+            "Questions sur la sûreté et la sécurité",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Autres"
+          },
+          "options": [
+            "Autres questions",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Impact de l'épidémie"
+          },
+          "options": [
+            "Suggestions concernant l’impact sur les services de santé",
+            "Suggestions concernant l’impact sur l’éducation",
+            "Suggestions concernant la santé mentale",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Comportements"
+          },
+          "options": [
+            "Suggestions concernant les comportements",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "MSP"
+          },
+          "options": [
+            "Suggestions concernant les mesures de santé",
+            "Suggestions concernant la campagne de communication sur l’épidémie",
+            "Suggestions pour lever les obstacles à l’application des mesures de santé",
+            "Suggestions concernant le traçage des contacts",
+            "Suggestions concernant les enterrements sûrs et dignes",
+            "Suggestions concernant les restrictions",
+            "Suggestions concernant les restrictions de mouvement",
+            "Suggestions concernant les voyages internationaux",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Traitement"
+          },
+          "options": [
+            "Suggestions concernant les traitements non approuvés",
+            "Suggestions concernant l’utilisation de la médecine traditionnelle comme traitement",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Services de santé"
+          },
+          "options": [
+            "Suggestions concernant l’accès aux soins de santé",
+            "Suggestions concernant le rôle des agents de santé communautaires",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Vaccins"
+          },
+          "options": [
+            "Suggestions concernant les campagnes de vaccination",
+            "Suggestions concernant les informations reçues sur le vaccin",
+            "Suggestions concernant la non-acceptation du vaccin",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Réponse"
+          },
+          "options": [
+            "Suggestions concernant l’information sur la réponse",
+            "Suggestion de réduire l’information sur la maladie",
+            "Suggestion d’adapter le contenu de la campagne d’information",
+            "Suggestion d’utiliser un canal spécifique pour communiquer avec les communautés",
+            "Suggestions concernant l’accès à la réponse",
+            "Suggestions de concentrer les activités pour des groupes spécifiques",
+            "Suggestions concernant la qualité de la réponse",
+            "Suggestions relatives à l’engagement communautaire",
+            "Suggestions relatives aux solutions dirigées par la communauté",
+            "Suggestions pour modifier la réponse",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Acteurs de la réponse"
+          },
+          "options": [
+            "Suggestions sur les acteurs de la réponse",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Sûreté et sécurité"
+          },
+          "options": [
+            "Suggestions concernant les conditions de sécurité",
+            "Suggestions concernant la violence",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Appréciations",
+            "framework2_topic": "MSP"
+          },
+          "options": [
+            "Appréciation concernant les MSP",
+            "Appréciations de l'équipe SDB",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Appréciations",
+            "framework2_topic": "Services de santé"
+          },
+          "options": [
+            "Appréciations ou encouragements envers les agents de santé",
+            "Appréciations du rôle des agents de santé",
+            "Appréciations du rôle des agents de santé communautaires",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Appréciations",
+            "framework2_topic": "Vaccins"
+          },
+          "options": [
+            "Appréciation sur les vaccins",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Appréciations",
+            "framework2_topic": "Réponse"
+          },
+          "options": [
+            "Appréciations des informations reçues",
+            "Appréciations de l’accès à la réponse",
+            "Appréciations de la qualité de la réponse",
+            "Appréciations de l’engagement communautaire",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Appréciations",
+            "framework2_topic": "Acteurs de la réponse"
+          },
+          "options": [
+            "Appréciation concernant la réponse actors",
+            "Appréciations du rôle du gouvernement",
+            "Appréciations du rôle des organisations internationales",
+            "Appréciations du rôle de la Croix-Rouge",
+            "Appréciations du rôle des acteurs locaux",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Maladie"
+          },
+          "options": [
+            "Demande de partage de preuves de la maladie ou de personnes malades",
+            "Demande de partage d’informations sur l’agent infectieux (virus, bactérie)",
+            "Demande de partage d’informations sur les symptômes",
+            "Demande de partage d’informations sur la transmission",
+            "Demande de partage d’informations sur le risque et la gravité",
+            "Demande de partage d’informations sur le rétablissement",
+            "Demande de soins de santé urgents",
+            "Demande de vérification de cas suspects",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Épidémie"
+          },
+          "options": [
+            "Demande d’informations sur l’évolution de l’épidémie",
+            "Demande de partage du nombre ou des tendances de l’épidémie",
+            "Demande d’arrêt de l’épidémie",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Impact de l'épidémie"
+          },
+          "options": [
+            "Demande d’atténuation de l’impact économique",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Comportements"
+          },
+          "options": [
+            "Demande d'aide liée aux comportements",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "MSP"
+          },
+          "options": [
+            "Demande de prévention sanitaire concernant la maladie",
+            "Demande de partager plus d’informations sur les mesures préventives",
+            "Demande de supports éducatifs, y compris des flyers et affiches",
+            "Demande de renforcer les MHP (mesures d’hygiène et de prévention)",
+            "Demande d’adapter les MHP",
+            "Demande relative aux tests",
+            "Demande relative au traçage des contacts",
+            "Demande relative aux enterrements sûrs et dignes",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Traitement"
+          },
+          "options": [
+            "Demande de construction de centres de traitement",
+            "Demande d’amélioration de l’accès aux centres de traitement",
+            "Demande de fournir un traitement approuvé",
+            "Demande de rendre le traitement disponible",
+            "Demande d’information sur l’utilisation des traitements",
+            "Demande de fournir un traitement non approuvé",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Services de santé"
+          },
+          "options": [
+            "Demande d’amélioration de l’accès aux soins de santé",
+            "Demande relative aux coûts des soins de santé",
+            "Demande de soutien médical pour un groupe spécifique",
+            "Demande d’amélioration de la qualité des soins de santé",
+            "Demande de création de morgue",
+            "Demande de service spécifique de la part des agents de santé",
+            "Demande de formation pour les agents de santé communautaires",
+            "Demande de formation pour les agents de santé",
+            "Demande de davantage d’équipements de protection pour les agents de santé",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Vaccins"
+          },
+          "options": [
+            "Demande de démarrer la campagne de vaccination",
+            "Demande de partager plus d’informations sur le vaccin",
+            "Demande d’arrêter la vaccination",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Réponse"
+          },
+          "options": [
+            "Demande relative aux informations reçues sur la réponse",
+            "Demande de plus d’informations sur les activités de réponse",
+            "Demande d’amélioration de la campagne de communication",
+            "Demande de traitement des rumeurs",
+            "Demande relative à l’accès à l’assistance",
+            "Demande d’assistance sanitaire",
+            "Demande d’autres équipements de prévention",
+            "Demande de cibler les activités pour des groupes spécifiques",
+            "Demande de partage d’informations sur le processus de sélection",
+            "Demande relative à la qualité de la réponse",
+            "Demande de former ou d’impliquer certaines personnes ou institutions",
+            "Demande d’accélérer l’action",
+            "Demande d’améliorer l’efficacité de l’action",
+            "Demande relative à l’engagement communautaire",
+            "Demande de localisation de la réponse",
+            "Demande de participation à l’action",
+            "Demande relative aux solutions menées par les communautés",
+            "Demande d’arrêt de la réponse",
+            "Demande d’être laissé tranquille",
+            "Demande de quitter la zone",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Acteurs de la réponse"
+          },
+          "options": [
+            "Demande relative aux acteurs de la réponse",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Sûreté et sécurité"
+          },
+          "options": [
+            "Demande liée à la sûreté et la sécurité",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Autres"
+          },
+          "options": [
+            "Autre demande",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Maladie"
+          },
+          "options": [
+            "Signalement concernant un point d’eau contaminé",
+            "Signalement concernant une personne qui propage la maladie",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Impact de l'épidémie"
+          },
+          "options": [
+            "Signalement sur la stigmatisation associée à la maladie",
+            "Signalement sur la stigmatisation ethnique ou culturelle",
+            "Signalement sur la stigmatisation des agents de santé",
+            "Signalement sur la stigmatisation de la famille ou des cas contacts",
+            "Signalement sur la stigmatisation des personnes guéries",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "MSP"
+          },
+          "options": [
+            "Signalement relatif aux restrictions",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Traitement"
+          },
+          "options": [
+            "Signalement sur le centre de traitement",
+            "Signalement sur les effets secondaires du traitement approuvé",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Services de santé"
+          },
+          "options": [
+            "Plaintes concernant le manque d’informations sur la personne décédée",
+            "Plaintes concernant les agents de santé",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Vaccins"
+          },
+          "options": [
+            "Plaintes concernant l’accès au vaccin",
+            "Plaintes concernant les infrastructures de vaccination",
+            "Plaintes concernant le prix du vaccin",
+            "Plaintes concernant l’indisponibilité du vaccin",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Réponse"
+          },
+          "options": [
+            "Plaintes concernant l’information reçue",
+            "Signalement sur l’accès à l’assistance",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Acteurs de la réponse"
+          },
+          "options": [
+            "Plaintes concernant les acteurs de la réponse",
+            "Plaintes concernant le rôle du gouvernement",
+            "Plaintes concernant le rôle des organisations internationales",
+            "Plaintes concernant le rôle de la Croix-Rouge",
+            "Plaintes concernant le rôle des acteurs locaux",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Sûreté et sécurité"
+          },
+          "options": [
+            "Signalement concernant le manque de sécurité",
+            "Signalement concernant des routes ou accès dangereux",
+            "Signalement d’incidents violents",
+            "Signalement de violences basées sur le genre",
+            "Signalement de discrimination",
+            "Signalement de manifestations violentes",
+            "Signalement de violences communautaires",
+            "Signalement d’incidents liés aux forces de sécurité",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Allégations et Signalement d’incident",
+            "framework2_topic": "Réponse"
+          },
+          "options": [
+            "Allégations concernant la réponse",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        },
+        {
+          "when": {
+            "framework2_type": "Allégations et Signalement d’incident",
+            "framework2_topic": "Acteurs de la réponse"
+          },
+          "options": [
+            "Allégations de mauvaise conduite en général",
+            "Allégations de consommation illégale",
+            "Allégations de corruption, de pot-de-vin, de vol ou de fraude",
+            "Allégations de népotisme",
+            "Allégations de discrimination, d’abus ou d’atteinte à la dignité",
+            "Allégations d’exploitation et d’abus sexuels (EAS)",
+            "Aucun code ne correspond / information insuffisante"
+          ]
+        }
+      ],
+      "review": {
+        "minConfidence": 0.6
+      }
+    }
+  ],
+  "derived": [
+    {
+      "outputColumnName": "framework2_sous_dimension",
+      "type": "lookup",
+      "inputs": [
+        "framework2_type",
+        "framework2_topic"
+      ],
+      "table": [
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Maladie"
+          },
+          "value": "Croyances concernant la maladie"
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Épidémie"
+          },
+          "value": "Observations sur l’épidémie"
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Impact de l'épidémie"
+          },
+          "value": "Observations sur l’impact de l’épidémie"
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Comportements"
+          },
+          "value": "Croyances concernant les comportements"
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "MSP"
+          },
+          "value": "Observations ou croyances concernant les MSP"
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Traitement"
+          },
+          "value": "Croyances concernant le traitement de la maladie"
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Services de santé"
+          },
+          "value": "Croyances concernant les services de santé"
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Vaccins"
+          },
+          "value": "Observations ou croyances concernant les vaccins"
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Réponse"
+          },
+          "value": "Observations sur la réponse"
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Acteurs de la réponse"
+          },
+          "value": "Observations sur les acteurs de la réponse"
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Sûreté et sécurité"
+          },
+          "value": "Observations sur la sûreté et la sécurité"
+        },
+        {
+          "when": {
+            "framework2_type": "Observations, perceptions ou croyances",
+            "framework2_topic": "Autres"
+          },
+          "value": "Autres observations, perceptions ou croyances"
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Maladie"
+          },
+          "value": "Questions sur la maladie"
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Épidémie"
+          },
+          "value": "Questions sur l'épidémie"
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Impact de l'épidémie"
+          },
+          "value": "Questions sur l'impact de l'épidémie"
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Comportements"
+          },
+          "value": "Questions sur les comportements"
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "MSP"
+          },
+          "value": "Questions sur les MSP"
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Traitement"
+          },
+          "value": "Questions sur les traitements"
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Services de santé"
+          },
+          "value": "Questions sur les services de soins de santé"
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Vaccins"
+          },
+          "value": "Questions sur les vaccins"
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Réponse"
+          },
+          "value": "Questions sur la réponse"
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Acteurs de la réponse"
+          },
+          "value": "Questions relative aux acteurs de la réponse"
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Sûreté et sécurité"
+          },
+          "value": "Questions sur la sûreté et la sécurité"
+        },
+        {
+          "when": {
+            "framework2_type": "Questions",
+            "framework2_topic": "Autres"
+          },
+          "value": "Autres questions"
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Impact de l'épidémie"
+          },
+          "value": "Suggestions sur l'impact de l'épidémie"
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Comportements"
+          },
+          "value": "Suggestions concernant les comportements"
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "MSP"
+          },
+          "value": "Suggestions sur les MSP"
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Traitement"
+          },
+          "value": "Suggestions sur le traitement"
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Services de santé"
+          },
+          "value": "Suggestions sur les services de santé"
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Vaccins"
+          },
+          "value": "Suggestions sur les vaccins"
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Réponse"
+          },
+          "value": "Suggestions sur la réponse"
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Acteurs de la réponse"
+          },
+          "value": "Suggestions sur les acteurs de la réponse"
+        },
+        {
+          "when": {
+            "framework2_type": "Suggestions",
+            "framework2_topic": "Sûreté et sécurité"
+          },
+          "value": "Suggestions concernant la sureté et sécurité"
+        },
+        {
+          "when": {
+            "framework2_type": "Appréciations",
+            "framework2_topic": "MSP"
+          },
+          "value": "Appréciation concernant les MSP"
+        },
+        {
+          "when": {
+            "framework2_type": "Appréciations",
+            "framework2_topic": "Services de santé"
+          },
+          "value": "Appréciation des services de santé"
+        },
+        {
+          "when": {
+            "framework2_type": "Appréciations",
+            "framework2_topic": "Vaccins"
+          },
+          "value": "Appréciation sur les vaccins"
+        },
+        {
+          "when": {
+            "framework2_type": "Appréciations",
+            "framework2_topic": "Réponse"
+          },
+          "value": "Appréciation concernant la réponse"
+        },
+        {
+          "when": {
+            "framework2_type": "Appréciations",
+            "framework2_topic": "Acteurs de la réponse"
+          },
+          "value": "Appréciation concernant les acteurs de la réponse"
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Maladie"
+          },
+          "value": "Demande de plus d'informations sur l'épidémie"
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Épidémie"
+          },
+          "value": "Demande relative à l'épidémie"
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Impact de l'épidémie"
+          },
+          "value": "Demande liée à l'impact de l'épidémie"
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Comportements"
+          },
+          "value": "Demande d'aide liée aux comportements"
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "MSP"
+          },
+          "value": "Demande relative aux MSP"
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Traitement"
+          },
+          "value": "Demande concernant les traitements"
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Services de santé"
+          },
+          "value": "Demande relative aux services de santé"
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Vaccins"
+          },
+          "value": "Demande relative aux vaccins"
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Réponse"
+          },
+          "value": "Demande relative à la réponse"
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Acteurs de la réponse"
+          },
+          "value": "Demande relative aux acteurs de la réponse"
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Sûreté et sécurité"
+          },
+          "value": "Demande liée à la sûreté et la sécurité"
+        },
+        {
+          "when": {
+            "framework2_type": "Demandes",
+            "framework2_topic": "Autres"
+          },
+          "value": "Autre demande"
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Maladie"
+          },
+          "value": "Signalement sur la maladie"
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Impact de l'épidémie"
+          },
+          "value": "Signalement lié à l'impact de l'épidémie"
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "MSP"
+          },
+          "value": "Signalement lié aux MSP"
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Traitement"
+          },
+          "value": "Signalement lié au traitement"
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Services de santé"
+          },
+          "value": "Signalement sur les services de santé"
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Vaccins"
+          },
+          "value": "Signalement sur la vaccination"
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Réponse"
+          },
+          "value": "Signalement sur la réponse"
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Acteurs de la réponse"
+          },
+          "value": "Signalement sur les acteurs de la réponse"
+        },
+        {
+          "when": {
+            "framework2_type": "Signalements et préoccupations",
+            "framework2_topic": "Sûreté et sécurité"
+          },
+          "value": "Signalement sur la sécurité et la sûreté"
+        },
+        {
+          "when": {
+            "framework2_type": "Allégations et Signalement d’incident",
+            "framework2_topic": "Réponse"
+          },
+          "value": "Allegations concernant la réponse"
+        },
+        {
+          "when": {
+            "framework2_type": "Allégations et Signalement d’incident",
+            "framework2_topic": "Acteurs de la réponse"
+          },
+          "value": "Allégations concernant  les acteurs de la réponse"
+        }
+      ]
+    }
+  ],
+  "report": {
+    "title": "Synthèse du feedback — Framework 2",
+    "instructions": "Rédige une synthèse en français avec les effectifs, les thèmes dominants, la criticité, les limites et les suites suggérées. Distingue les croyances rapportées des faits vérifiés.",
+    "crossTabs": [
+      [
+        "framework2_type",
+        "framework2_topic"
+      ]
+    ],
+    "groupBy": [],
+    "evidenceColumns": [
+      "Feedback"
+    ],
+    "maxExamples": 12
+  },
+  "execution": {
+    "batchSize": 4,
+    "workers": 4
+  }
+}

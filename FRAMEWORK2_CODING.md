@@ -1,5 +1,13 @@
 # Framework 2 (Ebola) — how the feedback coding works
 
+> **Implementation update:** The discussion below describes the original flat v1 configuration.
+> The app now supports dataset-independent v2 dependencies and derived lookups.
+> Import `examples/ebola-framework2-hierarchical.jev-config.json` for sequential
+> Type → valid Topic → leaf Code classification plus a deterministic sous-dimension lookup.
+> Uncertain parents block downstream decisions for review. The v1 example remains available.
+> All framework content lives in that JSON, with no Ebola-specific runtime behavior.
+> See [JEV_CONFIGURATION.md](JEV_CONFIGURATION.md) for the configurable workflow and reporting contract.
+
 Why the Jev configuration does not reproduce the Excel sheet's three-level
 structure, what that costs, and what the codes actually are.
 
