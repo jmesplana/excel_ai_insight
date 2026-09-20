@@ -1,0 +1,126 @@
+{
+  "format": "aidstack-insights-jev-config",
+  "version": 1,
+  "exportedAt": "2026-09-20T19:14:08.887Z",
+  "sheetName": "Sheet1",
+  "sourceColumns": [
+    "Feedback"
+  ],
+  "includeConfidence": true,
+  "questions": [
+    {
+      "outputColumnName": "framework2_type",
+      "questionType": "choice",
+      "instructions": "Choisis le type de feedback dominant selon le Framework 2 (Ebola) — l'acte de langage, indépendamment du sujet. Un seul type. Si plusieurs sujets sont présents, choisis celui qui nécessite l'action la plus importante.",
+      "options": [
+        "Observations, perceptions ou croyances",
+        "Questions",
+        "Suggestions",
+        "Appréciations",
+        "Demandes",
+        "Signalements et préoccupations",
+        "Allégations et Signalement d’incident"
+      ]
+    },
+    {
+      "outputColumnName": "framework2_topic",
+      "questionType": "choice",
+      "instructions": "Choisis le sujet dominant du feedback, indépendamment du type. Un seul sujet.\n\nLe sujet doit exister pour le type choisi. Sujets valides par type :\n\n- Observations, perceptions ou croyances : Maladie | Épidémie | Impact de l'épidémie | Comportements | MSP | Traitement | Services de santé | Vaccins | Réponse | Acteurs de la réponse | Sûreté et sécurité | Autres\n- Questions : Maladie | Épidémie | Impact de l'épidémie | Comportements | MSP | Traitement | Services de santé | Vaccins | Réponse | Acteurs de la réponse | Sûreté et sécurité | Autres\n- Suggestions : Impact de l'épidémie | Comportements | MSP | Traitement | Services de santé | Vaccins | Réponse | Acteurs de la réponse | Sûreté et sécurité\n- Appréciations : MSP | Services de santé | Vaccins | Réponse | Acteurs de la réponse\n- Demandes : Maladie | Épidémie | Impact de l'épidémie | Comportements | MSP | Traitement | Services de santé | Vaccins | Réponse | Acteurs de la réponse | Sûreté et sécurité | Autres\n- Signalements et préoccupations : Maladie | Impact de l'épidémie | MSP | Traitement | Services de santé | Vaccins | Réponse | Acteurs de la réponse | Sûreté et sécurité\n- Allégations et Signalement d’incident : Réponse | Acteurs de la réponse",
+      "options": [
+        "Maladie",
+        "Épidémie",
+        "Impact de l'épidémie",
+        "Comportements",
+        "MSP",
+        "Traitement",
+        "Services de santé",
+        "Vaccins",
+        "Réponse",
+        "Acteurs de la réponse",
+        "Sûreté et sécurité",
+        "Autres"
+      ]
+    },
+    {
+      "outputColumnName": "feedback_sensibilite",
+      "questionType": "score",
+      "instructions": "Classe la sensibilité du feedback indépendamment de sa véracité.",
+      "options": [
+        "Non sensible : commentaire ordinaire sans enjeu de protection, de sécurité ou de confidentialité",
+        "Sensible : stigmatisation, discrimination, conflit, plainte grave non nominative, ou question de protection ou de sécurité sans personne identifiable",
+        "Très sensible / confidentiel : allégation d'exploitation ou d'abus sexuels, informations personnelles identifiables, menace ciblée, violence, risque immédiat pour une personne, accusation grave identifiable, ou information médicale individuelle"
+      ]
+    },
+    {
+      "outputColumnName": "feedback_criticalite",
+      "questionType": "score",
+      "instructions": "Évalue l'urgence opérationnelle du feedback, indépendamment de sa sensibilité et sans supposer que l'affirmation est vraie.",
+      "options": [
+        "Faible : appréciation, commentaire général ou suggestion non urgente",
+        "Moyenne : question, inquiétude, demande ou rumeur nécessitant une réponse ou vérification, sans danger immédiat",
+        "Élevée : refus collectif, forte méfiance susceptible de perturber la riposte, problème sérieux d'accès aux soins, stigmatisation importante ou rumeur dangereuse",
+        "Critique / Urgente : alerte de cas ou décès suspect, menace ou violence imminente, risque immédiat pour la sécurité, abus grave, ou événement exigeant une escalade immédiate"
+      ]
+    },
+    {
+      "outputColumnName": "feedback_action",
+      "questionType": "choice",
+      "instructions": "Choisis UNE seule action principale à entreprendre. N'affirme pas qu'une action a déjà été réalisée. Priorise la sécurité et les alertes sanitaires lorsqu'elles sont présentes.",
+      "options": [
+        "Aucune action",
+        "Fournir une information / réponse",
+        "Adapter les messages RCCE",
+        "Vérifier l'information",
+        "Investiguer",
+        "Référer au secteur concerné",
+        "Déclencher une alerte",
+        "Mobilisation communautaire",
+        "Dialogue communautaire",
+        "Suivi individuel",
+        "Escalade immédiate",
+        "Adapter une activité / un service",
+        "Documenter et surveiller la tendance"
+      ]
+    },
+    {
+      "outputColumnName": "feedback_secteur",
+      "questionType": "choice",
+      "instructions": "Choisis le secteur principalement responsable. Si plusieurs secteurs sont concernés, choisis celui qui doit agir en premier.",
+      "options": [
+        "RCCE/CEA",
+        "Surveillance",
+        "Vaccination",
+        "Prise en charge clinique",
+        "PCI",
+        "WASH",
+        "EDS/SDB",
+        "Protection",
+        "Sécurité",
+        "Logistique",
+        "Santé",
+        "Coordination",
+        "MHPSS",
+        "Assistance / programmes"
+      ]
+    },
+    {
+      "outputColumnName": "feedback_referent",
+      "questionType": "choice",
+      "instructions": "Choisis le référent principal auquel orienter ce feedback. Si plusieurs sont possibles, choisis celui qui a le mandat opérationnel le plus direct.",
+      "options": [
+        "RCCE/CEA",
+        "Surveillance",
+        "Commission vaccination",
+        "Prise en charge / Case Management",
+        "PCI/WASH",
+        "EDS/SDB",
+        "Protection",
+        "Sécurité",
+        "Coordination Ebola / Incident Management",
+        "Ministère de la Santé / DPS",
+        "Croix-Rouge",
+        "Partenaire compétent"
+      ]
+    }
+  ]
+}

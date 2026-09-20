@@ -1,0 +1,77 @@
+{
+  "per_topic": [
+    {
+      "topic": "MSP",
+      "types": 6,
+      "pairs": 15,
+      "overlap": 41
+    },
+    {
+      "topic": "Services de santé",
+      "types": 6,
+      "pairs": 15,
+      "overlap": 37
+    },
+    {
+      "topic": "Impact de l'épidémie",
+      "types": 5,
+      "pairs": 10,
+      "overlap": 29
+    },
+    {
+      "topic": "Acteurs de la réponse",
+      "types": 7,
+      "pairs": 21,
+      "overlap": 26
+    },
+    {
+      "topic": "Sûreté et sécurité",
+      "types": 5,
+      "pairs": 10,
+      "overlap": 24
+    },
+    {
+      "topic": "Vaccins",
+      "types": 6,
+      "pairs": 15,
+      "overlap": 21
+    },
+    {
+      "topic": "Réponse",
+      "types": 7,
+      "pairs": 21,
+      "overlap": 15
+    },
+    {
+      "topic": "Comportements",
+      "types": 4,
+      "pairs": 6,
+      "overlap": 12
+    },
+    {
+      "topic": "Épidémie",
+      "types": 3,
+      "pairs": 3,
+      "overlap": 11
+    },
+    {
+      "topic": "Traitement",
+      "types": 5,
+      "pairs": 10,
+      "overlap": 9
+    },
+    {
+      "topic": "Maladie",
+      "types": 4,
+      "pairs": 6,
+      "overlap": 7
+    },
+    {
+      "topic": "Autres",
+      "types": 3,
+      "pairs": 3,
+      "overlap": 0
+    }
+  ],
+  "mean_overlap_pct": 19
+}
