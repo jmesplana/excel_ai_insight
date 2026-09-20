@@ -2143,6 +2143,23 @@ function previewAnalyzedData(analyzedRows, isTestRun = false) {
 
         // If this is a test run, create a floating preview panel
         if (isTestRun) {
+            // Confidence is easy to misread as "chance of being correct", so
+            // explain it where the numbers first appear -- but only when the
+            // run actually produced the columns (Jev with the option ticked).
+            const hasConfidence = headers.some(h => String(h).endsWith('__confidence'));
+            const confidenceNote = hasConfidence ? `
+                    <div class="alert alert-light border small mt-3 mb-0">
+                        <strong><i class="bi bi-info-circle"></i> Reading the confidence columns.</strong>
+                        A <code>__confidence</code> value (0&ndash;1) shows how clear-cut the pick was,
+                        <em>not</em> how likely it is to be correct &mdash; near 1 means the chosen option
+                        scored far above the rest, near 0 means it was a close call. Use it to decide what
+                        to check first: <span class="text-danger fw-semibold">below 0.5</span> needs a human,
+                        <span class="text-warning-emphasis fw-semibold">0.5&ndash;0.9</span> deserves care,
+                        <span class="text-success fw-semibold">above 0.9</span> is clear-cut. A low score on
+                        feedback that genuinely spans two categories is informative, not a failure.
+                        Yes/No questions report no confidence &mdash; use their <code>__score</code> column instead.
+                    </div>` : '';
+
             // Create a floating preview panel for test run results
             const previewPanel = document.createElement('div');
             previewPanel.className = 'card position-fixed bottom-0 end-0 mb-4 me-4 shadow test-run-preview-panel';
@@ -2167,6 +2184,7 @@ function previewAnalyzedData(analyzedRows, isTestRun = false) {
                     <div class="test-result-preview overflow-auto" style="max-height: 50vh;">
                         ${tableHTML}
                     </div>
+                    ${confidenceNote}
                     <div class="d-flex justify-content-end mt-3">
                         <button type="button" class="btn btn-sm btn-success" id="download-test-results-btn">
                             <i class="bi bi-download"></i> Download Test Results
