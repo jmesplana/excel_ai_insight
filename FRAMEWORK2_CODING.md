@@ -6,9 +6,10 @@ structure, what that costs, and what the codes actually are.
 | | |
 | --- | --- |
 | Source sheet | `examples/sample_framework_bvd.xlsx`, tab `framework`, table `FrameWork2` (`A2:BQ34`) |
-| Parsed tree | `framework2_taxonomy.json` — rebuild: `python build_framework2_taxonomy.py` |
-| Topic grid | `framework2_topic_grid.json` — rebuild: `python build_framework2_topic_grid.py` |
-| Jev config | `examples/ebola-framework2.jev-config.json` |
+| Parsed tree | `framework2_taxonomy.json` — rebuild: `python scripts/build_framework2_taxonomy.py` |
+| Topic grid | `framework2_topic_grid.json` — rebuild: `python scripts/build_framework2_topic_grid.py` |
+| Jev config | `examples/ebola-framework2.jev-config.json` — rebuild: `python scripts/build_framework2_jev_config.py` |
+| Overlap figures | `python scripts/build_framework2_overlap.py` (§3) |
 
 ---
 
@@ -76,7 +77,7 @@ So at that level the framework is **two independent dimensions**:
 ### But the leaf level is genuinely type-specific
 
 This does **not** extend downward. Measured leaf-vocabulary overlap between
-types that share a topic (`build_framework2_overlap.py`, of the shorter list,
+types that share a topic (`scripts/build_framework2_overlap.py`, of the shorter list,
 how much is echoed in the longer):
 
 | Topic | Types | Overlap | | Topic | Types | Overlap |
@@ -138,7 +139,7 @@ simply never labelled — there is no "Appréciation sur la maladie".*
 ### Merges applied
 
 Four topics are spelled inconsistently across types in the sheet. Every merge
-is declared in the `MERGE` dict of `build_framework2_topic_grid.py`:
+is declared in the `MERGE` dict of `scripts/build_framework2_topic_grid.py`:
 
 | Canonical topic | Merged from |
 | --- | --- |
@@ -267,7 +268,7 @@ sous-dimension the level actually analyzed?
 
 Both were found by the parser leaving exactly two unresolved labels and exactly
 two orphan columns, which paired up. Both are recorded in `HEADER_OVERRIDES` in
-`build_framework2_taxonomy.py`, bound by position and verified contents — not
+`scripts/build_framework2_taxonomy.py`, bound by position and verified contents — not
 by name similarity.
 
 | Label used in the parent column | Actual column header | Evidence |

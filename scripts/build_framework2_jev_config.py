@@ -2,10 +2,15 @@
 import json, datetime
 from collections import defaultdict
 
+import pathlib
+
+# Paths are resolved against the repo root so this runs from any directory.
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+
 MAX_CHOICE, MIN_SCORE, MAX_SCORE = 255, 2, 10
-G = json.load(open('framework2_topic_grid.json', encoding='utf-8'))
+G = json.load(open(ROOT / 'framework2_topic_grid.json', encoding='utf-8'))
 prev = {q['outputColumnName']: q for q in json.load(
-    open('examples/ebola-feedback-coding.jev-config.json', encoding='utf-8'))['questions']}
+    open(ROOT / 'examples/ebola-feedback-coding.jev-config.json', encoding='utf-8'))['questions']}
 
 types, topics = G['types'], G['topics']
 valid = defaultdict(list)
@@ -59,7 +64,7 @@ for q in cfg["questions"]:
     assert lo <= n <= hi, (q["outputColumnName"], n)
     assert len(set(q["options"])) == n
 
-out = 'examples/ebola-framework2.jev-config.json'
+out = ROOT / 'examples/ebola-framework2.jev-config.json'
 json.dump(cfg, open(out, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 open(out, 'a').write('\n')
 print(f'wrote {out}')

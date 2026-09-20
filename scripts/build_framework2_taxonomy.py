@@ -3,8 +3,13 @@ import zipfile, re, json, unicodedata
 from xml.etree import ElementTree as ET
 from collections import Counter
 
+import pathlib
+
+# Paths are resolved against the repo root so this runs from any directory.
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+
 NS = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
-XLSX = 'examples/sample_framework_bvd.xlsx'
+XLSX = ROOT / 'examples/sample_framework_bvd.xlsx'
 HEADER_ROW, FIRST_DATA_ROW, LAST_ROW, LAST_COL = 2, 3, 34, 69
 
 # Source-sheet header typos: the header cell does not match the label used in
@@ -83,8 +88,8 @@ report['counts'] = {'types': len(taxonomy),
                     'sous_dimensions': sum(len(s) for s in taxonomy.values()),
                     'codes': len(leaves), 'unique_codes': len(set(leaves))}
 
-with open('framework2_taxonomy.json', 'w', encoding='utf-8') as f:
+with open(ROOT / 'framework2_taxonomy.json', 'w', encoding='utf-8') as f:
     json.dump({'framework': 'Framework 2', 'disease': 'Ebola',
-               'source': XLSX, 'taxonomy': taxonomy, 'report': report},
+               'source': str(XLSX.relative_to(ROOT)), 'taxonomy': taxonomy, 'report': report},
               f, ensure_ascii=False, indent=2)
 print(json.dumps(report, ensure_ascii=False, indent=2))

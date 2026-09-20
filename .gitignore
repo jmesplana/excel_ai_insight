@@ -51,3 +51,6 @@ playwright-report/
 examples/*.xlsx
 examples/*.xls
 examples/*.csv
+
+# Generated measurement output (figures are quoted in FRAMEWORK2_CODING.md)
+framework2_overlap.json

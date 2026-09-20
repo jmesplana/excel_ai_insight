@@ -6,6 +6,11 @@ quantifies that, so the doc cites a measurement rather than an impression.
 """
 import json, re, unicodedata
 
+import pathlib
+
+# Paths are resolved against the repo root so this runs from any directory.
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+
 STRIP = [
     r'^observations?( ou croyances?)?( concernant| sur)?\s*',
     r'^declarations? (indiquant|concernant)\s*',
@@ -29,8 +34,8 @@ def key(s):
     return ' '.join(re.sub(r'\b(du|des|au|aux|le|la|les|de|d|l)\b', '', s).split())
 
 def main():
-    tax = json.load(open('framework2_taxonomy.json', encoding='utf-8'))['taxonomy']
-    grid_raw = json.load(open('framework2_topic_grid.json', encoding='utf-8'))['grid']
+    tax = json.load(open(ROOT / 'framework2_taxonomy.json', encoding='utf-8'))['taxonomy']
+    grid_raw = json.load(open(ROOT / 'framework2_topic_grid.json', encoding='utf-8'))['grid']
 
     by_topic = {}
     for k, sub in grid_raw.items():
@@ -57,7 +62,7 @@ def main():
     rows.sort(key=lambda r: -r['overlap'])
     mean = round(sum(r['overlap'] for r in rows) / len(rows))
     json.dump({'per_topic': rows, 'mean_overlap_pct': mean},
-              open('framework2_overlap.json', 'w', encoding='utf-8'),
+              open(ROOT / 'framework2_overlap.json', 'w', encoding='utf-8'),
               ensure_ascii=False, indent=2)
 
     print(f'{"TOPIC":26s} {"types":>5s} {"overlap":>8s}')

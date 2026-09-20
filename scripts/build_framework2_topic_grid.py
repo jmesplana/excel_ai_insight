@@ -2,7 +2,12 @@
 import json, re, unicodedata
 from collections import defaultdict
 
-tax = json.load(open('framework2_taxonomy.json', encoding='utf-8'))['taxonomy']
+import pathlib
+
+# Paths are resolved against the repo root so this runs from any directory.
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+tax = json.load(open(ROOT / 'framework2_taxonomy.json', encoding='utf-8'))['taxonomy']
 
 def norm(s):
     s = unicodedata.normalize('NFKD', s.replace('’', "'"))
@@ -82,5 +87,5 @@ print(f'\ncells: {len(TYPES)*len(TOPICS)}  filled: {len(grid)}  gaps: {len(gaps)
 json.dump({'types': TYPES, 'topics': TOPICS,
            'grid': {f'{t}||{tp}': v for (t, tp), v in grid.items()},
            'gaps': [{'type': t, 'topic': tp} for t, tp in gaps]},
-          open('framework2_topic_grid.json', 'w', encoding='utf-8'),
+          open(ROOT / 'framework2_topic_grid.json', 'w', encoding='utf-8'),
           ensure_ascii=False, indent=2)
