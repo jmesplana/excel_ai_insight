@@ -44,3 +44,13 @@ npm-debug.log*
 # Browser regression artifacts
 test-results/
 playwright-report/
+
+# Source spreadsheets: these carry real community feedback (location,
+# demographics, verbatim text) and must not be published. The parsed
+# taxonomy JSON is committed instead.
+examples/*.xlsx
+examples/*.xls
+examples/*.csv
+
+# Generated measurement output (figures are quoted in FRAMEWORK2_CODING.md)
+framework2_overlap.json

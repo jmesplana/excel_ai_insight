@@ -791,10 +791,26 @@ function toggleDarkMode() {
     }
 }
 
-/* Initialize tooltips */
-function initTooltips() {
-    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-    [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+/* Initialize tooltips.
+ *
+ * Scoped to `root` so re-rendering one card does not touch triggers elsewhere,
+ * and guarded by getOrCreateInstance: constructing a second Tooltip on an
+ * element orphans the first, which then has no working hide handler and leaves
+ * its popup stuck on screen. */
+function initTooltips(root = document) {
+    const tooltipTriggerList = root.querySelectorAll('[data-bs-toggle="tooltip"]');
+    [...tooltipTriggerList].forEach(el => bootstrap.Tooltip.getOrCreateInstance(el));
+}
+
+/* Dispose tooltips inside `root` before its markup is discarded.
+ *
+ * Bootstrap appends the visible popup to document.body, not next to the
+ * trigger, so removing the trigger alone strands the popup on screen. */
+function disposeTooltips(root) {
+    if (!root) return;
+    root.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+        bootstrap.Tooltip.getInstance(el)?.dispose();
+    });
 }
 
 /* Navigation between main content and about page */
@@ -1117,6 +1133,7 @@ function updatePreviewTable(sheetName) {
 /* Column Configuration */
 function updateColumnConfigs() {
     const columnConfigs = document.getElementById('column-configs');
+    disposeTooltips(columnConfigs);
     columnConfigs.innerHTML = '';
     addColumnConfig();
 }
@@ -1202,6 +1219,7 @@ function addColumnConfig(preset = null) {
     const removeConfigBtn = configCard.querySelector('.remove-config-btn');
     removeConfigBtn.addEventListener('click', function() {
         if (document.querySelectorAll('.column-selection-container').length > 1) {
+            disposeTooltips(configCard);
             configCard.remove();
         } else {
             // Don't remove if it's the only config
@@ -1268,7 +1286,7 @@ function addColumnConfig(preset = null) {
     if (preset) applyColumnPreset(configCard, preset);
 
     columnConfigs.appendChild(configCard);
-    initTooltips();
+    initTooltips(configCard);
     return configCard;
 }
 
@@ -1815,6 +1833,7 @@ function addJevQuestion(preset = null) {
 
     card.querySelector('.jev-remove-btn').addEventListener('click', () => {
         if (document.querySelectorAll('.jev-question-container').length > 1) {
+            disposeTooltips(card);
             card.remove();
         } else {
             showAlert('jev-message', 'You need at least one result column.', 'warning');
@@ -1845,7 +1864,7 @@ function addJevQuestion(preset = null) {
     if (preset) applyJevPreset(card, preset);
     syncType();
     container.appendChild(card);
-    initTooltips();
+    initTooltips(card);
     return card;
 }
 
@@ -1913,6 +1932,7 @@ async function importJevConfig(event) {
     if (confidence) confidence.checked = imported.includeConfidence;
 
     const container = document.getElementById('jev-question-configs');
+    disposeTooltips(container);
     container.innerHTML = '';
     imported.questions.forEach(preset => addJevQuestion(preset));
 

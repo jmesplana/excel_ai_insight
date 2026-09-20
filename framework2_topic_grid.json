@@ -1,0 +1,182 @@
+{
+  "types": [
+    "Observations, perceptions ou croyances",
+    "Questions",
+    "Suggestions",
+    "Appréciations",
+    "Demandes",
+    "Signalements et préoccupations",
+    "Allégations et Signalement d’incident"
+  ],
+  "topics": [
+    "Maladie",
+    "Épidémie",
+    "Impact de l'épidémie",
+    "Comportements",
+    "MSP",
+    "Traitement",
+    "Services de santé",
+    "Vaccins",
+    "Réponse",
+    "Acteurs de la réponse",
+    "Sûreté et sécurité",
+    "Autres"
+  ],
+  "grid": {
+    "Observations, perceptions ou croyances||Maladie": "Croyances concernant la maladie",
+    "Observations, perceptions ou croyances||Épidémie": "Observations sur l’épidémie",
+    "Observations, perceptions ou croyances||Impact de l'épidémie": "Observations sur l’impact de l’épidémie",
+    "Observations, perceptions ou croyances||Comportements": "Croyances concernant les comportements",
+    "Observations, perceptions ou croyances||MSP": "Observations ou croyances concernant les MSP",
+    "Observations, perceptions ou croyances||Traitement": "Croyances concernant le traitement de la maladie",
+    "Observations, perceptions ou croyances||Services de santé": "Croyances concernant les services de santé",
+    "Observations, perceptions ou croyances||Vaccins": "Observations ou croyances concernant les vaccins",
+    "Observations, perceptions ou croyances||Réponse": "Observations sur la réponse",
+    "Observations, perceptions ou croyances||Acteurs de la réponse": "Observations sur les acteurs de la réponse",
+    "Observations, perceptions ou croyances||Sûreté et sécurité": "Observations sur la sûreté et la sécurité",
+    "Observations, perceptions ou croyances||Autres": "Autres observations, perceptions ou croyances",
+    "Questions||Maladie": "Questions sur la maladie",
+    "Questions||Épidémie": "Questions sur l'épidémie",
+    "Questions||Impact de l'épidémie": "Questions sur l'impact de l'épidémie",
+    "Questions||Comportements": "Questions sur les comportements",
+    "Questions||MSP": "Questions sur les MSP",
+    "Questions||Traitement": "Questions sur les traitements",
+    "Questions||Services de santé": "Questions sur les services de soins de santé",
+    "Questions||Vaccins": "Questions sur les vaccins",
+    "Questions||Réponse": "Questions sur la réponse",
+    "Questions||Acteurs de la réponse": "Questions relative aux acteurs de la réponse",
+    "Questions||Sûreté et sécurité": "Questions sur la sûreté et la sécurité",
+    "Questions||Autres": "Autres questions",
+    "Suggestions||Impact de l'épidémie": "Suggestions sur l'impact de l'épidémie",
+    "Suggestions||Comportements": "Suggestions concernant les comportements",
+    "Suggestions||MSP": "Suggestions sur les MSP",
+    "Suggestions||Traitement": "Suggestions sur le traitement",
+    "Suggestions||Services de santé": "Suggestions sur les services de santé",
+    "Suggestions||Vaccins": "Suggestions sur les vaccins",
+    "Suggestions||Réponse": "Suggestions sur la réponse",
+    "Suggestions||Acteurs de la réponse": "Suggestions sur les acteurs de la réponse",
+    "Suggestions||Sûreté et sécurité": "Suggestions concernant la sureté et sécurité",
+    "Appréciations||MSP": "Appréciation concernant les MSP",
+    "Appréciations||Services de santé": "Appréciation des services de santé",
+    "Appréciations||Vaccins": "Appréciation sur les vaccins",
+    "Appréciations||Réponse": "Appréciation concernant la réponse",
+    "Appréciations||Acteurs de la réponse": "Appréciation concernant les acteurs de la réponse",
+    "Demandes||Maladie": "Demande de plus d'informations sur l'épidémie",
+    "Demandes||Épidémie": "Demande relative à l'épidémie",
+    "Demandes||Impact de l'épidémie": "Demande liée à l'impact de l'épidémie",
+    "Demandes||Comportements": "Demande d'aide liée aux comportements",
+    "Demandes||MSP": "Demande relative aux MSP",
+    "Demandes||Traitement": "Demande concernant les traitements",
+    "Demandes||Services de santé": "Demande relative aux services de santé",
+    "Demandes||Vaccins": "Demande relative aux vaccins",
+    "Demandes||Réponse": "Demande relative à la réponse",
+    "Demandes||Acteurs de la réponse": "Demande relative aux acteurs de la réponse",
+    "Demandes||Sûreté et sécurité": "Demande liée à la sûreté et la sécurité",
+    "Demandes||Autres": "Autre demande",
+    "Signalements et préoccupations||Maladie": "Signalement sur la maladie",
+    "Signalements et préoccupations||Impact de l'épidémie": "Signalement lié à l'impact de l'épidémie",
+    "Signalements et préoccupations||MSP": "Signalement lié aux MSP",
+    "Signalements et préoccupations||Traitement": "Signalement lié au traitement",
+    "Signalements et préoccupations||Services de santé": "Signalement sur les services de santé",
+    "Signalements et préoccupations||Vaccins": "Signalement sur la vaccination",
+    "Signalements et préoccupations||Réponse": "Signalement sur la réponse",
+    "Signalements et préoccupations||Acteurs de la réponse": "Signalement sur les acteurs de la réponse",
+    "Signalements et préoccupations||Sûreté et sécurité": "Signalement sur la sécurité et la sûreté",
+    "Allégations et Signalement d’incident||Réponse": "Allegations concernant la réponse",
+    "Allégations et Signalement d’incident||Acteurs de la réponse": "Allégations concernant  les acteurs de la réponse"
+  },
+  "gaps": [
+    {
+      "type": "Suggestions",
+      "topic": "Maladie"
+    },
+    {
+      "type": "Suggestions",
+      "topic": "Épidémie"
+    },
+    {
+      "type": "Suggestions",
+      "topic": "Autres"
+    },
+    {
+      "type": "Appréciations",
+      "topic": "Maladie"
+    },
+    {
+      "type": "Appréciations",
+      "topic": "Épidémie"
+    },
+    {
+      "type": "Appréciations",
+      "topic": "Impact de l'épidémie"
+    },
+    {
+      "type": "Appréciations",
+      "topic": "Comportements"
+    },
+    {
+      "type": "Appréciations",
+      "topic": "Traitement"
+    },
+    {
+      "type": "Appréciations",
+      "topic": "Sûreté et sécurité"
+    },
+    {
+      "type": "Appréciations",
+      "topic": "Autres"
+    },
+    {
+      "type": "Signalements et préoccupations",
+      "topic": "Épidémie"
+    },
+    {
+      "type": "Signalements et préoccupations",
+      "topic": "Comportements"
+    },
+    {
+      "type": "Signalements et préoccupations",
+      "topic": "Autres"
+    },
+    {
+      "type": "Allégations et Signalement d’incident",
+      "topic": "Maladie"
+    },
+    {
+      "type": "Allégations et Signalement d’incident",
+      "topic": "Épidémie"
+    },
+    {
+      "type": "Allégations et Signalement d’incident",
+      "topic": "Impact de l'épidémie"
+    },
+    {
+      "type": "Allégations et Signalement d’incident",
+      "topic": "Comportements"
+    },
+    {
+      "type": "Allégations et Signalement d’incident",
+      "topic": "MSP"
+    },
+    {
+      "type": "Allégations et Signalement d’incident",
+      "topic": "Traitement"
+    },
+    {
+      "type": "Allégations et Signalement d’incident",
+      "topic": "Services de santé"
+    },
+    {
+      "type": "Allégations et Signalement d’incident",
+      "topic": "Vaccins"
+    },
+    {
+      "type": "Allégations et Signalement d’incident",
+      "topic": "Sûreté et sécurité"
+    },
+    {
+      "type": "Allégations et Signalement d’incident",
+      "topic": "Autres"
+    }
+  ]
+}

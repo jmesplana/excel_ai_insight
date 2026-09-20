@@ -1,0 +1,607 @@
+{
+  "framework": "Framework 2",
+  "disease": "Ebola",
+  "source": "examples/sample_framework_bvd.xlsx",
+  "taxonomy": {
+    "Observations, perceptions ou croyances": {
+      "Croyances concernant la maladie": [
+        "Croyances concernant l’existence de la maladie",
+        "Croyances concernant la non-existence de la maladie",
+        "Croyances indiquant le déni de la maladie",
+        "Croyances concernant l’agent infectieux (virus ou bactérie)",
+        "Croyances concernant la résistance du virus",
+        "Croyances concernant les symptômes",
+        "Croyances indiquant l’ignorance des symptômes",
+        "Croyances concernant la comparaison avec d’autres maladies",
+        "Croyances concernant les modes de transmission",
+        "Croyances concernant la transmission de personne à personne",
+        "Croyances concernant la transmission à partir de corps morts",
+        "Croyances concernant les matériaux contaminés",
+        "Croyances concernant l’eau contaminée",
+        "Croyances concernant les transmissions par les animaux",
+        "Croyances selon lesquelles certains groupes de personnes sont les propagateurs de la maladie",
+        "Croyances relatives aux comportements à risque de contamination",
+        "Croyances concernant d’autres modes de transmission",
+        "Croyances ou commentaires concernant le risque et la gravité",
+        "Peurs d’être contaminé",
+        "Croyances concernant le fait d’être contaminé",
+        "Croyances selon lesquelles quelqu’un est contaminé",
+        "Croyances selon lesquelles certaines communautés sont plus exposées au virus",
+        "Croyances concernant la gravité de la maladie",
+        "Observations ou croyances concernant le rétablissement",
+        "Croyances concernant les personnes rétablies de la maladie",
+        "Croyances selon lesquelles les personnes rétablies pourraient propager le virus",
+        "Autres croyances concernant la maladie"
+      ],
+      "Observations sur l’épidémie": [
+        "Croyances concernant l’origine de l’épidémie",
+        "Croyances concernant l’origine zoonotique de l’épidémie",
+        "Croyances selon lesquelles l’épidémie est d’origine surnaturelle",
+        "Croyances selon lesquelles l’épidémie fait partie d’un complot",
+        "Croyances selon lesquelles l’épidémie a été apportée par des étrangers",
+        "Croyances concernant l’évolution de l’épidémie",
+        "Croyances selon lesquelles l’épidémie n’existe pas dans cette région ou ce pays",
+        "Croyances concernant le nombre de cas et les tendances",
+        "Croyances concernant la durée de l’épidémie",
+        "Croyances selon lesquelles l’épidémie est terminée",
+        "Autres croyances concernant l’épidémie"
+      ],
+      "Observations sur l’impact de l’épidémie": [
+        "Observations sur l'impact de l'épidémie",
+        "Observations concernant l’impact social",
+        "Préoccupations liées à la stigmatisation due à la maladie",
+        "Préoccupations concernant la stigmatisation ethnique ou culturelle",
+        "Préoccupations concernant la stigmatisation des agents de santé",
+        "Préoccupations concernant la stigmatisation de la famille ou des contacts du cas",
+        "Préoccupations concernant la stigmatisation des personnes rétablies",
+        "Observations concernant l’impact sur la cohésion sociale",
+        "Observations concernant l’impact économique",
+        "Observations concernant l’impact sur les moyens de subsistance",
+        "Observations concernant la sécurité alimentaire",
+        "Observations concernant l’impact sur l’emploi",
+        "Observations concernant les conséquences sur les services de base",
+        "Observations concernant l’impact sur les services administratifs",
+        "Observations concernant l’impact sur les services de santé",
+        "Observations concernant l’impact sur l’éducation",
+        "Observations concernant les conséquences sur la santé mentale"
+      ],
+      "Croyances concernant les comportements": [
+        "Croyances concernant les comportements préventifs",
+        "Croyances concernant le nettoyage et la désinfection des surfaces touchées",
+        "Croyances concernant le lavage des mains",
+        "Croyances concernant la distanciation sociale",
+        "Croyances concernant les pratiques sexuelles sans risque",
+        "Croyances concernant la grossesse et l’allaitement",
+        "Croyances concernant les cas suspects",
+        "Croyances concernant l’isolement avec une personne malade",
+        "Croyances concernant les comportements culturels et traditionnels",
+        "Croyances concernant la prière comme mesure préventive",
+        "Croyances concernant l’éradication des animaux comme mesure préventive",
+        "Croyances concernant les enterrements et comportements funéraires traditionnels",
+        "Croyances concernant l’utilisation de remèdes naturels pour la prévention"
+      ],
+      "Observations ou croyances concernant les MSP": [
+        "Observation concernant les mesures de santé",
+        "Observations concernant la campagne de communication sur l’épidémie",
+        "Observations sur l’adhésion aux mesures de santé",
+        "Observations sur les obstacles à l’application des mesures de santé",
+        "Observations ou croyances concernant le traçage des contacts",
+        "Observations ou croyances concernant les enterrements sûrs et dignes",
+        "Observations ou croyances concernant les restrictions",
+        "Observations ou croyances concernant les restrictions de mouvement",
+        "Observations ou croyances concernant les voyages internationaux"
+      ],
+      "Croyances concernant le traitement de la maladie": [
+        "Croyances concernant les centres de traitement",
+        "Observations concernant l’accès aux centres de traitement",
+        "Observations ou croyances concernant la sécurité des centres de traitement",
+        "Croyances concernant les traitements approuvés",
+        "Croyances concernant la disponibilité des traitements approuvés",
+        "Croyances concernant l’utilisation de médicaments spécifiques",
+        "Croyances concernant l’efficacité des traitements approuvés",
+        "Croyances concernant les effets secondaires des traitements approuvés",
+        "Croyances concernant l’utilisation de traitements non approuvés",
+        "Croyances concernant l’utilisation de remèdes naturels pour le traitement",
+        "Croyances concernant l’utilisation de la médecine traditionnelle pour le traitement"
+      ],
+      "Croyances concernant les services de santé": [
+        "Croyances concernant l’accès aux soins de santé",
+        "Croyances concernant la qualité des soins de santé",
+        "Croyances selon lesquelles les structures de santé ne sont pas sûres",
+        "Croyances concernant la gestion des décès dans les structures de santé",
+        "Croyances concernant les agents de santé",
+        "Croyances concernant le rôle des agents de santé",
+        "Croyances concernant le rôle des agents de santé communautaires",
+        "Croyances concernant les compétences des agents de santé",
+        "Croyances concernant les équipements de protection pour les agents de santé"
+      ],
+      "Observations ou croyances concernant les vaccins": [
+        "Observations ou croyances concernant les campagnes de vaccination",
+        "Observations ou croyances concernant les informations reçues sur le vaccin",
+        "Déclarations indiquant la non-acceptation du vaccin",
+        "Observations ou croyances concernant le développement des vaccins",
+        "Observations ou croyances concernant la disponibilité du vaccin",
+        "Observations ou croyances concernant l’accès au vaccin",
+        "Observations ou croyances concernant les structures de vaccination",
+        "Observations ou croyances concernant le prix du vaccin",
+        "Observations ou croyances concernant la qualité du vaccin",
+        "Observations ou croyances concernant l’efficacité du vaccin",
+        "Observations ou croyances concernant les effets secondaires du vaccin",
+        "Déclarations indiquant une suspicion envers le vaccin",
+        "Autres croyances et observations concernant les vaccins"
+      ],
+      "Observations sur la réponse": [
+        "Observations concernant l’information sur la réponse",
+        "Déclarations concernant le manque d’information",
+        "Observations concernant les rumeurs dans la communauté",
+        "Croyances selon lesquelles les informations reçues sont fausses",
+        "Observations sur l’accès à l’assistance",
+        "Observations sur la fourniture d’une assistance sanitaire",
+        "Observations sur la fourniture d’articles de prévention des maladies",
+        "Observations ou croyances concernant les activités de réponse pour des groupes spécifiques",
+        "Observations ou croyances concernant le processus de sélection de l’assistance",
+        "Observations ou croyances concernant l’accès au soutien des moyens de subsistance",
+        "Observations sur la qualité de la réponse",
+        "Observations sur les compétences des acteurs de la réponse",
+        "Observations sur le calendrier de l’action",
+        "Observations sur l’efficacité de l’action",
+        "Observations sur l’engagement communautaire",
+        "Observations sur la localisation de la réponse",
+        "Observations sur l’implication des membres de la communauté dans la réponse",
+        "Observations sur les solutions dirigées par la communauté",
+        "Déclarations concernant la non-acceptation de la réponse",
+        "Déclarations concernant la fatigue face à la réponse",
+        "Déclarations concernant le rejet de la réponse"
+      ],
+      "Observations sur les acteurs de la réponse": [
+        "Déclarations indiquant une suspicion envers les acteurs et intervenants",
+        "Déclarations indiquant une suspicion envers le gouvernement",
+        "Déclarations indiquant une suspicion envers la science",
+        "Déclarations indiquant une suspicion envers les médias et la presse",
+        "Déclarations indiquant une suspicion envers les leaders locaux",
+        "Déclarations indiquant une suspicion envers les agents de santé",
+        "Déclarations indiquant une suspicion envers les acteurs humanitaires",
+        "Croyances selon lesquelles certaines personnes/organisations gagnent de l’argent à cause de l’épidémie",
+        "Croyances selon lesquelles la maladie est propagée par les acteurs de la réponse",
+        "Observations sur le rôle des acteurs et intervenants",
+        "Observations ou croyances concernant le gouvernement",
+        "Observations ou croyances concernant les organisations internationales",
+        "Observations ou croyances concernant la Croix-Rouge",
+        "Observations ou croyances concernant les acteurs locaux"
+      ],
+      "Observations sur la sûreté et la sécurité": [
+        "Observations sur la sûreté et la sécurité",
+        "Déclarations concernant les conditions de sécurité",
+        "Déclarations concernant le sentiment de menace",
+        "Déclarations concernant les routes ou accès dangereux",
+        "Déclarations concernant la violence",
+        "Déclarations concernant le SEA ou les atteintes à la dignité",
+        "Déclarations concernant la discrimination",
+        "Déclarations concernant les protestations violentes",
+        "Déclarations concernant les violences communautaires",
+        "Déclarations concernant les groupes armés",
+        "Déclarations concernant les forces de sécurité",
+        "Déclarations concernant les personnes disparues"
+      ],
+      "Autres observations, perceptions ou croyances": [
+        "Autres observations, perceptions ou croyances"
+      ]
+    },
+    "Questions": {
+      "Questions sur la maladie": [
+        "Questions sur l’existence de la maladie",
+        "Questions sur la négation de la maladie",
+        "Questions sur l’agent infectieux (virus, bactérie)",
+        "Questions sur la résistance du virus",
+        "Questions sur les symptômes",
+        "Questions sur la comparaison avec d’autres maladies",
+        "Questions sur la transmission",
+        "Questions sur la transmission de personne à personne",
+        "Questions sur la transmission par les corps des défunts",
+        "Questions sur les matériaux contaminés",
+        "Questions sur l’eau contaminée",
+        "Questions sur les transmissions animales",
+        "Questions sur qui propage la maladie",
+        "Questions sur les comportements à risque de contamination",
+        "Questions sur d’autres modes de transmission",
+        "Questions sur le risque et la gravité",
+        "Questions sur le risque d’être contaminé",
+        "Questions sur le fait d’avoir des symptômes",
+        "Questions sur une personne présentant des symptômes",
+        "Questions sur les communautés à risque",
+        "Questions sur la gravité de la maladie",
+        "Questions sur la guérison",
+        "Questions sur les personnes guéries de la maladie",
+        "Questions sur la transmission par les personnes guéries",
+        "Autres questions sur la maladie"
+      ],
+      "Questions sur l'épidémie": [
+        "Questions sur l’origine de l’épidémie",
+        "Questions sur l’origine zoonotique de l’épidémie",
+        "Questions sur le rôle surnaturel dans l’origine de l’épidémie",
+        "Questions indiquant que l’épidémie fait partie d’un complot",
+        "Questions sur l’introduction de l’épidémie par des étrangers",
+        "Questions sur l’évolution de l’épidémie",
+        "Autre question sur l’épidémie",
+        "Questions sur l’existance de l’épidémie",
+        "Question concernant la fin de l'épidémie."
+      ],
+      "Questions sur l'impact de l'épidémie": [
+        "Impact social",
+        "Questions sur l’impact social",
+        "Questions sur l’exclusion sociale ou la stigmatisation due à la maladie",
+        "Questions sur la stigmatisation ethnique ou culturelle",
+        "Questions sur la stigmatisation des agents de santé",
+        "Questions sur la stigmatisation de la famille ou des contacts du cas",
+        "Questions sur la stigmatisation des personnes guéries",
+        "Questions sur l’impact sur la cohésion sociale",
+        "Impact économique",
+        "Questions sur l’impact économique",
+        "Questions sur l’impact sur les moyens de subsistance",
+        "Questions sur la sécurité alimentaire",
+        "Questions sur l’impact sur l’emploi",
+        "Services basiques",
+        "Questions sur les conséquences sur les services de base",
+        "Questions sur l’impact sur les services administratifs",
+        "Questions sur l’impact sur les services de santé",
+        "Questions sur l’impact sur l’éducation",
+        "Santé mentale",
+        "Questions sur les conséquences sur la santé mentale"
+      ],
+      "Questions sur les comportements": [
+        "Questions sur les comportements préventifs",
+        "Questions sur le nettoyage et la désinfection des surfaces touchées",
+        "Questions sur le lavage des mains",
+        "Questions sur la distanciation sociale",
+        "Questions sur les pratiques sexuelles sûres",
+        "Questions sur la grossesse et l’allaitement",
+        "Questions sur ce qu’il faut faire si l’on soupçonne quelqu’un d’être malade",
+        "Questions sur l’isolement des personnes malades",
+        "Questions sur les comportements culturels et traditionnels",
+        "Questions sur la prière comme mesure préventive",
+        "Questions sur l’éradication des animaux comme mesure préventive",
+        "Questions sur les enterrements et pratiques funéraires traditionnels",
+        "Questions sur l’utilisation de remèdes naturels pour la prévention"
+      ],
+      "Questions sur les MSP": [
+        "Questions sur les mesures de santé",
+        "Questions sur la campagne de communication autour de l’épidémie",
+        "Questions sur la manière de faire appliquer les mesures de santé",
+        "Questions sur le traçage des contacts",
+        "Questions sur les enterrements sûrs et dignes",
+        "Questions sur les restrictions",
+        "Questions sur les restrictions de mouvement",
+        "Observations ou croyances concernant les voyages internationaux"
+      ],
+      "Questions sur les traitements": [
+        "Questions sur les centres de traitement",
+        "Questions sur l’accès aux centres de traitement",
+        "Questions sur la sécurité des centres de traitement",
+        "Questions concernant les raison pour lesquelles les gens meurent a l’hopitale",
+        "Questions sur les traitements approuvés pour la maladie",
+        "Questions sur la disponibilité des traitements approuvés",
+        "Questions sur l’utilisation de médicaments spécifiques",
+        "Questions sur l’efficacité des traitements approuvés",
+        "Questions sur les effets secondaires des traitements approuvés",
+        "Questions sur l’utilisation de traitements non approuvés",
+        "Questions sur l’utilisation de remèdes naturels pour le traitement",
+        "Questions sur l’utilisation de la médecine traditionnelle pour le traitement"
+      ],
+      "Questions sur les services de soins de santé": [
+        "Questions sur l’accès aux soins de santé",
+        "Questions sur la qualité des soins de santé",
+        "Questions sur la sécurité dans les établissements de santé",
+        "Questions sur la gestion des décès dans les établissements de santé",
+        "Questions sur les agents de santé",
+        "Questions sur le rôle des agents de santé",
+        "Questions sur le rôle des agents de santé communautaires",
+        "Questions sur les compétences des agents de santé",
+        "Questions sur les équipements de protection pour les agents de santé"
+      ],
+      "Questions sur les vaccins": [
+        "Questions sur les campagnes de vaccination",
+        "Questions sur les informations reçues sur le vaccin",
+        "Questions sur la non-acceptation",
+        "Questions sur le développement du vaccin",
+        "Questions sur l’existence d’un vaccin pour la maladie",
+        "Questions sur l’accès au vaccin",
+        "Questions sur les infrastructures liées au vaccin",
+        "Questions sur le prix du vaccin",
+        "Questions sur la qualité du vaccin",
+        "Questions sur l’efficacité du vaccin",
+        "Questions sur les effets secondaires du vaccin",
+        "Questions indiquant une suspicion à l’égard du vaccin",
+        "Autres questions sur les vaccins"
+      ],
+      "Questions sur la réponse": [
+        "Questions sur les informations concernant la réponse",
+        "Questions liées aux fausses nouvelles suspectées ou aux rumeurs dans la communauté",
+        "Questions sur la confiance dans les informations reçues",
+        "Questions sur l’accès à l’assistance",
+        "Questions sur la fourniture d’une assistance sanitaire",
+        "Questions sur la fourniture d’autres articles de prévention des maladies",
+        "Questions sur les activités de réponse pour des groupes spécifiques",
+        "Questions sur le processus de sélection de l’assistance",
+        "Questions sur l’accès au soutien des moyens de subsistance",
+        "Questions relatives à la qualité de la réponse",
+        "Questions sur le calendrier des actions",
+        "Questions sur l’efficacité des actions",
+        "Questions sur l’engagement communautaire",
+        "Questions sur la localisation de la réponse",
+        "Questions sur la manière de participer à la réponse",
+        "Questions sur les solutions menées par la communauté"
+      ],
+      "Questions relative aux acteurs de la réponse": [
+        "Questions révélant une méfiance envers des personnes ou des institutions",
+        "Questions révélant une méfiance envers le gouvernement",
+        "Questions révélant une méfiance envers la science",
+        "Questions révélant une méfiance envers les médias",
+        "Questions révélant une méfiance envers les dirigeants locaux",
+        "Questions révélant une méfiance envers les agents de santé",
+        "Questions révélant une méfiance envers les acteurs humanitaires",
+        "Questions révélant que les acteurs humanitaires profitent financièrement de l’épidémie",
+        "Questions sur le rôle des acteurs de la réponse",
+        "Questions sur le rôle du gouvernement",
+        "Questions sur le rôle des organisations internationales",
+        "Questions sur le rôle de la Croix-Rouge",
+        "Questions sur le rôle des acteurs locaux"
+      ],
+      "Questions sur la sûreté et la sécurité": [
+        "Questions sur la sûreté et la sécurité"
+      ],
+      "Autres questions": [
+        "Autres questions"
+      ]
+    },
+    "Suggestions": {
+      "Suggestions sur l'impact de l'épidémie": [
+        "Suggestions concernant l’impact sur les services de santé",
+        "Suggestions concernant l’impact sur l’éducation",
+        "Suggestions concernant la santé mentale"
+      ],
+      "Suggestions concernant les comportements": [
+        "Suggestions concernant les comportements"
+      ],
+      "Suggestions sur les MSP": [
+        "Suggestions concernant les mesures de santé",
+        "Suggestions concernant la campagne de communication sur l’épidémie",
+        "Suggestions pour lever les obstacles à l’application des mesures de santé",
+        "Suggestions concernant le traçage des contacts",
+        "Suggestions concernant les enterrements sûrs et dignes",
+        "Suggestions concernant les restrictions",
+        "Suggestions concernant les restrictions de mouvement",
+        "Suggestions concernant les voyages internationaux"
+      ],
+      "Suggestions sur le traitement": [
+        "Suggestions concernant les traitements non approuvés",
+        "Suggestions concernant l’utilisation de la médecine traditionnelle comme traitement"
+      ],
+      "Suggestions sur les services de santé": [
+        "Suggestions concernant l’accès aux soins de santé",
+        "Suggestions concernant le rôle des agents de santé communautaires"
+      ],
+      "Suggestions sur les vaccins": [
+        "Suggestions concernant les campagnes de vaccination",
+        "Suggestions concernant les informations reçues sur le vaccin",
+        "Suggestions concernant la non-acceptation du vaccin"
+      ],
+      "Suggestions sur la réponse": [
+        "Suggestions concernant l’information sur la réponse",
+        "Suggestion de réduire l’information sur la maladie",
+        "Suggestion d’adapter le contenu de la campagne d’information",
+        "Suggestion d’utiliser un canal spécifique pour communiquer avec les communautés",
+        "Suggestions concernant l’accès à la réponse",
+        "Suggestions de concentrer les activités pour des groupes spécifiques",
+        "Suggestions concernant la qualité de la réponse",
+        "Suggestions relatives à l’engagement communautaire",
+        "Suggestions relatives aux solutions dirigées par la communauté",
+        "Suggestions pour modifier la réponse"
+      ],
+      "Suggestions sur les acteurs de la réponse": [
+        "Suggestions sur les acteurs de la réponse"
+      ],
+      "Suggestions concernant la sureté et sécurité": [
+        "Suggestions concernant les conditions de sécurité",
+        "Suggestions concernant la violence"
+      ]
+    },
+    "Appréciations": {
+      "Appréciation concernant les MSP": [
+        "Appréciation concernant les MSP",
+        "Appréciations de l'équipe SDB"
+      ],
+      "Appréciation des services de santé": [
+        "Appréciations ou encouragements envers les agents de santé",
+        "Appréciations du rôle des agents de santé",
+        "Appréciations du rôle des agents de santé communautaires"
+      ],
+      "Appréciation sur les vaccins": [
+        "Appréciation sur les vaccins"
+      ],
+      "Appréciation concernant la réponse": [
+        "Appréciations des informations reçues",
+        "Appréciations de l’accès à la réponse",
+        "Appréciations de la qualité de la réponse",
+        "Appréciations de l’engagement communautaire"
+      ],
+      "Appréciation concernant les acteurs de la réponse": [
+        "Appréciation concernant la réponse actors",
+        "Appréciations du rôle du gouvernement",
+        "Appréciations du rôle des organisations internationales",
+        "Appréciations du rôle de la Croix-Rouge",
+        "Appréciations du rôle des acteurs locaux"
+      ]
+    },
+    "Demandes": {
+      "Demande de plus d'informations sur l'épidémie": [
+        "Demande de partage de preuves de la maladie ou de personnes malades",
+        "Demande de partage d’informations sur l’agent infectieux (virus, bactérie)",
+        "Demande de partage d’informations sur les symptômes",
+        "Demande de partage d’informations sur la transmission",
+        "Demande de partage d’informations sur le risque et la gravité",
+        "Demande de partage d’informations sur le rétablissement",
+        "Demande de soins de santé urgents",
+        "Demande de vérification de cas suspects"
+      ],
+      "Demande relative à l'épidémie": [
+        "Demande d’informations sur l’évolution de l’épidémie",
+        "Demande de partage du nombre ou des tendances de l’épidémie",
+        "Demande d’arrêt de l’épidémie"
+      ],
+      "Demande liée à l'impact de l'épidémie": [
+        "Demande d’atténuation de l’impact économique"
+      ],
+      "Demande d'aide liée aux comportements": [
+        "Demande d'aide liée aux comportements"
+      ],
+      "Demande relative aux MSP": [
+        "Demande de prévention sanitaire concernant la maladie",
+        "Demande de partager plus d’informations sur les mesures préventives",
+        "Demande de supports éducatifs, y compris des flyers et affiches",
+        "Demande de renforcer les MHP (mesures d’hygiène et de prévention)",
+        "Demande d’adapter les MHP",
+        "Demande relative aux tests",
+        "Demande relative au traçage des contacts",
+        "Demande relative aux enterrements sûrs et dignes"
+      ],
+      "Demande concernant les traitements": [
+        "Demande de construction de centres de traitement",
+        "Demande d’amélioration de l’accès aux centres de traitement",
+        "Demande de fournir un traitement approuvé",
+        "Demande de rendre le traitement disponible",
+        "Demande d’information sur l’utilisation des traitements",
+        "Demande de fournir un traitement non approuvé"
+      ],
+      "Demande relative aux services de santé": [
+        "Demande d’amélioration de l’accès aux soins de santé",
+        "Demande relative aux coûts des soins de santé",
+        "Demande de soutien médical pour un groupe spécifique",
+        "Demande d’amélioration de la qualité des soins de santé",
+        "Demande de création de morgue",
+        "Demande de service spécifique de la part des agents de santé",
+        "Demande de formation pour les agents de santé communautaires",
+        "Demande de formation pour les agents de santé",
+        "Demande de davantage d’équipements de protection pour les agents de santé"
+      ],
+      "Demande relative aux vaccins": [
+        "Demande de démarrer la campagne de vaccination",
+        "Demande de partager plus d’informations sur le vaccin",
+        "Demande d’arrêter la vaccination"
+      ],
+      "Demande relative à la réponse": [
+        "Demande relative aux informations reçues sur la réponse",
+        "Demande de plus d’informations sur les activités de réponse",
+        "Demande d’amélioration de la campagne de communication",
+        "Demande de traitement des rumeurs",
+        "Demande relative à l’accès à l’assistance",
+        "Demande d’assistance sanitaire",
+        "Demande d’autres équipements de prévention",
+        "Demande de cibler les activités pour des groupes spécifiques",
+        "Demande de partage d’informations sur le processus de sélection",
+        "Demande relative à la qualité de la réponse",
+        "Demande de former ou d’impliquer certaines personnes ou institutions",
+        "Demande d’accélérer l’action",
+        "Demande d’améliorer l’efficacité de l’action",
+        "Demande relative à l’engagement communautaire",
+        "Demande de localisation de la réponse",
+        "Demande de participation à l’action",
+        "Demande relative aux solutions menées par les communautés",
+        "Demande d’arrêt de la réponse",
+        "Demande d’être laissé tranquille",
+        "Demande de quitter la zone"
+      ],
+      "Demande relative aux acteurs de la réponse": [
+        "Demande relative aux acteurs de la réponse"
+      ],
+      "Demande liée à la sûreté et la sécurité": [
+        "Demande liée à la sûreté et la sécurité"
+      ],
+      "Autre demande": [
+        "Autre demande"
+      ]
+    },
+    "Signalements et préoccupations": {
+      "Signalement sur la maladie": [
+        "Signalement concernant un point d’eau contaminé",
+        "Signalement concernant une personne qui propage la maladie"
+      ],
+      "Signalement lié à l'impact de l'épidémie": [
+        "Signalement sur la stigmatisation associée à la maladie",
+        "Signalement sur la stigmatisation ethnique ou culturelle",
+        "Signalement sur la stigmatisation des agents de santé",
+        "Signalement sur la stigmatisation de la famille ou des cas contacts",
+        "Signalement sur la stigmatisation des personnes guéries"
+      ],
+      "Signalement lié aux MSP": [
+        "Signalement relatif aux restrictions"
+      ],
+      "Signalement lié au traitement": [
+        "Signalement sur le centre de traitement",
+        "Signalement sur les effets secondaires du traitement approuvé"
+      ],
+      "Signalement sur les services de santé": [
+        "Plaintes concernant le manque d’informations sur la personne décédée",
+        "Plaintes concernant les agents de santé"
+      ],
+      "Signalement sur la vaccination": [
+        "Plaintes concernant l’accès au vaccin",
+        "Plaintes concernant les infrastructures de vaccination",
+        "Plaintes concernant le prix du vaccin",
+        "Plaintes concernant l’indisponibilité du vaccin"
+      ],
+      "Signalement sur la réponse": [
+        "Plaintes concernant l’information reçue",
+        "Signalement sur l’accès à l’assistance"
+      ],
+      "Signalement sur les acteurs de la réponse": [
+        "Plaintes concernant les acteurs de la réponse",
+        "Plaintes concernant le rôle du gouvernement",
+        "Plaintes concernant le rôle des organisations internationales",
+        "Plaintes concernant le rôle de la Croix-Rouge",
+        "Plaintes concernant le rôle des acteurs locaux"
+      ],
+      "Signalement sur la sécurité et la sûreté": [
+        "Signalement concernant le manque de sécurité",
+        "Signalement concernant des routes ou accès dangereux",
+        "Signalement d’incidents violents",
+        "Signalement de violences basées sur le genre",
+        "Signalement de discrimination",
+        "Signalement de manifestations violentes",
+        "Signalement de violences communautaires",
+        "Signalement d’incidents liés aux forces de sécurité"
+      ]
+    },
+    "Allégations et Signalement d’incident": {
+      "Allegations concernant la réponse": [
+        "Allégations concernant la réponse"
+      ],
+      "Allégations concernant  les acteurs de la réponse": [
+        "Allégations de mauvaise conduite en général",
+        "Allégations de consommation illégale",
+        "Allégations de corruption, de pot-de-vin, de vol ou de fraude",
+        "Allégations de népotisme",
+        "Allégations de discrimination, d’abus ou d’atteinte à la dignité",
+        "Allégations d’exploitation et d’abus sexuels (EAS)"
+      ]
+    }
+  },
+  "report": {
+    "unresolved": [],
+    "empty_sous_dimensions": [],
+    "orphan_columns": [],
+    "separators_dropped": 75,
+    "header_overrides_applied": {
+      "Questions sur les MSP": "Demande relative aux MSP2",
+      "Allégations concernant  les acteurs de la réponse": "Allegations sur les acteurs de la réponse"
+    },
+    "duplicate_code_labels": [
+      "Observations ou croyances concernant les voyages internationaux"
+    ],
+    "counts": {
+      "types": 7,
+      "sous_dimensions": 61,
+      "codes": 445,
+      "unique_codes": 444
+    }
+  }
+}
