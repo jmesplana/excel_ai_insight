@@ -434,6 +434,59 @@
                             <li><strong>Downloadable Results:</strong> Export to Excel with all original and analyzed data</li>
                             <li><strong>Progress Tracking:</strong> Real-time progress bar shows analysis status</li>
                         </ul>
+
+                        <h5 class="mt-4 mb-3">Reading the Confidence Columns (Jev Classification):</h5>
+                        <p>
+                            If you ticked <em>Add confidence columns</em>, each result is followed by a
+                            <code>__confidence</code> value between 0 and 1. It measures
+                            <strong>how clear-cut the answer was, not how likely it is to be correct.</strong>
+                            Jev scores every option you supplied: a number near 1 means the winning option
+                            scored far above the rest, while a number near 0 means several options scored
+                            alike and the pick was a close call.
+                        </p>
+                        <p>
+                            Use it to decide <em>what to check first</em> — it sorts your rows from clear-cut
+                            to borderline. Read it as a ranking, not as a percentage: 0.80 does not mean
+                            &ldquo;80% likely correct&rdquo;.
+                        </p>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered align-middle">
+                                <thead class="table-light">
+                                    <tr><th style="width: 9rem;">Confidence</th><th>What it suggests</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="badge bg-danger">below 0.5</span></td>
+                                        <td>Genuine uncertainty &mdash; send the row to a human reviewer</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="badge bg-warning text-dark">0.5 &ndash; 0.9</span></td>
+                                        <td>Usable, with care proportional to what the value drives</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="badge bg-success">above 0.9</span></td>
+                                        <td>Clear-cut enough to use unreviewed</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="mb-2">
+                            These are starting points from the model's documentation, not guarantees. To set a
+                            threshold you can defend, hand-code a sample of rows, compare them to the results,
+                            and see where the disagreements actually fall on the scale.
+                        </p>
+                        <ul>
+                            <li>
+                                <strong>Yes/No questions report no confidence</strong> &mdash; that column stays
+                                empty. Use the <code>__score</code> column instead (the probability of
+                                &ldquo;yes&rdquo;), where distance from 0.5 carries the same meaning.
+                            </li>
+                            <li>
+                                <strong>A low score is information, not a failure.</strong> Feedback that
+                                genuinely spans two categories <em>should</em> score low &mdash; that is exactly
+                                the row a person most needs to look at.
+                            </li>
+                        </ul>
                     </div>
                 </div>
             </div>

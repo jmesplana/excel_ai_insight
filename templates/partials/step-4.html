@@ -158,7 +158,7 @@
                                         <label class="form-check-label" for="jev-include-confidence">
                                             Add confidence columns
                                             <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
-                                               title="Adds '<result>__confidence' (0-1) for every question, plus '<result>__score' for Score and Yes/No questions. Use it to route low-confidence rows for human review."></i>
+                                               title="Adds '<result>__confidence' (0-1) for Choice and Score questions — Yes/No questions do not report one. Also adds '<result>__score' for Score and Yes/No. Confidence measures how concentrated Jev's answer was, not how likely it is to be correct: below 0.5 means genuine uncertainty, so review those rows."></i>
                                         </label>
                                     </div>
 

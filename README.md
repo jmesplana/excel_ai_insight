@@ -14,7 +14,7 @@ Perfect for anyone drowning in Excel data: e-commerce managers analyzing custome
 - **Sentiment Analysis**: Extract sentiment (Positive/Negative/Neutral) from customer feedback
 - **Translation Service**: Translate text to any language (English, Spanish, French, Japanese, etc.)
 - **Medical Coding & Translation (WHO ICD-11)**: Map free-text diagnoses (any language, even with typos) to official WHO ICD-11 codes and translated terms, plus an optional derived ICD-10 mapping with a relationship indicator (same-as / broader-than / narrower-than / no-map)
-- **Jev Classification (typesafe.ai)**: Assign each row one label from a list you define. Jev returns a *typed* answer constrained to your options — never invented text — along with a calibrated confidence, so results need no cleanup
+- **Jev Classification (typesafe.ai)**: Assign each row one label from a list you define. Jev returns a *typed* answer constrained to your options — never invented text — along with a confidence score, so results need no cleanup
 - **Pattern Detection**: Discover categories and themes in your data automatically
 - **Multi-Column Analysis**: Analyze multiple columns together for deeper insights
 - **Test Mode**: Try your prompts on a sample before the full run — set how many rows in the **Test rows** box next to the Test Run button
@@ -150,7 +150,7 @@ A dedicated mode (select **Jev Classification** on the Configuration step) that
 replaces the LLM with [Jev](https://typesafe.ai), a *System One* model. Where an
 LLM generates prose you then have to parse, Jev answers **typed questions**: the
 result is always one of the options you supplied, plus a probability for each
-option and a calibrated confidence.
+option and a confidence score.
 
 Each result column is one question, of three kinds:
 
@@ -168,11 +168,50 @@ Notes:
 - **Confidence columns** are optional. Tick *Add confidence columns* to also
   emit `<result>__confidence` (0–1), plus `<result>__score` for Score and
   Yes/No questions — useful for routing low-confidence rows to human review.
+  See [What the confidence numbers mean](#what-the-confidence-numbers-mean).
 - **Accents and non-Latin labels** are handled: option keys are slugified to
   ASCII internally, and the label you typed is what lands in the cell.
 - **Configurations are portable.** Export the question set and option lists to
   JSON and reimport them onto the next file.
 - Set your **Jev API Key** in API Settings (or `TYPESAFE_API_KEY` server-side).
+
+#### What the confidence numbers mean
+
+Ticking *Add confidence columns* adds `<result>__confidence` next to each
+result, between 0 and 1.
+
+**It measures how concentrated Jev's answer was, not how likely it is to be
+correct.** Jev scores every option you supplied and the confidence summarises
+the shape of that distribution: near 1 means the winning option scored far
+above the rest; near 0 means several options scored alike and the pick was
+close. A high number says the question was easy to answer from the text, not
+that the answer is true.
+
+The API documents this as a convenience statistic rather than a calibrated
+probability, so read it as a *relative* ranking — it sorts your rows from
+clear-cut to borderline. Do not read 0.80 as "80% likely correct".
+
+The vendor's suggested starting thresholds:
+
+| Confidence | What it suggests |
+|---|---|
+| **below 0.5** | Genuine uncertainty — send the row to a human |
+| **0.5 – 0.9** | Usable, with care proportional to what the value drives |
+| **above 0.9** | Clear-cut enough to use unreviewed |
+
+Treat these as a starting point and tune them against your own data. The
+honest way to set a threshold: hand-code a sample, compare it to Jev's output,
+and see where the disagreements actually fall on the scale. Until you do that,
+the column tells you what to *look at first*, not what is right.
+
+Two practical notes:
+
+- **Yes/No questions report no confidence** — the column is left empty for
+  them. Use the `__score` column (the probability of "yes"), where distance
+  from 0.5 carries the same "how close was it" meaning.
+- **A low score is information, not a failure.** Feedback that genuinely spans
+  two categories *should* score low, and that is the row a human most needs to
+  see.
 
 ### Pattern Detection
 Discover categories automatically:

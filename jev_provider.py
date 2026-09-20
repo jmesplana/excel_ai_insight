@@ -3,9 +3,14 @@ Jev (typesafe.ai) System One provider.
 
 Where the OpenAI/Azure path asks a model for free text and takes whatever prose
 comes back, Jev answers *typed* questions: every answer is constrained to a list
-the caller supplied, and comes with a probability per option plus a calibrated
-confidence. Nothing outside the supplied options can ever be returned, so the
+the caller supplied, and comes with a probability per option plus a confidence
+statistic. Nothing outside the supplied options can ever be returned, so the
 value that lands in a spreadsheet cell needs no parsing or cleanup.
+
+Confidence (0-1) summarises how concentrated that probability distribution is,
+not how likely the answer is to be correct: the API documents it as a
+convenience metric rather than a calibrated probability. Choice and Score
+report it; Noul does not.
 
 Three question types are supported, mirroring the API's primitives:
 
@@ -200,6 +205,9 @@ def decode_answer(answer, decoder):
 
     `detail` is the raw score for a Score question and the yes-probability for
     a Noul, or None for a Choice -- the optional auditing column.
+
+    `confidence` is None for a Noul: the API reports it only for Choice and
+    Score. The caller writes an empty cell in that case.
     """
     if not isinstance(answer, dict):
         raise JevError("Malformed answer from Jev.")
