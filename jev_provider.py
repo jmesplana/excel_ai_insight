@@ -243,9 +243,24 @@ def decode_answer(answer, decoder):
     probabilities = answer.get("probabilities")
     if not isinstance(probabilities, dict) or set(probabilities) != expected:
         raise JevError("Jev probability keys do not match the options.")
-    total = sum(number(v, 0, 1, "probability") for v in probabilities.values())
-    if abs(total - 1) > 0.01:
-        raise JevError("Jev probabilities do not sum to one.")
+    values = [number(v, 0, 1, "probability") for v in probabilities.values()]
+    total = math.fsum(values)
+    # Keep the existing 1% tolerance, including its floating-point boundary.
+    plausible_total = math.isclose(total, 1, rel_tol=0, abs_tol=0.01 + 1e-12)
+    if not plausible_total and all(v == round(v, 2) for v in values):
+        # Jev's documented responses use hundredths. Each rounded value can
+        # differ by up to .005; with many options that can exceed 1% overall.
+        # Check whether their rounding intervals can contain a unit total,
+        # clipping at 0 and 1 so zero entries cannot hide excess probability.
+        # Preserve the original probabilities, confidence and score for audit.
+        lower = math.fsum(max(0, v - 0.005) for v in values)
+        upper = math.fsum(min(1, v + 0.005) for v in values)
+        plausible_total = lower <= 1 + 1e-12 and upper >= 1 - 1e-12
+    if total == 0 or not plausible_total:
+        raise JevError(
+            f"Jev probabilities do not sum to one (total {total:.6g} "
+            f"across {len(values)} options). Retry failed decisions."
+        )
     if kind == "choice":
         key = answer.get("choice")
         if key not in expected:

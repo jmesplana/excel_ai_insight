@@ -63,6 +63,65 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(q['criteria']['a'], {'includes': ['alpha']})
         self.assertEqual(decoder['labels']['a'], 'A')
 
+    def test_rounded_probabilities_accept_boundary_and_accumulated_rounding(self):
+        for kind in ('choice', 'score'):
+            for values in ([.6, .3, .09], [.6, .3, .11],
+                           [.78, .04, .04, .04, .04, .04],
+                           [.82, .04, .04, .04, .04, .04]):
+                with self.subTest(kind=kind, values=values):
+                    labels = [f'Option {i}' for i in range(len(values))]
+                    question, decoder = build_question({'type': kind, 'instructions': 'Rate', 'options': labels})
+                    keys = list(question['criteria']) if kind == 'choice' else [str(i) for i in range(len(values))]
+                    raw = {'type': kind, 'confidence': .8, 'choice': keys[0], 'score': .4,
+                           'probabilities': dict(zip(keys, values))}
+                    original = raw.copy()
+                    value, confidence, detail = decode_answer(raw, decoder)
+                    self.assertEqual(value, labels[0])
+                    self.assertEqual(confidence, .8)
+                    self.assertEqual(detail, .4 if kind == 'score' else None)
+                    self.assertEqual(raw, original)
+
+    def test_invalid_distributions_still_fail(self):
+        for values in ([0, 0], [0] * 255, [.6, .6] + [0] * 253,
+                       [.4, .4], [.8, .3], [.50001, .47999],
+                       [float('nan'), .1], [float('inf'), .1],
+                       [True, 0], ['0.9', .1], [-.1, 1.1]):
+            with self.subTest(values=values):
+                question, decoder = build_question({'type': 'choice', 'instructions': 'Classify',
+                    'options': [f'Option {i}' for i in range(len(values))]})
+                keys = list(question['criteria'])
+                raw = {'type': 'choice', 'choice': keys[0], 'confidence': .8,
+                       'probabilities': dict(zip(keys, values))}
+                with self.assertRaises(JevError):
+                    decode_answer(raw, decoder)
+        _, decoder = build_question({**self.parent, 'type': 'choice'})
+        for probabilities in ({'a': 1}, {'a': .9, 'b': .1, 'extra': 0}):
+            with self.assertRaises(JevError):
+                decode_answer({**choice(), 'probabilities': probabilities}, decoder)
+
+    def test_batch_retry_recovers_rounded_answer_and_preserves_audit(self):
+        config = {**self.parent, 'options': ['A', 'B', 'C']}
+        raw = {**choice(), 'probabilities': {'a': .6, 'b': .3, 'c': .09}}
+        previous = {'Category': {'status': 'error', 'value': None,
+                    'reason': 'Jev probabilities do not sum to one.'}}
+        client = create_app().test_client()
+        with patch('insights.jev.ask', return_value={'answers': {'q0': raw}}):
+            response = client.post('/analyze_batch_jev', json={'jevApiKey': 'key',
+                'configs': [config], 'includeConfidence': True,
+                'rows': [{'rowIndex': 8, 'state': 'source', 'previous': previous}]})
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data['errors'], 0)
+        result = data['results'][0]
+        self.assertEqual(result['values']['Category'], 'A')
+        self.assertEqual(result['values']['Category__confidence'], .9)
+        self.assertEqual(result['decisions']['Category']['raw'], raw)
+
+    def test_invalid_total_reports_numeric_diagnostics(self):
+        _, decoder = build_question({**self.parent, 'type': 'choice'})
+        with self.assertRaisesRegex(JevError, r'total 0\.8 across 2 options'):
+            decode_answer({**choice(), 'probabilities': {'a': .4, 'b': .4}}, decoder)
+
     def test_empty_rows_cost_nothing_and_derived_is_blocked(self):
         call = Mock()
         records, _ = evaluate_row(None, [self.parent, self.child], [], call)
