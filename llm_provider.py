@@ -1,7 +1,7 @@
 """
 LLM provider abstraction.
 
-The app supports two backends that both speak the OpenAI chat-completions API:
+The app supports three backends that speak the OpenAI chat-completions API:
 
   * "openai" -- api.openai.com, keyed by a plain API key. The model name is
     sent as-is (e.g. "gpt-4o-mini").
@@ -9,6 +9,8 @@ The app supports two backends that both speak the OpenAI chat-completions API:
     endpoint + key + API version. On Azure the "model" argument is really the
     *deployment name* your organization chose, which often differs from the
     underlying model name.
+
+  * "ollama" -- a local Ollama service with an installed model and no cloud key.
 
 Configuration is resolved per request with this precedence:
 
@@ -67,10 +69,20 @@ def resolve_config(data=None):
         or 'openai'
     ).lower()
 
-    if provider not in ('openai', 'azure'):
+    if provider not in ('openai', 'azure', 'ollama'):
         raise LLMConfigError(
-            f"Unknown provider '{provider}'. Expected 'openai' or 'azure'."
+            f"Unknown provider '{provider}'. Expected openai, azure or ollama."
         )
+
+    if provider == 'ollama':
+        from local_services import local_url
+        endpoint = local_url(data.get('ollamaEndpoint') or os.environ.get('OLLAMA_BASE_URL')
+                             or 'http://127.0.0.1:11434', LLMConfigError)
+        model = _clean(data.get('ollamaModel')) or _clean(os.environ.get('OLLAMA_MODEL'))
+        if not model:
+            raise LLMConfigError('Select an installed Ollama model in Settings.')
+        return {'provider': 'ollama', 'api_key': 'ollama', 'model': model,
+                'endpoint': endpoint, 'api_version': None}
 
     if provider == 'azure':
         api_key = (
@@ -151,6 +163,11 @@ def build_client(config):
             azure_endpoint=config["endpoint"],
             api_version=config["api_version"],
         )
+    if config['provider'] == 'ollama':
+        import httpx
+        return OpenAI(api_key='ollama', base_url=config['endpoint'] + '/v1',
+                      timeout=180, max_retries=0,
+                      http_client=httpx.Client(trust_env=False, follow_redirects=False))
     return OpenAI(api_key=config["api_key"])
 
 
@@ -170,4 +187,4 @@ def get_client_and_model(data=None):
 def provider_label(config_or_data=None):
     """Human-readable provider name, for error messages shown to the user."""
     provider = (config_or_data or {}).get('provider') or 'openai'
-    return "Azure AI Foundry" if provider == 'azure' else "OpenAI"
+    return {"azure": "Azure AI Foundry", "ollama": "Ollama"}.get(provider, "OpenAI")

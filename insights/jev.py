@@ -15,6 +15,13 @@ bp = Blueprint("jev", __name__)
 MAX_ROWS_PER_BATCH = 100
 
 
+def classify(state, questions, *, config, **kwargs):
+    if config.get('provider') == 'laya':
+        from laya_provider import ask as ask_laya
+        return ask_laya(state, questions, config=config, **kwargs)
+    return ask(state, questions, api_key=config['api_key'], model=config['model'], **kwargs)
+
+
 @bp.route('/test_jev_connection', methods=['POST'])
 def test_jev_connection():
     """Verify a Jev API key with one trivial question before a whole file runs."""
@@ -25,19 +32,17 @@ def test_jev_connection():
         return jsonify({"ok": False, "error": public_error(e)}), 400
 
     try:
-        ask(
+        classify(
             "ping",
             {"_probe": {"type": "noul", "instructions": "Is this a test message?"}},
-            api_key=config["api_key"],
-            model=config["model"],
+            config=config,
             timeout=20,
         )
     except JevError as e:
         status = 401 if "Invalid Jev API key" in str(e) else 400
         return jsonify({"ok": False, "error": public_error(e)}), status
 
-    return jsonify({"ok": True, "provider": "Jev", "model": config["model"]})
-
+    return jsonify({"ok": True, "provider": "Laya" if config.get("provider") == "laya" else "Jev", "model": config["model"]})
 
 @bp.route('/validate_jev_config', methods=['POST'])
 def validate_jev_config():
@@ -45,10 +50,12 @@ def validate_jev_config():
     try:
         data = request.get_json() or {}
         validate_workflow(data.get('configs'), data.get('derived'))
+        if data.get('classificationProvider') == 'laya':
+            from laya_provider import validate_configs
+            validate_configs(data.get('configs'))
         return jsonify(ok=True)
     except (JevConfigError, TypeError, AttributeError) as e:
         return jsonify(error=public_error(e)), 400
-
 
 @bp.route('/analyze_batch_jev', methods=['POST'])
 def analyze_batch_jev():
@@ -67,6 +74,9 @@ def analyze_batch_jev():
         if len({r['rowIndex'] for r in rows}) != len(rows):
             raise JevConfigError('Row indices must be unique.')
         config = resolve_config(data)
+        if config.get('provider') == 'laya':
+            from laya_provider import validate_configs
+            validate_configs(configs)
         execution = data.get('execution', {})
         limits = {'workers': (4, 1, 8), 'requestsPerMinute': (600, 1, 1200),
                   'tokensPerSecond': (100000, 1, 250000), 'maxAttempts': (3, 1, 4)}
@@ -83,7 +93,7 @@ def analyze_batch_jev():
     def run_row(row):
         with requests.Session() as session:
             def call(state, questions):
-                return ask(state, questions, api_key=config['api_key'], model=config['model'],
+                return classify(state, questions, config=config,
                     session=session, details=True, deadline=deadline,
                     requests_per_minute=settings['requestsPerMinute'],
                     tokens_per_second=settings['tokensPerSecond'], max_attempts=settings['maxAttempts'])
@@ -104,7 +114,7 @@ def analyze_batch_jev():
                     values[name + '__score'] = record['detail']
         return {'rowIndex': row['rowIndex'], 'values': values, 'decisions': records, 'calls': calls}
 
-    with ThreadPoolExecutor(max_workers=settings['workers']) as executor:
+    with ThreadPoolExecutor(max_workers=1 if config.get('provider') == 'laya' else settings['workers']) as executor:
         results = list(executor.map(run_row, rows))
     errors = sum(any(d['status'] == 'error' for d in r['decisions'].values()) for r in results)
     return jsonify(results=results, errors=errors)

@@ -6,19 +6,17 @@
     <title>Aidstack Insights | Intelligence for impact workers</title>
     <meta name="description" content="AI-powered spreadsheet analysis for humanitarian and global health professionals. Explore data, translate text, and review results with Aidstack Insights.">
     <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/vendor/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/static/vendor/bootstrap-icons.css">
     <!-- Google Fonts - Aidstack Brand Typography -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="/static/vendor/fonts.css" rel="stylesheet">
     <!-- XLSX Library -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
+    <script src="/static/vendor/xlsx.full.min.js"></script>
     <!-- Chart.js for visualizations -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/static/vendor/chart.umd.min.js"></script>
     <!-- Marked.js for Markdown rendering -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="/static/vendor/marked.min.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
 </head>
@@ -234,31 +232,8 @@
                                             </h2>
                                             <div id="offlineCollapse" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
                                                 <div class="accordion-body">
-                                                    <p><strong>Short answer:</strong> Partially, but it requires technical setup.</p>
-
-                                                    <p><strong>For offline LLM processing:</strong><br>
-                                                    Yes, if you:
-                                                    <ul>
-                                                        <li>Have a powerful machine capable of running local LLMs</li>
-                                                        <li>Are comfortable setting up tools like <a href="https://ollama.ai" target="_blank">Ollama</a> or similar LLM runners</li>
-                                                        <li>Clone the repository and configure it to use your local LLM</li>
-                                                        <li>Have sufficient computing power to process your dataset</li>
-                                                    </ul>
-                                                    </p>
-
-                                                    <p><strong>For most users (OpenAI API):</strong><br>
-                                                    Using OpenAI's API requires internet connectivity. Here's what you should know:</p>
-
-                                                    <div class="alert alert-info mt-3">
-                                                        <strong><i class="bi bi-shield-check"></i> Data Privacy with OpenAI API:</strong>
-                                                        <ul class="mb-0 mt-2">
-                                                            <li>✅ <strong>Not used for training</strong> - Your data is NOT used to train or improve OpenAI's models</li>
-                                                            <li>⏰ <strong>30-day retention</strong> - Data is retained for up to 30 days for abuse and misuse monitoring only</li>
-                                                            <li>🗑️ <strong>Automatic deletion</strong> - After 30 days, your data is automatically deleted</li>
-                                                            <li>📄 <strong>Full details:</strong> <a href="https://openai.com/policies/api-data-usage-policies" target="_blank">OpenAI API Data Usage Policies</a></li>
-                                                        </ul>
-                                                    </div>
-
+                                                    <p>Yes. Run the app on your computer, use Laya for classification and Ollama for analysis, written reports and chat. Download the models during initial setup, then select the local providers in API Settings.</p>
+                                                    <p>The interface and spreadsheet import/export work offline. Jev, OpenAI, Azure and WHO ICD lookup require internet access.</p>
                                                     <p class="mb-0"><strong>Privacy note:</strong> Saved credentials stay in your browser. Credentials and selected row data pass through the server to your chosen provider.</p>
                                                 </div>
                                             </div>
@@ -356,7 +331,7 @@
     </div>
 
     <!-- Bootstrap Bundle with Popper -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/vendor/bootstrap.bundle.min.js"></script>
     
     <script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
 

@@ -115,18 +115,18 @@
                                 </div>
                                 <!-- /analysis-config -->
 
-                                <!-- Jev Classification Config (hidden unless appMode === 'jev') -->
+                                <!-- Classification (Jev / Laya) Config (hidden unless appMode === 'jev') -->
                                 <div id="jev-config" class="hidden">
                                     <div class="alert alert-primary">
-                                        <i class="bi bi-shield-check"></i> Each result column below is one question Jev answers about every row. Independent questions for a row are asked together. Conditional questions run after their dependencies.
+                                        <i class="bi bi-shield-check"></i> Each result column below is one question your selected classifier answers about every row. Independent questions for a row are asked together. Conditional questions run after their dependencies.
                                     </div>
 
                                     <div class="mb-3">
-                                        <label class="form-label">Columns to send to Jev
+                                        <label class="form-label">Columns to classify
                                             <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
                                                title="The row context every question is answered against. Pick the column holding the text to classify, plus any column that adds useful context."></i>
                                         </label>
-                                        <div id="jev-source-columns" class="border rounded p-2">
+                                        <p class="small">Selected provider: <strong data-classifier-label>Jev · cloud</strong></p><div id="jev-source-columns" class="border rounded p-2">
                                             <!-- Source column checkboxes are inserted here -->
                                         </div>
                                         <div class="form-text">Selected columns are labeled by name in the row context. Imported execution settings can preserve them as structured JSON.</div>

@@ -68,11 +68,12 @@ export function validateQuestion(question) {
  * @param {object} state - { sourceColumns, includeConfidence, questions }
  */
 const QUESTION_FIELDS = ['outputColumnName', 'questionType', 'instructions', 'options', 'review', 'dependsOn', 'branches', 'criteria'];
-const ROOT_FIELDS = ['format', 'version', 'exportedAt', 'sheetName', 'sourceColumns', 'includeConfidence', 'questions', 'derived', 'report', 'execution', 'model'];
+const ROOT_FIELDS = ['format', 'version', 'exportedAt', 'sheetName', 'sourceColumns', 'includeConfidence', 'questions', 'derived', 'report', 'execution', 'model', 'classifier'];
 const copy = value => JSON.parse(JSON.stringify(value));
 export function serializeJevConfig({ sourceColumns = [], includeConfidence = false,
                                      sheetName = '', questions = [], warnings, format, version, exportedAt, ...advanced } = {}) {
-    const unknown = Object.keys(advanced).filter(k => !['derived', 'report', 'execution', 'model'].includes(k));
+    if (advanced.classifier !== undefined) validateReportConfig({questions: [], classifier: advanced.classifier}, []);
+    const unknown = Object.keys(advanced).filter(k => !['derived', 'report', 'execution', 'model', 'classifier'].includes(k));
     if (unknown.length) throw new Error(`Unknown workflow fields: ${unknown.join(', ')}`);
     for (const q of questions) {
         const extras = Object.keys(q).filter(k => !QUESTION_FIELDS.includes(k));
@@ -83,7 +84,7 @@ export function serializeJevConfig({ sourceColumns = [], includeConfidence = fal
         exportedAt: new Date().toISOString(), sheetName,
         sourceColumns: sourceColumns.filter(name => str(name).trim() !== ''),
         includeConfidence: !!includeConfidence,
-        ...Object.fromEntries(['derived', 'report', 'execution', 'model'].filter(k => advanced[k] !== undefined).map(k => [k, copy(advanced[k])])),
+        ...Object.fromEntries(['derived', 'report', 'execution', 'model', 'classifier'].filter(k => advanced[k] !== undefined).map(k => [k, copy(advanced[k])])),
         questions: questions.map(q => ({
             ...Object.fromEntries(QUESTION_FIELDS.filter(k => q[k] !== undefined).map(k => [k, copy(q[k])])),
             outputColumnName: str(q.outputColumnName).trim(),
@@ -94,6 +95,13 @@ export function serializeJevConfig({ sourceColumns = [], includeConfidence = fal
 }
 
 export function validateReportConfig(config, columns) {
+    if (config.classifier !== undefined) {
+        const c = config.classifier;
+        if (!c || typeof c !== 'object' || Array.isArray(c) || !['jev', 'laya'].includes(c.provider)
+            || Object.keys(c).some(k => !['provider', 'model'].includes(k))
+            || (c.model !== undefined && (typeof c.model !== 'string' || !c.model.trim()))) throw new Error('Invalid classifier configuration. Use provider and model only; keep credentials in Settings.');
+        if (c.provider === 'laya' && !['english', 'multilingual', 'typed-decisions'].includes(c.model)) throw new Error('Select a supported Laya checkpoint.');
+    }
     if (config.model !== undefined && (typeof config.model !== 'string' || !config.model.trim())) throw new Error('model must be a non-empty model name.');
     if (config.derived !== undefined && !Array.isArray(config.derived)) throw new Error('derived must be an array.');
     const report = config.report || {};
@@ -155,6 +163,7 @@ export function deserializeJevConfig(raw, availableColumns = []) {
             if (!QUESTION_TYPES.includes(q.questionType)) throw new Error('Unknown question type.');
         }
     }
+    if (raw.classifier !== undefined) validateReportConfig({questions: [], classifier: raw.classifier}, []);
     const questions = raw.questions.map(entry => ({
         ...Object.fromEntries(QUESTION_FIELDS.filter(k => entry[k] !== undefined).map(k => [k, copy(entry[k])])),
         outputColumnName: str(entry.outputColumnName).trim(),
@@ -171,7 +180,7 @@ export function deserializeJevConfig(raw, availableColumns = []) {
         includeConfidence: !!raw.includeConfidence,
         sheetName: str(raw.sheetName),
         questions,
-        ...Object.fromEntries(['derived', 'report', 'execution', 'model'].filter(k => raw[k] !== undefined).map(k => [k, copy(raw[k])])),
+        ...Object.fromEntries(['derived', 'report', 'execution', 'model', 'classifier'].filter(k => raw[k] !== undefined).map(k => [k, copy(raw[k])])),
         warnings
     };
 }

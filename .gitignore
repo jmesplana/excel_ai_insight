@@ -54,3 +54,9 @@ examples/*.csv
 
 # Generated measurement output (figures are quoted in FRAMEWORK2_CODING.md)
 framework2_overlap.json
+
+# Optional local Laya service environment
+.venv-laya/
+
+# Local websites allowed to access the Laya connector
+.laya-origins.json

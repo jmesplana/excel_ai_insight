@@ -90,6 +90,19 @@ def resolve_config(data=None):
     """
     data = data or {}
 
+    provider = data.get('classificationProvider') or os.environ.get('CLASSIFICATION_PROVIDER', 'jev')
+    if provider not in ('jev', 'laya'):
+        raise JevConfigError('Choose Jev or Laya for classification.')
+    if provider == 'laya':
+        from local_services import local_url
+        endpoint = local_url(data.get('layaEndpoint') or os.environ.get('LAYA_BASE_URL')
+                             or 'http://127.0.0.1:8000', JevConfigError)
+        model = _clean(data.get('layaModel')) or os.environ.get('LAYA_MODEL', 'multilingual')
+        if model not in ('english', 'multilingual', 'typed-decisions'):
+            raise JevConfigError('Choose an English, multilingual or typed-decisions Laya checkpoint.')
+        return {'provider': 'laya', 'endpoint': endpoint, 'model': model,
+                'api_key': _clean(data.get('layaApiKey')) or os.environ.get('LAYA_API_KEY') or ''}
+
     api_key = (
         _clean(data.get('jevApiKey'))
         or _clean(os.environ.get('TYPESAFE_API_KEY'))

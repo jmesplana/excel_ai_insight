@@ -50,6 +50,25 @@ def test_connection():
     return jsonify({"ok": True, "provider": label, "model": config["model"]})
 
 
+@bp.route('/ollama_models', methods=['POST'])
+def ollama_models():
+    import os
+    import requests
+    from local_services import local_url
+    try:
+        data = request.get_json() or {}
+        endpoint = local_url(data.get('ollamaEndpoint') or os.environ.get('OLLAMA_BASE_URL')
+                             or 'http://127.0.0.1:11434', LLMConfigError)
+        with requests.Session() as session:
+            session.trust_env = False
+            response = session.get(endpoint + '/api/tags', timeout=5, allow_redirects=False)
+        response.raise_for_status()
+        models = response.json()['models']
+        return jsonify(models=[m['name'] for m in models if isinstance(m.get('name'), str)])
+    except Exception:
+        return jsonify(error='Could not list local Ollama models. Start Ollama and check its address.'), 400
+
+
 @bp.route('/detect_patterns', methods=['POST'])
 def detect_patterns():
     try:

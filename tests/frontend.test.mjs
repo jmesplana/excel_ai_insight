@@ -286,3 +286,12 @@ test('post-analysis splitting preserves reporting against original records', () 
     assert.equal(split.data.length, 6002);
     assert.equal(buildJevReport(split).coverage.processed, 6001);
 });
+
+test('Laya classifier selection round-trips; profiles never belong in configuration files', () => {
+    const input = {...savedJevConfig, classifier:{provider:'laya', model:'multilingual'}};
+    const result = deserializeJevConfig(serializeJevConfig(input), input.sourceColumns);
+    assert.deepEqual(result.classifier, input.classifier);
+    assert.deepEqual(result.questions, input.questions);
+    assert.throws(() => serializeJevConfig({...input, classifier:{...input.classifier, apiKey:'secret'}}), /credentials/);
+    assert.throws(() => deserializeJevConfig({...input, classifier:{provider:'laya', model:'unknown'}}), /checkpoint/);
+});

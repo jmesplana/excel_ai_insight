@@ -1,11 +1,12 @@
+import { classifierFetch } from './classifier-transport.js';
 import { initResults } from './results.js';
 let resultsUI;
-import { API_KEY_STORAGE_KEY, PROVIDER_STORAGE_KEY, AZURE_ENDPOINT_STORAGE_KEY, AZURE_DEPLOYMENT_STORAGE_KEY, AZURE_API_VERSION_STORAGE_KEY, OPENAI_MODEL_STORAGE_KEY, getLLMConfig, hasLocalCredentials, syncProviderUI } from './provider-settings.js';
+import { getLLMConfig, hasLocalCredentials, initProviderSettings, syncProviderUI } from './provider-settings.js';
 import { escapeHtml, renderMarkdown } from './rendering.js';
 import { parseWorkbook, exportResults, explodeColumn } from './spreadsheet.js';
 import { BatchRun } from './batch-runner.js';
 import { serializeConfig, deserializeConfig, configFilename } from './analysis-config.js';
-import { getJevConfig, JEV_API_KEY_STORAGE_KEY, JEV_MODEL_STORAGE_KEY } from './provider-settings.js';
+import { getJevConfig } from './provider-settings.js';
 import { serializeJevConfig, deserializeJevConfig, jevConfigFilename, parseOptions,
     formatOptions, validateQuestion, validateReportConfig, buildJevState, DEFAULT_QUESTION_TYPE } from './jev-config.js';
 
@@ -369,8 +370,6 @@ function testRowCount(inputId, fallback, available) {
 }
 
 async function runIcdTranslation(isTestRun = false) {
-    const openaiApiKey = (document.getElementById('modal-api-key').value || '').trim() ||
-                         (localStorage.getItem(API_KEY_STORAGE_KEY) || '').trim();
     const clientId = (document.getElementById('modal-icd-client-id').value || '').trim() ||
                      (localStorage.getItem(ICD_CLIENT_ID_STORAGE_KEY) || '').trim();
     const clientSecret = (document.getElementById('modal-icd-client-secret').value || '').trim() ||
@@ -699,7 +698,7 @@ function applyModePanels(step) {
         const intro = document.getElementById('config-intro-alert');
         if (intro && !isClean) {
             intro.innerHTML = isJev
-                ? '<i class="bi bi-info-circle"></i> Pick <strong>Jev Classification</strong> below, then define your result columns and their option lists on the <strong>Configure Analysis</strong> step. Set your <strong>Jev API Key</strong> in the <strong>API Settings</strong> button in the top navigation bar, unless your server already provides one.'
+                ? '<i class="bi bi-info-circle"></i> Pick <strong>Classification (Jev / Laya)</strong> below, then define your result columns and their option lists on the <strong>Configure Analysis</strong> step. Choose <strong>Jev or Laya</strong> in <strong>API Settings → Classification</strong>.'
                 : '<i class="bi bi-info-circle"></i> Before starting your analysis, configure general instructions that will apply to all analyzed columns. Configure OpenAI or Azure in the <strong>API Settings</strong> button in the top navigation bar, unless your server already provides credentials.';
         }
         const title = document.getElementById('config-card-title');
@@ -890,98 +889,6 @@ function initResultChart(data, labels, columnName) {
             }
         }
     });
-}
-
-/* API Key Management */
-function loadSavedApiKey() {
-    const savedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
-    if (savedKey) {
-        // Update main form field if it exists
-        const apiKeyInput = document.getElementById('modal-api-key');
-        if (apiKeyInput) {
-            apiKeyInput.value = savedKey;
-            const saveKeyCheckbox = document.getElementById('save-api-key');
-            if (saveKeyCheckbox) {
-                saveKeyCheckbox.checked = true;
-            }
-        }
-        
-        // Update modal fields if they exist
-        const modalApiKeyField = document.getElementById('modal-api-key');
-        const modalSaveKeyCheckbox = document.getElementById('modal-save-api-key');
-        if (modalApiKeyField) {
-            modalApiKeyField.value = savedKey;
-            if (modalSaveKeyCheckbox) {
-                modalSaveKeyCheckbox.checked = true;
-            }
-        }
-    }
-
-    // Load saved WHO ICD credentials (used by Medical Translation mode)
-    const savedIcdId = localStorage.getItem(ICD_CLIENT_ID_STORAGE_KEY);
-    const savedIcdSecret = localStorage.getItem(ICD_CLIENT_SECRET_STORAGE_KEY);
-    const icdIdField = document.getElementById('modal-icd-client-id');
-    const icdSecretField = document.getElementById('modal-icd-client-secret');
-    if (icdIdField && savedIcdId) icdIdField.value = savedIcdId;
-    if (icdSecretField && savedIcdSecret) icdSecretField.value = savedIcdSecret;
-    if ((savedIcdId || savedIcdSecret) && modalSaveKeyCheckbox) {
-        modalSaveKeyCheckbox.checked = true;
-    }
-}
-
-function toggleApiKeyVisibility() {
-    const apiKeyInput = document.getElementById('modal-api-key');
-    const toggleBtn = document.getElementById('toggle-api-key');
-    
-    if (apiKeyInput && toggleBtn) {
-        const iconElement = toggleBtn.querySelector('i');
-        
-        if (apiKeyInput.type === 'password') {
-            apiKeyInput.type = 'text';
-            if (iconElement) {
-                iconElement.classList.remove('bi-eye');
-                iconElement.classList.add('bi-eye-slash');
-            }
-        } else {
-            apiKeyInput.type = 'password';
-            if (iconElement) {
-                iconElement.classList.remove('bi-eye-slash');
-                iconElement.classList.add('bi-eye');
-            }
-        }
-    }
-}
-
-function handleSaveApiKeyChange(e) {
-    if (e && e.target) {
-        if (e.target.checked) {
-            const apiKeyInput = document.getElementById('modal-api-key');
-            if (apiKeyInput && apiKeyInput.value) {
-                localStorage.setItem(API_KEY_STORAGE_KEY, apiKeyInput.value);
-            }
-        } else {
-            // Use the local function to avoid reference errors
-            localStorage.removeItem(API_KEY_STORAGE_KEY);
-            const saveApiKeyCheckbox = document.getElementById('save-api-key');
-            if (saveApiKeyCheckbox) {
-                saveApiKeyCheckbox.checked = false;
-            }
-        }
-    }
-}
-
-function clearSavedApiKey() {
-    localStorage.removeItem(API_KEY_STORAGE_KEY);
-    const saveApiKeyCheckbox = document.getElementById('save-api-key');
-    if (saveApiKeyCheckbox) {
-        saveApiKeyCheckbox.checked = false;
-    }
-    
-    // Also clear the modal fields if they exist
-    const modalSaveApiKeyCheckbox = document.getElementById('modal-save-api-key');
-    if (modalSaveApiKeyCheckbox) {
-        modalSaveApiKeyCheckbox.checked = false;
-    }
 }
 
 /* File handling helpers */
@@ -1903,8 +1810,13 @@ function parseJevInstructions(text) {
 function jevAdvanced() {
     return JSON.parse(document.getElementById('jev-workflow-json').value || '{}');
 }
+function classifierDocument() {
+    const c = getJevConfig();
+    const model = c.classificationProvider === 'laya' ? c.layaModel : (jevAdvanced().model || c.jevModel);
+    return {provider: c.classificationProvider, ...(model ? {model} : {})};
+}
 function currentJevDocument() {
-    return serializeJevConfig({...jevAdvanced(), sourceColumns: readJevSourceColumns(),
+    return serializeJevConfig({...jevAdvanced(), classifier: classifierDocument(), sourceColumns: readJevSourceColumns(),
         includeConfidence: document.getElementById('jev-include-confidence').checked,
         sheetName: document.getElementById('sheet-select').value, questions: readJevQuestions()});
 }
@@ -1917,6 +1829,7 @@ function exportJevConfig() {
     }
     const doc = serializeJevConfig({
         ...jevAdvanced(),
+        classifier: classifierDocument(),
         sourceColumns: readJevSourceColumns(),
         includeConfidence: document.getElementById('jev-include-confidence')?.checked,
         sheetName: document.getElementById('sheet-select').value,
@@ -1951,6 +1864,13 @@ async function importJevConfig(event) {
     applyImportedJevConfig(imported);
 }
 function applyImportedJevConfig(imported) {
+    if (imported.classifier) {
+        const c = imported.classifier;
+        if (!['jev', 'laya'].includes(c.provider)) throw new Error('Unknown classifier.');
+        document.getElementById(`classifier-${c.provider}`).checked = true;
+        if (c.model) document.getElementById(`modal-${c.provider}-model`).value = c.model;
+        syncProviderUI();
+    }
     document.getElementById('jev-workflow-json').value = JSON.stringify(Object.fromEntries(
         ['derived', 'report', 'execution', 'model'].filter(k => imported[k] !== undefined).map(k => [k, imported[k]])), null, 2);
     const selected = new Set(imported.sourceColumns);
@@ -1976,6 +1896,7 @@ async function runJevClassification(isTestRun = false) {
     if (activeJevRun?.running) return;
     try {
         const config = currentJevDocument();
+        const providerConfig = getJevConfig();
         // Also validates field names/version rules for documents created in the UI.
         deserializeJevConfig(config, availableColumns);
         if (!config.sourceColumns.length) throw new Error('Select at least one source column.');
@@ -1996,8 +1917,8 @@ async function runJevClassification(isTestRun = false) {
                 names.add(name); outputColumns.push(name);
             }
         }
-        const validation = await fetch('/validate_jev_config', {method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({configs: config.questions, derived: config.derived})});
+        const validation = await classifierFetch('/validate_jev_config',
+            {configs: config.questions, derived: config.derived, classificationProvider: providerConfig.classificationProvider}, providerConfig);
         const check = await readJson(validation);
         if (!validation.ok) throw new Error(check.error || 'Invalid workflow configuration.');
         const count = isTestRun ? testRowCount('jev-test-rows', 5, sheet.data.length) : sheet.data.length;
@@ -2005,6 +1926,8 @@ async function runJevClassification(isTestRun = false) {
             sourceColumns: sheet.columns, columns: [...sheet.columns, ...outputColumns], outputColumns,
             rows: sheet.data.slice(0, count), totalRows: sheet.data.length,
             ...(isTestRun ? {sourceRows: sheet.data} : {}),
+            classifier: {classificationProvider: providerConfig.classificationProvider,
+                ...(providerConfig.classificationProvider === 'laya' ? {layaEndpoint: providerConfig.layaEndpoint, layaModel: providerConfig.layaModel} : {jevModel: providerConfig.jevModel})},
             config, isTestRun, cursor: 0, results: [], audit: [], running: false, stopped: false};
         await checkpoint('start', activeJevRun);
         analyzedResult = null;
@@ -2026,6 +1949,10 @@ async function continueJevRun(retryFailed = false) {
     const run = activeJevRun;
     if (!run || run.running) return;
     run.running = true; run.stopped = false;
+    const classifier = run.classifier || {classificationProvider: 'jev'};
+    const credentials = classifier.classificationProvider === 'laya'
+        ? {layaApiKey: document.getElementById('modal-laya-api-key').value.trim()}
+        : {jevApiKey: document.getElementById('modal-jev-api-key').value.trim()};
     const pending = retryFailed ? run.audit.flatMap((a, i) => Object.values(a.decisions || {}).some(d => ['error', 'blocked'].includes(d.status)) ? [i] : [])
         : Array.from({length: run.rows.length - run.cursor}, (_, i) => run.cursor + i);
     showSpinner(true, retryFailed ? 'Retrying unfinished decisions…' : 'Classifying rows…', true);
@@ -2036,18 +1963,17 @@ async function continueJevRun(retryFailed = false) {
     let failure = null;
     try {
         if (run.needsCheckpointStart) { await checkpoint('start', run); run.needsCheckpointStart = false; }
-        const batchSize = run.config.execution?.batchSize ?? 4;
+        const batchSize = classifier.classificationProvider === 'laya' ? 1 : (run.config.execution?.batchSize ?? 4);
         for (let offset = 0; offset < pending.length && !run.stopped; offset += batchSize) {
             const indices = pending.slice(offset, offset + batchSize);
             const rows = indices.map(i => ({rowIndex: i, state: buildJevState(run.rows[i], run.config.sourceColumns, run.config.execution?.structuredState),
                 previous: retryFailed ? run.audit[i]?.decisions : undefined}));
-            const response = await fetch('/analyze_batch_jev', {method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({...getJevConfig(), ...(run.config.model ? {jevModel: run.config.model} : {}),
+            const response = await classifierFetch('/analyze_batch_jev', {...classifier, ...credentials, ...(classifier.classificationProvider !== 'laya' && run.config.model ? {jevModel: run.config.model} : {}),
                     configs: run.config.questions, derived: run.config.derived, execution: run.config.execution,
-                    includeConfidence: run.config.includeConfidence, rows})});
+                    includeConfidence: run.config.includeConfidence, rows});
             const result = await readJson(response);
             if (!response.ok) throw new Error(result.error || 'Classification failed.');
-            if (!run.config.model) {
+            if (classifier.classificationProvider !== 'laya' && !run.config.model) {
                 const model = result.results?.flatMap(r => r.calls || []).find(c => c.model)?.model;
                 if (model) run.config.model = model;
             }
@@ -2310,7 +2236,7 @@ function setupChartVisualization(data, headers) {
 /* Document Ready */
 document.addEventListener('DOMContentLoaded', function() {
     // Load saved API key
-    loadSavedApiKey();
+    initProviderSettings();
     
     // Initialize tooltips
     initTooltips();
@@ -2379,54 +2305,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // API key management - check if elements exist first (we've moved these to modal)
-    const toggleApiKey = document.getElementById('toggle-api-key');
-    const saveApiKey = document.getElementById('save-api-key');
-    const clearSavedKey = document.getElementById('clear-saved-key');
-    const apiKey = document.getElementById('modal-api-key');
-    
-    if (toggleApiKey && typeof toggleApiKeyVisibility === 'function') {
-        toggleApiKey.addEventListener('click', toggleApiKeyVisibility);
-    }
-    
-    if (saveApiKey && typeof handleSaveApiKeyChange === 'function') {
-        saveApiKey.addEventListener('change', handleSaveApiKeyChange);
-    }
-    
-    if (clearSavedKey) {
-        clearSavedKey.addEventListener('click', function() {
-            localStorage.removeItem(API_KEY_STORAGE_KEY);
-            if (saveApiKey) saveApiKey.checked = false;
-        });
-    }
-    
-    if (apiKey && saveApiKey) {
-        apiKey.addEventListener('input', function(e) {
-            if (saveApiKey.checked) {
-                localStorage.setItem(API_KEY_STORAGE_KEY, e.target.value);
-            }
-        });
-    }
-
-    // Persist WHO ICD credentials live while the save checkbox is ticked.
-    const modalIcdClientId = document.getElementById('modal-icd-client-id');
-    const modalIcdClientSecret = document.getElementById('modal-icd-client-secret');
-    const modalSaveCheckbox = document.getElementById('modal-save-api-key');
-    if (modalIcdClientId && modalSaveCheckbox) {
-        modalIcdClientId.addEventListener('input', function(e) {
-            if (modalSaveCheckbox.checked) {
-                localStorage.setItem(ICD_CLIENT_ID_STORAGE_KEY, e.target.value.trim());
-            }
-        });
-    }
-    if (modalIcdClientSecret && modalSaveCheckbox) {
-        modalIcdClientSecret.addEventListener('input', function(e) {
-            if (modalSaveCheckbox.checked) {
-                localStorage.setItem(ICD_CLIENT_SECRET_STORAGE_KEY, e.target.value.trim());
-            }
-        });
-    }
-
     // Mode chooser (Step 1): AI Analysis, Jev Classification, Medical
     // Translation (ICD-11), or Clean Data (split multi-value cells; no AI).
     const MODE_RADIOS = { analysis: 'mode-analysis', jev: 'mode-jev', icd: 'mode-icd', clean: 'mode-clean' };
@@ -2668,9 +2546,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             </h2>
                             <div id="modalOfflineCollapse" class="accordion-collapse collapse" data-bs-parent="#modalFaqAccordion">
                                 <div class="accordion-body">
-                                    <p><strong>Short answer:</strong> Partially, but it requires technical setup.</p>
-                                    <p><strong>For offline LLM processing:</strong><br>
-                                    Yes, if you have a powerful machine and are comfortable setting up tools like <a href="https://ollama.ai" target="_blank">Ollama</a> to run local LLMs.</p>
+                                    <p>Yes. Run this app locally with Laya for classification and Ollama for text generation. Download the models during setup, then select them in API Settings. Cloud providers and WHO ICD lookup still require internet.</p>
                                     <div class="alert alert-info">
                                         <strong><i class="bi bi-shield-check"></i> OpenAI API Data Privacy:</strong>
                                         <ul class="mb-0 mt-2 small">
@@ -2739,279 +2615,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     
-    // Load saved API key from localStorage if available
-    function loadSavedApiKey() {
-        const savedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
-        if (savedKey) {
-            // Update modal fields - need to get fresh references here
-            const modalApiKeyField = document.getElementById('modal-api-key');
-            const modalSaveKeyCheckbox = document.getElementById('modal-save-api-key');
-            
-            if (modalApiKeyField) {
-                modalApiKeyField.value = savedKey;
-                if (modalSaveKeyCheckbox) {
-                    modalSaveKeyCheckbox.checked = true;
-                }
-            }
-            
-            // Update main form field if it exists 
-            // (we've removed it from UI but keeping compatibility with old code)
-            const apiKeyInput = document.getElementById('modal-api-key');
-            if (apiKeyInput) {
-                apiKeyInput.value = savedKey;
-                const saveKeyCheckbox = document.getElementById('save-api-key');
-                if (saveKeyCheckbox) {
-                    saveKeyCheckbox.checked = true;
-                }
-            }
-        }
-    }
-    
-    // Clear saved API key
-    function clearSavedApiKey() {
-        localStorage.removeItem(API_KEY_STORAGE_KEY);
-        const modalSaveKeyCheckbox = document.getElementById('modal-save-api-key');
-        if (modalSaveKeyCheckbox) {
-            modalSaveKeyCheckbox.checked = false;
-        }
-    }
-    
-    // API Settings Modal functionality
-    const apiSettingsBtn = document.getElementById('api-settings-btn');
-    const modalApiKey = document.getElementById('modal-api-key');
-    const modalToggleApiKey = document.getElementById('modal-toggle-api-key');
-    const modalSaveApiKey = document.getElementById('modal-save-api-key');
-    const saveApiSettings = document.getElementById('save-api-settings');
-    
-    // Initialize Modal
-    const apiSettingsModal = new bootstrap.Modal(document.getElementById('api-settings-modal'));
-
-    /** Restore provider choice and Azure/model fields into the modal. */
-    function loadSavedProviderSettings() {
-        const provider = localStorage.getItem(PROVIDER_STORAGE_KEY) || 'openai';
-        const radio = document.getElementById(
-            provider === 'azure' ? 'provider-azure' : 'provider-openai');
-        if (radio) radio.checked = true;
-
-        const restore = (id, key) => {
-            const el = document.getElementById(id);
-            if (el) el.value = localStorage.getItem(key) || '';
-        };
-        restore('modal-azure-endpoint', AZURE_ENDPOINT_STORAGE_KEY);
-        restore('modal-azure-deployment', AZURE_DEPLOYMENT_STORAGE_KEY);
-        restore('modal-azure-api-version', AZURE_API_VERSION_STORAGE_KEY);
-        restore('modal-openai-model', OPENAI_MODEL_STORAGE_KEY);
-        // Jev credentials are independent of the provider radio above.
-        restore('modal-jev-api-key', JEV_API_KEY_STORAGE_KEY);
-        restore('modal-jev-model', JEV_MODEL_STORAGE_KEY);
-
-        syncProviderUI();
-    }
-
-    // Switch the visible fields when the provider changes.
-    document.querySelectorAll('input[name="llm-provider"]').forEach(radio => {
-        radio.addEventListener('change', syncProviderUI);
-    });
-
-    // Test Connection: verify credentials before running a whole file.
-    const testConnBtn = document.getElementById('test-connection-btn');
-    if (testConnBtn) {
-        testConnBtn.addEventListener('click', async function() {
-            const out = document.getElementById('test-connection-result');
-            testConnBtn.disabled = true;
-            out.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass-split"></i> Testing connection...</span>';
-            try {
-                const response = await fetch('/test_connection', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(getLLMConfig())
-                });
-                const result = await response.json();
-                if (response.ok && result.ok) {
-                    out.innerHTML = '<span class="text-success"><i class="bi bi-check-circle-fill"></i> '
-                        + 'Connected to ' + result.provider + ' (model: ' + result.model + ')</span>';
-                } else {
-                    out.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle-fill"></i> '
-                        + escapeHtml(result.error || 'Connection failed') + '</span>';
-                }
-            } catch (e) {
-                out.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle-fill"></i> ' + escapeHtml(e.message) + '</span>';
-            } finally {
-                testConnBtn.disabled = false;
-            }
-        });
-    }
-    
-    // Test Jev Connection: verify the Jev key independently of the LLM one.
-    const testJevConnBtn = document.getElementById('test-jev-connection-btn');
-    if (testJevConnBtn) {
-        testJevConnBtn.addEventListener('click', async function() {
-            const out = document.getElementById('test-jev-connection-result');
-            testJevConnBtn.disabled = true;
-            out.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass-split"></i> Testing connection...</span>';
-            try {
-                const response = await fetch('/test_jev_connection', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(getJevConfig())
-                });
-                const result = await response.json();
-                if (response.ok && result.ok) {
-                    out.innerHTML = '<span class="text-success"><i class="bi bi-check-circle-fill"></i> '
-                        + 'Connected to Jev (model: ' + escapeHtml(result.model) + ')</span>';
-                } else {
-                    out.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle-fill"></i> '
-                        + escapeHtml(result.error || 'Connection failed') + '</span>';
-                }
-            } catch (e) {
-                out.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle-fill"></i> ' + escapeHtml(e.message) + '</span>';
-            } finally {
-                testJevConnBtn.disabled = false;
-            }
-        });
-    }
-
-    // Toggle Jev key visibility in modal
-    const modalJevApiKey = document.getElementById('modal-jev-api-key');
-    const modalToggleJevApiKey = document.getElementById('modal-toggle-jev-api-key');
-    if (modalToggleJevApiKey && modalJevApiKey) {
-        modalToggleJevApiKey.addEventListener('click', function() {
-            if (modalJevApiKey.type === 'password') {
-                modalJevApiKey.type = 'text';
-                modalToggleJevApiKey.innerHTML = '<i class="bi bi-eye-slash"></i>';
-            } else {
-                modalJevApiKey.type = 'password';
-                modalToggleJevApiKey.innerHTML = '<i class="bi bi-eye"></i>';
-            }
-        });
-    }
-
-    // Add event listeners with null checks
-    if (apiSettingsBtn) {
-        apiSettingsBtn.addEventListener('click', function() {
-            // Load current API key from localStorage if available
-            loadSavedApiKey();
-            loadSavedProviderSettings();
-            apiSettingsModal.show();
-        });
-    }
-    
-    // Toggle API key visibility in modal
-    if (modalToggleApiKey && modalApiKey) {
-        modalToggleApiKey.addEventListener('click', function() {
-            if (modalApiKey.type === 'password') {
-                modalApiKey.type = 'text';
-                modalToggleApiKey.innerHTML = '<i class="bi bi-eye-slash"></i>';
-            } else {
-                modalApiKey.type = 'password';
-                modalToggleApiKey.innerHTML = '<i class="bi bi-eye"></i>';
-            }
-        });
-    }
-    
-    // Save API settings
-    if (saveApiSettings && modalApiKey && modalSaveApiKey) {
-        saveApiSettings.addEventListener('click', function() {
-            const apiKey = modalApiKey.value.trim();
-            const saveKey = modalSaveApiKey.checked;
-
-            // Read WHO ICD credentials (used by Medical Translation mode).
-            const icdIdField = document.getElementById('modal-icd-client-id');
-            const icdSecretField = document.getElementById('modal-icd-client-secret');
-            const icdId = icdIdField ? icdIdField.value.trim() : '';
-            const icdSecret = icdSecretField ? icdSecretField.value.trim() : '';
-
-            // Read provider + Azure fields.
-            const providerEl = document.querySelector('input[name="llm-provider"]:checked');
-            const provider = (providerEl && providerEl.value) || 'openai';
-            const fieldVal = (id) => {
-                const el = document.getElementById(id);
-                return el ? el.value.trim() : '';
-            };
-            const azureEndpoint = fieldVal('modal-azure-endpoint');
-            const azureDeployment = fieldVal('modal-azure-deployment');
-            const azureApiVersion = fieldVal('modal-azure-api-version');
-            const openaiModel = fieldVal('modal-openai-model');
-            const jevApiKey = fieldVal('modal-jev-api-key');
-            const jevModel = fieldVal('modal-jev-model');
-
-            if (!apiKey && !icdId && !icdSecret && !azureEndpoint && !azureDeployment && !jevApiKey) {
-                alert('Please enter your AI provider credentials, your Jev API key, and/or your WHO ICD credentials.');
-                return;
-            }
-
-            // Azure needs all three parts to work; warn early rather than
-            // failing on the first analysis request.
-            if (provider === 'azure' && apiKey && !(azureEndpoint && azureDeployment)) {
-                alert('Azure AI Foundry requires an Endpoint and a Deployment Name in addition to the API key.');
-                return;
-            }
-
-            // The provider choice itself is always remembered.
-            localStorage.setItem(PROVIDER_STORAGE_KEY, provider);
-
-            // Persist (or clear) provider details based on the save checkbox.
-            const persist = (key, value) => {
-                if (saveKey && value) localStorage.setItem(key, value);
-                else localStorage.removeItem(key);
-            };
-            persist(AZURE_ENDPOINT_STORAGE_KEY, azureEndpoint);
-            persist(AZURE_DEPLOYMENT_STORAGE_KEY, azureDeployment);
-            persist(AZURE_API_VERSION_STORAGE_KEY, azureApiVersion);
-            persist(OPENAI_MODEL_STORAGE_KEY, openaiModel);
-            persist(JEV_API_KEY_STORAGE_KEY, jevApiKey);
-            persist(JEV_MODEL_STORAGE_KEY, jevModel);
-
-            // Persist (or clear) OpenAI key based on the save checkbox.
-            if (apiKey) {
-                if (saveKey) {
-                    localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
-                } else {
-                    localStorage.removeItem(API_KEY_STORAGE_KEY);
-                }
-                const apiKeyInput = document.getElementById('modal-api-key');
-                if (apiKeyInput) {
-                    apiKeyInput.value = apiKey;
-                    const saveKeyCheckbox = document.getElementById('save-api-key');
-                    if (saveKeyCheckbox) {
-                        saveKeyCheckbox.checked = saveKey;
-                    }
-                }
-            }
-
-            // Persist (or clear) WHO ICD credentials based on the same save checkbox.
-            if (saveKey) {
-                if (icdId) localStorage.setItem(ICD_CLIENT_ID_STORAGE_KEY, icdId);
-                else localStorage.removeItem(ICD_CLIENT_ID_STORAGE_KEY);
-                if (icdSecret) localStorage.setItem(ICD_CLIENT_SECRET_STORAGE_KEY, icdSecret);
-                else localStorage.removeItem(ICD_CLIENT_SECRET_STORAGE_KEY);
-            } else {
-                localStorage.removeItem(ICD_CLIENT_ID_STORAGE_KEY);
-                localStorage.removeItem(ICD_CLIENT_SECRET_STORAGE_KEY);
-            }
-
-            apiSettingsModal.hide();
-            alert('API settings saved successfully!');
-        });
-    }
-    
-    // Handle the old toggle-api-key button (which we've removed from UI)
-    const oldToggleBtn = document.getElementById('toggle-api-key');
-    if (oldToggleBtn) {
-        oldToggleBtn.addEventListener('click', function() {
-            const apiKeyInput = document.getElementById('modal-api-key');
-            if (apiKeyInput) {
-                if (apiKeyInput.type === 'password') {
-                    apiKeyInput.type = 'text';
-                    this.innerHTML = '<i class="bi bi-eye-slash"></i>';
-                } else {
-                    apiKeyInput.type = 'password';
-                    this.innerHTML = '<i class="bi bi-eye"></i>';
-                }
-            }
-        });
-    }
-
     resultsUI = initResults({ getFileData: () => fileData, getChatDataset, streamChat, getLLMConfig, showAlert });
     initCleanData();
 });

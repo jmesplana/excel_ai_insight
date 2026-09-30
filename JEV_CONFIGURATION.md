@@ -142,3 +142,11 @@ Choice and Score responses must include every option with a finite probability b
 Completed batches save the source records, frozen configuration and raw decisions in IndexedDB on this browser, excluding credentials. **Restore saved run** restores that snapshot without making API calls. Only the latest run is saved. **Remove saved checkpoint** deletes it. Download results before changing devices or clearing browser storage. Narrative text is part of the current result/export, not the batch checkpoint. Local storage failures pause further batches and leave completed results available in memory.
 
 For very large datasets, browser memory/storage and the deployment request limits still apply. The table is paginated; it does not render the entire workbook into the DOM. This implementation is a resumable browser-driven workflow, not a durable background processing service.
+
+## Laya and portable classifier selection
+
+The same import/export workflow now supports Laya. New exports may contain
+`classifier: {"provider": "laya", "model": "multilingual"}` (or provider `jev`).
+Only provider and model belong in this object; credentials stay in Settings.
+Existing configurations without it use the classifier currently selected in Settings.
+The legacy root `model` field pins Jev only. See [local setup](LOCAL_INFERENCE.md).

@@ -537,3 +537,9 @@ attribute values must use `escapeHtml` or DOM `textContent`.
 Jev results now include a whole-dataset statistical report, an optional OpenAI/Azure written report, decision probabilities, review queues and audited Excel exports. JSON configuration controls the codebook, dependency branches, lookups, composite scores, thresholds and report breakdowns. Browser checkpoints support restoring runs and retrying failed decisions.
 
 See [the configuration guide](JEV_CONFIGURATION.md) and [generic import example](examples/configurable-workflow.jev-config.json). Existing v1 configurations remain supported. For the included Ebola taxonomy, the optional [hierarchical example](examples/ebola-framework2-hierarchical.jev-config.json) adds leaf codes and a validated sous-dimension lookup.
+
+## Local providers and independent settings
+
+Use Laya for local classification and Ollama for local text generation alongside
+Jev, OpenAI and Azure. See [local setup and offline use](LOCAL_INFERENCE.md).
+Provider keys are saved independently in the redesigned Settings dialog.

@@ -1,138 +1,170 @@
-    <!-- API Settings Modal -->
-    <div class="modal fade" id="api-settings-modal" tabindex="-1" aria-labelledby="api-settings-modal-label" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="api-settings-modal-label"><i class="bi bi-gear"></i> API Settings</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i> Saved credentials stay in your browser and are sent to the server for processing. WHO authentication is cached temporarily in server memory. If your administrator has configured a server-side deployment, you may leave these blank.
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">AI Provider</label>
-                        <div class="btn-group w-100" role="group" aria-label="AI provider">
-                            <input type="radio" class="btn-check" name="llm-provider" id="provider-openai" value="openai" checked>
-                            <label class="btn btn-outline-primary" for="provider-openai">
-                                <i class="bi bi-stars"></i> OpenAI
-                            </label>
-                            <input type="radio" class="btn-check" name="llm-provider" id="provider-azure" value="azure">
-                            <label class="btn btn-outline-primary" for="provider-azure">
-                                <i class="bi bi-cloud"></i> Azure AI Foundry
-                            </label>
-                        </div>
-                        <div class="form-text">Choose Azure AI Foundry to use a model deployed in your organization's Azure tenant.</div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="modal-api-key" class="form-label">
-                            <span class="provider-openai-only">OpenAI API Key</span>
-                            <span class="provider-azure-only d-none">Azure API Key</span>
-                        </label>
-                        <div class="input-group">
-                            <input type="password" class="form-control" id="modal-api-key" placeholder="Enter your API Key">
-                            <button class="btn btn-outline-secondary" type="button" id="modal-toggle-api-key">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                        </div>
-                        <div class="form-text provider-openai-only">Get your API key from <a href="https://platform.openai.com/account/api-keys" target="_blank">OpenAI's website</a></div>
-                        <div class="form-text provider-azure-only d-none">Found under <strong>Keys and Endpoint</strong> in your Azure OpenAI / AI Foundry resource.</div>
-                    </div>
-
-                    <!-- Azure-specific configuration -->
-                    <div id="azure-settings" class="d-none">
-                        <div class="mb-3">
-                            <label for="modal-azure-endpoint" class="form-label">Azure Endpoint</label>
-                            <input type="text" class="form-control" id="modal-azure-endpoint" placeholder="https://your-resource.openai.azure.com">
-                            <div class="form-text">The base endpoint URL of your Azure resource (without a trailing path).</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="modal-azure-deployment" class="form-label">Deployment Name</label>
-                            <input type="text" class="form-control" id="modal-azure-deployment" placeholder="e.g. gpt-4o-mini">
-                            <div class="form-text">The <strong>deployment</strong> name you chose in Azure &mdash; this is often different from the underlying model name.</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="modal-azure-api-version" class="form-label">API Version</label>
-                            <input type="text" class="form-control" id="modal-azure-api-version" placeholder="2024-10-21">
-                            <div class="form-text">Leave blank to use the default (2024-10-21).</div>
-                        </div>
-                    </div>
-
-                    <!-- OpenAI-specific model override -->
-                    <div id="openai-model-settings" class="mb-3">
-                        <label for="modal-openai-model" class="form-label">Model <span class="text-muted">(optional)</span></label>
-                        <input type="text" class="form-control" id="modal-openai-model" placeholder="gpt-4o-mini">
-                        <div class="form-text">Leave blank to use the default (gpt-4o-mini).</div>
-                    </div>
-
-                    <div class="d-grid mb-2">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="test-connection-btn">
-                            <i class="bi bi-plug"></i> Test Connection
-                        </button>
-                    </div>
-                    <div id="test-connection-result" class="small mb-2"></div>
-
-                    <hr>
-                    <div class="alert alert-info">
-                        <i class="bi bi-shield-check"></i> A <strong>Jev</strong> API key is required for <strong>Jev Classification</strong> mode, which picks one label from your own list instead of generating text. It is not used by the AI Analysis mode above.
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="modal-jev-api-key" class="form-label">Jev API Key</label>
-                        <div class="input-group">
-                            <input type="password" class="form-control" id="modal-jev-api-key" placeholder="Enter your Jev API Key">
-                            <button class="btn btn-outline-secondary" type="button" id="modal-toggle-jev-api-key">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                        </div>
-                        <div class="form-text">Create a key at the <a href="https://console.typesafe.ai" target="_blank">TypeSafe console</a>.</div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="modal-jev-model" class="form-label">Jev Model <span class="text-muted">(optional)</span></label>
-                        <input type="text" class="form-control" id="modal-jev-model" placeholder="jev-latest">
-                        <div class="form-text">Leave blank to use the default (jev-latest). Pin an exact version, e.g. <code>jev-1.13.0</code>, if you tune confidence thresholds.</div>
-                    </div>
-
-                    <div class="d-grid mb-2">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="test-jev-connection-btn">
-                            <i class="bi bi-plug"></i> Test Jev Connection
-                        </button>
-                    </div>
-                    <div id="test-jev-connection-result" class="small mb-2"></div>
-
-                    <hr>
-                    <div class="alert alert-info">
-                        <i class="bi bi-translate"></i> WHO ICD-11 API credentials are required for <strong>Medical Translation (ICD-11)</strong>. Saved credentials stay in this browser and are sent to the server for authentication. WHO access tokens and credential cache keys are held temporarily in server memory.
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="modal-icd-client-id" class="form-label">WHO ICD Client ID</label>
-                        <input type="text" class="form-control" id="modal-icd-client-id" placeholder="Enter your WHO ICD Client ID">
-                        <div class="form-text">Register for free at the <a href="https://icd.who.int/icdapi" target="_blank">WHO ICD API portal</a> to obtain credentials.</div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="modal-icd-client-secret" class="form-label">WHO ICD Client Secret</label>
-                        <input type="password" class="form-control" id="modal-icd-client-secret" placeholder="Enter your WHO ICD Client Secret">
-                        <div class="form-text">Used together with the Client ID to authenticate with the WHO ICD-11 API.</div>
-                    </div>
-
-                    <div class="form-check mt-3">
-                        <input class="form-check-input" type="checkbox" id="modal-save-api-key">
-                        <label class="form-check-label" for="modal-save-api-key">
-                            Save these settings in this browser
-                        </label>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary" id="save-api-settings">Save Settings</button>
-                </div>
-            </div>
-        </div>
-    </div>
+<div class="modal fade" id="api-settings-modal" tabindex="-1" aria-labelledby="api-settings-modal-label" aria-hidden="true">
+<div class="modal-dialog modal-lg modal-dialog-scrollable">
+<div class="modal-content">
+<div class="modal-header">
+<div>
+<h5 class="modal-title" id="api-settings-modal-label">Connections &amp; models</h5>
+<p class="text-muted small mb-0">Each provider keeps its own settings and credentials.</p>
+</div>
+<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
+</button>
+</div>
+<div class="modal-body p-4">
+<ul class="nav nav-pills gap-2 mb-4" role="tablist" aria-label="Connection categories">
+<li class="nav-item" role="presentation">
+<button class="nav-link active" id="settings-tab-text" data-bs-toggle="pill" data-bs-target="#settings-text" type="button" role="tab" aria-controls="settings-text" aria-selected="true">Text generation</button>
+</li>
+<li class="nav-item" role="presentation">
+<button class="nav-link " id="settings-tab-classify" data-bs-toggle="pill" data-bs-target="#settings-classify" type="button" role="tab" aria-controls="settings-classify" aria-selected="false">Classification</button>
+</li>
+<li class="nav-item" role="presentation">
+<button class="nav-link " id="settings-tab-medical" data-bs-toggle="pill" data-bs-target="#settings-medical" type="button" role="tab" aria-controls="settings-medical" aria-selected="false">WHO ICD</button>
+</li>
+</ul>
+<div class="tab-content">
+<section class="tab-pane fade show active" id="settings-text" role="tabpanel" aria-labelledby="settings-tab-text">
+<h6>Analysis, written reports &amp; chat</h6>
+<p class="text-muted small">Choose the provider to use. Switching keeps the other providers’ fields intact.</p>
+<div class="d-flex flex-wrap gap-2 mb-4">
+<input type="radio" class="btn-check" name="llm-provider" id="provider-openai" value="openai" checked>
+<label class="btn btn-outline-primary" for="provider-openai">OpenAI</label>
+<input type="radio" class="btn-check" name="llm-provider" id="provider-azure" value="azure" >
+<label class="btn btn-outline-primary" for="provider-azure">Azure Foundry</label>
+<input type="radio" class="btn-check" name="llm-provider" id="provider-ollama" value="ollama" >
+<label class="btn btn-outline-primary" for="provider-ollama">Ollama · local</label>
+</div>
+<div data-llm-panel="openai">
+<div class="mb-3">
+<label for="modal-api-key" class="form-label">OpenAI API key</label>
+<div class="input-group">
+<input id="modal-api-key" class="form-control" type="password" placeholder="sk-…" autocomplete="off" >
+<button type="button" class="btn btn-outline-secondary" data-reveal="modal-api-key" aria-label="Show or hide OpenAI API key">Show</button>
+</div>
+</div>
+<div class="mb-3">
+<label for="modal-openai-model" class="form-label">Model</label>
+<input id="modal-openai-model" class="form-control" type="text" placeholder="gpt-4o-mini" autocomplete="off" >
+</div>
+</div>
+<div data-llm-panel="azure" hidden>
+<div class="mb-3">
+<label for="modal-azure-api-key" class="form-label">Azure API key</label>
+<div class="input-group">
+<input id="modal-azure-api-key" class="form-control" type="password" placeholder="Your Azure resource key" autocomplete="off" >
+<button type="button" class="btn btn-outline-secondary" data-reveal="modal-azure-api-key" aria-label="Show or hide Azure API key">Show</button>
+</div>
+</div>
+<div class="mb-3">
+<label for="modal-azure-endpoint" class="form-label">Azure resource endpoint</label>
+<input id="modal-azure-endpoint" class="form-control" type="text" placeholder="https://your-resource.openai.azure.com" autocomplete="off" >
+</div>
+<div class="mb-3">
+<label for="modal-azure-deployment" class="form-label">Deployment name</label>
+<input id="modal-azure-deployment" class="form-control" type="text" placeholder="Your deployment name" autocomplete="off" >
+</div>
+<div class="mb-3">
+<label for="modal-azure-api-version" class="form-label">API version</label>
+<input id="modal-azure-api-version" class="form-control" type="text" placeholder="2024-10-21" autocomplete="off" >
+</div>
+<p class="form-text">Use your Azure OpenAI resource endpoint and deployment, rather than a Foundry project URL.</p>
+</div>
+<div data-llm-panel="ollama" hidden>
+<p class="small text-muted">Uses models already installed in Ollama on the computer running this app. No API key needed.</p>
+<div class="mb-3">
+<label for="modal-ollama-endpoint" class="form-label">Ollama address</label>
+<input id="modal-ollama-endpoint" class="form-control" type="text" placeholder="http://127.0.0.1:11434" autocomplete="off" >
+</div>
+<div class="mb-3">
+<label for="modal-ollama-model" class="form-label">Model</label>
+<input id="modal-ollama-model" class="form-control" type="text" placeholder="Select an installed model" autocomplete="off" list="ollama-model-options">
+</div>
+<datalist id="ollama-model-options">
+</datalist>
+<button type="button" class="btn btn-outline-secondary btn-sm" id="ollama-models-btn">Find installed models</button>
+<p id="ollama-models-status" class="small mt-2" role="status">
+</p>
+</div>
+<button type="button" id="test-connection-btn" class="btn btn-outline-primary btn-sm">Test selected provider</button>
+<p id="test-connection-result" class="small mt-2" role="status">
+</p>
+</section>
+<section class="tab-pane fade" id="settings-classify" role="tabpanel" aria-labelledby="settings-tab-classify">
+<h6>Classify rows against your codebook</h6>
+<p class="small text-muted">Both providers use the same questions, staged workflow and exports.</p>
+<div class="d-flex flex-wrap gap-2 mb-4">
+<input type="radio" class="btn-check" name="classification-provider" id="classifier-jev" value="jev" checked>
+<label class="btn btn-outline-primary" for="classifier-jev">Jev · cloud</label>
+<input type="radio" class="btn-check" name="classification-provider" id="classifier-laya" value="laya" >
+<label class="btn btn-outline-primary" for="classifier-laya">Laya · local</label>
+</div>
+<div data-classifier-panel="jev">
+<div class="mb-3">
+<label for="modal-jev-api-key" class="form-label">Jev API key</label>
+<div class="input-group">
+<input id="modal-jev-api-key" class="form-control" type="password" placeholder="Your TypeSafe key" autocomplete="off" >
+<button type="button" class="btn btn-outline-secondary" data-reveal="modal-jev-api-key" aria-label="Show or hide Jev API key">Show</button>
+</div>
+</div>
+<div class="mb-3">
+<label for="modal-jev-model" class="form-label">Jev model</label>
+<input id="modal-jev-model" class="form-control" type="text" placeholder="jev-latest" autocomplete="off" >
+</div>
+</div>
+<div data-classifier-panel="laya" hidden>
+<p class="small">Start locally: <code id="laya-start-command" class="text-break">npm run laya -- --origin YOUR_WEBSITE_URL</code></p>
+<p class="small text-muted">Run the Laya connector on your computer. This website connects directly to it; classification rows do not pass through Vercel.</p>
+<div class="mb-3">
+<label for="modal-laya-endpoint" class="form-label">Local Laya connector address</label>
+<input id="modal-laya-endpoint" class="form-control" type="text" value="http://127.0.0.1:8001" placeholder="http://127.0.0.1:8001" autocomplete="off" >
+</div>
+<label class="form-label" for="modal-laya-model">Checkpoint</label>
+<select class="form-select mb-3" id="modal-laya-model">
+<option value="multilingual">Multilingual · includes French</option>
+<option value="english">English</option>
+<option value="typed-decisions">Typed decisions</option>
+</select>
+<div class="mb-3">
+<label for="modal-laya-api-key" class="form-label">Laya API key (optional)</label>
+<div class="input-group">
+<input id="modal-laya-api-key" class="form-control" type="password" placeholder="Only if configured on your local service" autocomplete="off" >
+<button type="button" class="btn btn-outline-secondary" data-reveal="modal-laya-api-key" aria-label="Show or hide Laya API key (optional)">Show</button>
+</div>
+</div>
+<p class="small text-muted">Validate results and confidence thresholds on your data. Laya supports up to 100 choices per question.</p>
+</div>
+<button type="button" id="test-jev-connection-btn" class="btn btn-outline-primary btn-sm">Test selected classifier</button>
+<p id="test-jev-connection-result" class="small mt-2" role="status">
+</p>
+</section>
+<section class="tab-pane fade" id="settings-medical" role="tabpanel" aria-labelledby="settings-tab-medical">
+<h6>WHO ICD-11</h6>
+<p class="text-muted small">For medical translation. WHO lookup requires internet access.</p>
+<div class="mb-3">
+<label for="modal-icd-client-id" class="form-label">WHO ICD client ID</label>
+<input id="modal-icd-client-id" class="form-control" type="text" placeholder="Client ID" autocomplete="off" >
+</div>
+<div class="mb-3">
+<label for="modal-icd-client-secret" class="form-label">WHO ICD client secret</label>
+<div class="input-group">
+<input id="modal-icd-client-secret" class="form-control" type="password" placeholder="Client secret" autocomplete="off" >
+<button type="button" class="btn btn-outline-secondary" data-reveal="modal-icd-client-secret" aria-label="Show or hide WHO ICD client secret">Show</button>
+</div>
+</div>
+</section>
+</div>
+<hr class="my-4">
+<div class="form-check">
+<input class="form-check-input" type="checkbox" id="modal-save-api-key">
+<label class="form-check-label" for="modal-save-api-key">Remember all provider settings in this browser</label>
+</div>
+<p class="text-muted small mt-2 mb-0">Unchecked: use for this session and remove saved profiles when you save. Credentials pass through the app server to the selected provider. Laya connects to this computer through its local connector. Ollama currently runs on the app server’s computer.</p>
+<p id="settings-status" class="small" role="status">
+</p>
+</div>
+<div class="modal-footer">
+<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+<button type="button" class="btn btn-primary" id="save-api-settings">Save all settings</button>
+</div>
+</div>
+</div>
+</div>
