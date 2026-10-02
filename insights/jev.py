@@ -100,14 +100,9 @@ def analyze_batch_jev():
             records, calls = evaluate_row(row.get('state'), configs, derived, call, row.get('previous'))
         values = {}
         for name, record in records.items():
-            status = record['status']
+            # Classification cells contain configured values only. Missing
+            # decisions stay blank; diagnostics belong in the decision audit.
             values[name] = record.get('value')
-            if status == 'error':
-                values[name] = 'Error: ' + record['reason']
-            elif status == 'empty':
-                values[name] = 'No data (empty cell)'
-            elif values[name] is None:
-                values[name] = 'Needs review'
             if data.get('includeConfidence') and 'raw' in record:
                 values[name + '__confidence'] = record.get('confidence') if record.get('confidence') is not None else ''
                 if record['raw']['type'] in ('score', 'noul'):

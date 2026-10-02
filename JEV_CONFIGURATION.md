@@ -16,6 +16,7 @@ Existing version 1 configurations remain importable. Export writes version 2. Ad
 | `includeConfidence` | Show confidence and raw Score/Noul columns in the main results sheet; raw answers are retained regardless |
 | `questions` | Ordered array of question definitions |
 | `derived` | Optional lookup or composite outputs |
+| `outputOrder` | Optional array of output names in results, export and report order. May mix question and derived outputs; unlisted outputs follow in their original order. Confidence/raw score columns follow their corresponding question. Execution still follows question dependencies. |
 | `report` | Optional report definitions and evidence selection |
 | `execution` | Optional throughput settings |
 
@@ -36,6 +37,8 @@ Every question has `outputColumnName`, `questionType`, `instructions`, and norma
 ```
 
 Choice/Score answers below that threshold keep their assigned value but are marked for review. Default: 0.5. Confidence measures distribution concentration; it is not an accuracy guarantee.
+
+Classification cells contain only configured labels (or configured lookup values). Missing, failed, blocked and unassigned answers leave blank cells; review and error messages are retained in the decision audit and review queue. “Needs review” appears as a classification value only when it is explicitly one of that column's configured labels.
 
 ```json
 {"review": {"noMax": 0.15, "yesMin": 0.85}}
@@ -79,7 +82,7 @@ A lookup enforces allowed combinations without an AI call:
 }
 ```
 
-Missing matches are flagged for review; uncertain or failed inputs block the lookup. Derived inputs may reference earlier outputs. Questions can depend on earlier questions; derived outputs run after the questions.
+Missing matches are flagged for review and leave the value blank. A lookup maps an assigned input label even when that input is uncertain, retaining the mapped value and propagating the review status. Failed, blocked or unassigned inputs block the lookup. Derived inputs may reference earlier outputs. Questions can depend on earlier questions; derived outputs run after the questions.
 
 Composite scores use positive weights referencing Score questions:
 

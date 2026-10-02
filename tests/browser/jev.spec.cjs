@@ -158,6 +158,41 @@ test('a Jev configuration survives export and reimport onto another file', async
   if (errors.length) throw Error(errors.join('; '));
 });
 
+test('outputOrder imports and places calculated columns between question columns', async ({page}) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await openJevConfig(page);
+  const config = {format: 'aidstack-insights-jev-config', version: 2, sourceColumns: ['Feedback'],
+    questions: [
+      {outputColumnName: 'feedback_type', questionType: 'choice', instructions: 'Choose type.', options: ['Question', 'Request']},
+      {outputColumnName: 'feedback_code', questionType: 'choice', instructions: 'Choose code.', options: ['Vaccine', 'Treatment']}
+    ],
+    derived: [
+      {outputColumnName: 'feedback_category', type: 'lookup', inputs: ['feedback_code'],
+        table: [{when: {feedback_code: 'Vaccine'}, value: 'Health'}, {when: {feedback_code: 'Treatment'}, value: 'Health'}]},
+      {outputColumnName: 'feedback_subcode', type: 'lookup', inputs: ['feedback_code'],
+        table: [{when: {feedback_code: 'Vaccine'}, value: 'Prevention'}, {when: {feedback_code: 'Treatment'}, value: 'Care'}]}
+    ], outputOrder: ['feedback_type', 'feedback_category', 'feedback_code', 'feedback_subcode']};
+  await page.locator('#jev-import-config-input').setInputFiles({name: 'ordered.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(config))});
+  await expect(page.locator('#jev-message')).toContainText('Imported');
+  expect(JSON.parse(await page.locator('#jev-workflow-json').inputValue()).outputOrder).toEqual(config.outputOrder);
+  const download = page.waitForEvent('download');
+  await page.locator('#jev-export-config-btn').click();
+  const saved = JSON.parse(fs.readFileSync(await (await download).path(), 'utf8'));
+  expect(saved.outputOrder).toEqual(config.outputOrder);
+  await page.route('**/analyze_batch_jev', async route => {
+    const body = route.request().postDataJSON();
+    const results = body.rows.map(row => ({rowIndex: row.rowIndex,
+      values: {feedback_type: 'Question', feedback_category: 'Health', feedback_code: 'Vaccine', feedback_subcode: 'Prevention'},
+      decisions: Object.fromEntries(config.outputOrder.map(name => [name, {status: 'ok', value: 'Example'}])), calls: []}));
+    await route.fulfill({json: {results, errors: 0}});
+  });
+  await page.locator('#jev-run-btn').click();
+  await expect(page.locator('#result-message')).toContainText('Classification complete');
+  const headers = await page.locator('#results-data-table thead th').evaluateAll(cells => cells.map(cell => cell.dataset.column));
+  expect(headers.filter(name => config.outputOrder.includes(name))).toEqual(config.outputOrder);
+  expect(errors).toEqual([]);
+});
+
 test('configurable report, failed-decision retry and checkpoint restore', async ({page}) => {
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   let requests = 0;

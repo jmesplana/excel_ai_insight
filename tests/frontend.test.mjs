@@ -237,7 +237,37 @@ test('the Jev filename is dated so repeated exports do not overwrite each other'
 
 /* Generic configuration and complete-dataset reporting. */
 import {buildJevReport, narrativePacket} from '../static/js/jev-report.js';
-import {validateReportConfig} from '../static/js/jev-config.js';
+import {validateReportConfig, orderedJevOutputs} from '../static/js/jev-config.js';
+
+test('output order interleaves calculated columns and survives import/export without changing execution order', () => {
+    const config = serializeJevConfig({sourceColumns: ['Text'],
+        questions: [{...jevQuestion, outputColumnName: 'Type'}, {...jevQuestion, outputColumnName: 'Code'}],
+        derived: [{outputColumnName: 'Category', type: 'lookup', inputs: ['Code'],
+            table: [{when: {Code: 'Question'}, value: 'Information'}]}],
+        outputOrder: ['Type', 'Category', 'Code']});
+    const decoded = deserializeJevConfig(config, ['Text']);
+    validateReportConfig(decoded, ['Text']);
+    assert.deepEqual(serializeJevConfig(decoded).outputOrder, config.outputOrder);
+    assert.deepEqual(decoded.questions.map(q => q.outputColumnName), ['Type', 'Code']);
+    assert.deepEqual(orderedJevOutputs(decoded).map(q => q.outputColumnName), ['Type', 'Category', 'Code']);
+    const report = buildJevReport({sheetName: 'Sheet1', data: [{Text: 'Example'}],
+        jev: {config: decoded, totalRows: 1, selectedRows: 1, audit: [{decisions: {
+            Type: {status: 'ok', value: 'Question'}, Code: {status: 'ok', value: 'Question'},
+            Category: {status: 'ok', value: 'Information'}}, calls: []}]}});
+    assert.deepEqual(report.distributions.map(d => d.name), config.outputOrder);
+    assert.equal(report.distributions[1].counts[0].value, 'Information');
+    assert.deepEqual(orderedJevOutputs({...decoded, outputOrder: ['Category']}).map(q => q.outputColumnName),
+        ['Category', 'Type', 'Code']);
+    assert.deepEqual(orderedJevOutputs({...decoded, outputOrder: undefined}).map(q => q.outputColumnName),
+        ['Type', 'Code', 'Category']);
+});
+
+test('invalid output order cannot omit results through duplicate or unknown names', () => {
+    for (const outputOrder of [null, 'Class', ['Class', 'Class'], ['Missing'], ['Text'], [1]]) {
+        assert.throws(() => validateReportConfig({sourceColumns: ['Text'],
+            questions: [{outputColumnName: 'Class'}], outputOrder}, ['Text']), /outputOrder/);
+    }
+});
 
 test('v2 preserves structured questions, branches, lookups and reporting settings', () => {
     const config = serializeJevConfig({sourceColumns: ['Text'], model: 'pinned',

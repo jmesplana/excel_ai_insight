@@ -49,6 +49,69 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaises(JevConfigError): validate_workflow([self.parent, self.parent])
         with self.assertRaises(JevConfigError): validate_workflow([{**self.parent, 'review': {'minConfidence': float('nan')}}])
 
+    def test_uncertain_lookup_keeps_configured_value_and_propagates_review(self):
+        derived = [
+            {'outputColumnName': 'Mapped', 'inputs': ['Category'],
+             'table': [{'when': {'Category': 'A'}, 'value': 'Configured category'}]},
+            {'outputColumnName': 'Subcode', 'inputs': ['Mapped'],
+             'table': [{'when': {'Mapped': 'Configured category'}, 'value': 'Configured subcode'}]},
+            {'outputColumnName': 'Missing', 'inputs': ['Category'],
+             'table': [{'when': {'Category': 'B'}, 'value': 'Another category'}]},
+            {'outputColumnName': 'Unavailable', 'inputs': ['Missing'],
+             'table': [{'when': {'Missing': 'Another category'}, 'value': 'Another subcode'}]},
+        ]
+        validate_workflow([self.parent], derived)
+        client = create_app().test_client()
+        with patch('insights.jev.ask', return_value={'answers': {'q0': choice(confidence=.3)}}):
+            response = client.post('/analyze_batch_jev', json={'jevApiKey': 'key',
+                'configs': [self.parent], 'derived': derived, 'includeConfidence': True,
+                'rows': [{'rowIndex': 0, 'state': 'source'}]})
+        self.assertEqual(response.status_code, 200)
+        result = response.get_json()['results'][0]
+        self.assertEqual(result['values'], {'Category': 'A', 'Category__confidence': .3,
+            'Mapped': 'Configured category', 'Subcode': 'Configured subcode',
+            'Missing': None, 'Unavailable': None})
+        for name in ('Category', 'Mapped', 'Subcode', 'Missing'):
+            self.assertEqual(result['decisions'][name]['status'], 'review')
+        self.assertEqual(result['decisions']['Unavailable']['status'], 'blocked')
+
+    def test_unassigned_cells_are_blank_and_diagnostics_stay_in_audit(self):
+        client = create_app().test_client()
+        cases = [
+            (None, None, 'empty', 'empty'),
+            ('source', JevError('Temporary failure'), 'error', 'blocked'),
+            ('source', {'answers': {'q0': choice(key='invented_label')}}, 'error', 'blocked'),
+            ('source', {'answers': {'q0': choice(confidence=.3)}}, 'review', 'blocked'),
+        ]
+        for state, answer, parent_status, child_status in cases:
+            with self.subTest(parent_status=parent_status, answer=answer):
+                with patch('insights.jev.ask', side_effect=answer if isinstance(answer, Exception) else None,
+                           return_value=answer) as call:
+                    response = client.post('/analyze_batch_jev', json={'jevApiKey': 'key',
+                        'configs': [self.parent, self.child], 'rows': [{'rowIndex': 0, 'state': state}]})
+                self.assertEqual(response.status_code, 200)
+                result = response.get_json()['results'][0]
+                self.assertEqual(result['values']['Category'], 'A' if parent_status == 'review' else None)
+                self.assertIsNone(result['values']['Detail'])
+                self.assertEqual(result['decisions']['Category']['status'], parent_status)
+                self.assertEqual(result['decisions']['Detail']['status'], child_status)
+                if parent_status == 'error':
+                    self.assertTrue(result['decisions']['Category']['reason'])
+                if state is None:
+                    call.assert_not_called()
+
+    def test_needs_review_is_returned_only_when_selected_as_a_configured_label(self):
+        config = {**self.parent, 'outputColumnName': 'Status', 'options': ['New', 'Needs review']}
+        raw = {'type': 'choice', 'choice': 'needs_review', 'confidence': .9,
+               'probabilities': {'new': .1, 'needs_review': .9}}
+        client = create_app().test_client()
+        with patch('insights.jev.ask', return_value={'answers': {'q0': raw}}):
+            response = client.post('/analyze_batch_jev', json={'jevApiKey': 'key',
+                'configs': [config], 'rows': [{'rowIndex': 0, 'state': 'source'}]})
+        result = response.get_json()['results'][0]
+        self.assertEqual(result['values']['Status'], 'Needs review')
+        self.assertEqual(result['decisions']['Status']['status'], 'ok')
+
     def test_unknown_choice_invalid_probabilities_and_noul_are_rejected(self):
         _, decoder = build_question({**self.parent, 'type': 'choice'})
         for raw in [{}, {**choice(), 'choice': 'unknown'}, {**choice(), 'probabilities': {'a': 2, 'b': -1}}, {**choice(), 'type': 'score'}]:

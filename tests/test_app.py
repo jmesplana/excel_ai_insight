@@ -65,7 +65,7 @@ class AppTests(unittest.TestCase):
         self.assertEqual(values[4]['Urgence'], 'Élevée')
         self.assertEqual(values[4]['Urgence__score'], 1.6)
         self.assertEqual(values[4]['Type__confidence'], 0.91)
-        self.assertEqual(values[5]['Type'], 'No data (empty cell)')
+        self.assertIsNone(values[5]['Type'])
         self.assertNotIn('secret-key', response.get_data(as_text=True))
 
     def test_jev_row_failure_is_isolated_and_key_never_leaks(self):

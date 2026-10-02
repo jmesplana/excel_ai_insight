@@ -167,12 +167,17 @@ def evaluate_row(state, configs, derived, call, previous=None):
         inputs = item.get('inputs', list(item.get('weights', {})))
         if all(records[k]['status'] == 'empty' for k in inputs):
             records[name] = {'status': 'empty', 'value': None}
+        elif item.get('type', 'lookup') == 'lookup':
+            if any(records[k]['status'] not in ('ok', 'review') or records[k]['value'] is None for k in inputs):
+                records[name] = {'status': 'blocked', 'value': None, 'reason': 'Inputs have no usable assigned value.'}
+                continue
+            found = next((entry for entry in item['table'] if all(records[k]['value'] == entry['when'][k] for k in inputs)), None)
+            uncertain = any(records[k]['status'] == 'review' for k in inputs)
+            records[name] = ({'status': 'review' if uncertain else 'ok', 'value': found['value'],
+                              'reason': 'Mapped from an input that requires review.' if uncertain else None} if found else
+                             {'status': 'review', 'value': None, 'reason': 'No configured lookup match.'})
         elif any(records[k]['status'] != 'ok' for k in inputs):
             records[name] = {'status': 'blocked', 'value': None, 'reason': 'Inputs require review or retry.'}
-        elif item.get('type', 'lookup') == 'lookup':
-            found = next((entry for entry in item['table'] if all(records[k]['value'] == entry['when'][k] for k in inputs)), None)
-            records[name] = ({'status': 'ok', 'value': found['value']} if found else
-                             {'status': 'review', 'value': None, 'reason': 'No configured lookup match.'})
         else:
             weights = item['weights']
             value = sum(records[k]['detail'] / (len(records[k]['labels']) - 1) * w for k, w in weights.items()) / sum(weights.values())

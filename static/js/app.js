@@ -8,7 +8,7 @@ import { BatchRun } from './batch-runner.js';
 import { serializeConfig, deserializeConfig, configFilename } from './analysis-config.js';
 import { getJevConfig } from './provider-settings.js';
 import { serializeJevConfig, deserializeJevConfig, jevConfigFilename, parseOptions,
-    formatOptions, validateQuestion, validateReportConfig, buildJevState, DEFAULT_QUESTION_TYPE } from './jev-config.js';
+    formatOptions, validateQuestion, validateReportConfig, orderedJevOutputs, buildJevState, DEFAULT_QUESTION_TYPE } from './jev-config.js';
 
 import {buildJevReport, narrativePacket} from './jev-report.js';
 import {checkpoint} from './jev-checkpoint.js';
@@ -1872,7 +1872,7 @@ function applyImportedJevConfig(imported) {
         syncProviderUI();
     }
     document.getElementById('jev-workflow-json').value = JSON.stringify(Object.fromEntries(
-        ['derived', 'report', 'execution', 'model'].filter(k => imported[k] !== undefined).map(k => [k, imported[k]])), null, 2);
+        ['derived', 'report', 'execution', 'model', 'outputOrder'].filter(k => imported[k] !== undefined).map(k => [k, imported[k]])), null, 2);
     const selected = new Set(imported.sourceColumns);
     document.querySelectorAll('.jev-source-column').forEach(input => {
         input.checked = selected.has(input.value);
@@ -1906,7 +1906,7 @@ async function runJevClassification(isTestRun = false) {
         validateReportConfig(config, sheet.columns);
         const names = new Set(sheet.columns);
         const outputColumns = [];
-        for (const question of [...config.questions, ...(config.derived || [])]) {
+        for (const question of orderedJevOutputs(config)) {
             const columns = [question.outputColumnName];
             if (config.includeConfidence && question.questionType) {
                 columns.push(question.outputColumnName + '__confidence');

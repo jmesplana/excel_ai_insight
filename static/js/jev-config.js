@@ -68,12 +68,13 @@ export function validateQuestion(question) {
  * @param {object} state - { sourceColumns, includeConfidence, questions }
  */
 const QUESTION_FIELDS = ['outputColumnName', 'questionType', 'instructions', 'options', 'review', 'dependsOn', 'branches', 'criteria'];
-const ROOT_FIELDS = ['format', 'version', 'exportedAt', 'sheetName', 'sourceColumns', 'includeConfidence', 'questions', 'derived', 'report', 'execution', 'model', 'classifier'];
+const ADVANCED_FIELDS = ['derived', 'report', 'execution', 'model', 'classifier', 'outputOrder'];
+const ROOT_FIELDS = ['format', 'version', 'exportedAt', 'sheetName', 'sourceColumns', 'includeConfidence', 'questions', ...ADVANCED_FIELDS];
 const copy = value => JSON.parse(JSON.stringify(value));
 export function serializeJevConfig({ sourceColumns = [], includeConfidence = false,
                                      sheetName = '', questions = [], warnings, format, version, exportedAt, ...advanced } = {}) {
     if (advanced.classifier !== undefined) validateReportConfig({questions: [], classifier: advanced.classifier}, []);
-    const unknown = Object.keys(advanced).filter(k => !['derived', 'report', 'execution', 'model', 'classifier'].includes(k));
+    const unknown = Object.keys(advanced).filter(k => !ADVANCED_FIELDS.includes(k));
     if (unknown.length) throw new Error(`Unknown workflow fields: ${unknown.join(', ')}`);
     for (const q of questions) {
         const extras = Object.keys(q).filter(k => !QUESTION_FIELDS.includes(k));
@@ -84,7 +85,7 @@ export function serializeJevConfig({ sourceColumns = [], includeConfidence = fal
         exportedAt: new Date().toISOString(), sheetName,
         sourceColumns: sourceColumns.filter(name => str(name).trim() !== ''),
         includeConfidence: !!includeConfidence,
-        ...Object.fromEntries(['derived', 'report', 'execution', 'model', 'classifier'].filter(k => advanced[k] !== undefined).map(k => [k, copy(advanced[k])])),
+        ...Object.fromEntries(ADVANCED_FIELDS.filter(k => advanced[k] !== undefined).map(k => [k, copy(advanced[k])])),
         questions: questions.map(q => ({
             ...Object.fromEntries(QUESTION_FIELDS.filter(k => q[k] !== undefined).map(k => [k, copy(q[k])])),
             outputColumnName: str(q.outputColumnName).trim(),
@@ -92,6 +93,19 @@ export function serializeJevConfig({ sourceColumns = [], includeConfidence = fal
             instructions: q.instructions || '', options: q.options || []
         }))
     };
+}
+
+/** Order result columns without changing question execution or lookup dependencies. */
+export function orderedJevOutputs(config) {
+    const definitions = [...config.questions, ...(config.derived || [])];
+    if (config.outputOrder === undefined) return definitions;
+    const order = config.outputOrder;
+    const byName = new Map(definitions.map(def => [def.outputColumnName, def]));
+    if (!Array.isArray(order) || order.some(name => typeof name !== 'string' || !byName.has(name)) || new Set(order).size !== order.length) {
+        throw new Error('outputOrder must list unique, existing question or derived output names.');
+    }
+    const selected = new Set(order);
+    return [...order.map(name => byName.get(name)), ...definitions.filter(def => !selected.has(def.outputColumnName))];
 }
 
 export function validateReportConfig(config, columns) {
@@ -104,6 +118,7 @@ export function validateReportConfig(config, columns) {
     }
     if (config.model !== undefined && (typeof config.model !== 'string' || !config.model.trim())) throw new Error('model must be a non-empty model name.');
     if (config.derived !== undefined && !Array.isArray(config.derived)) throw new Error('derived must be an array.');
+    orderedJevOutputs(config);
     const report = config.report || {};
     if (typeof report !== 'object' || Array.isArray(report)) throw new Error('report must be an object.');
     const reportFields = ['title', 'instructions', 'groupBy', 'crossTabs', 'evidenceColumns', 'maxExamples', 'maxGroups', 'maxCategories'];
@@ -180,7 +195,7 @@ export function deserializeJevConfig(raw, availableColumns = []) {
         includeConfidence: !!raw.includeConfidence,
         sheetName: str(raw.sheetName),
         questions,
-        ...Object.fromEntries(['derived', 'report', 'execution', 'model', 'classifier'].filter(k => raw[k] !== undefined).map(k => [k, copy(raw[k])])),
+        ...Object.fromEntries(ADVANCED_FIELDS.filter(k => raw[k] !== undefined).map(k => [k, copy(raw[k])])),
         warnings
     };
 }

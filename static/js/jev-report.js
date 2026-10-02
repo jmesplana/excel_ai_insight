@@ -1,8 +1,10 @@
+import {orderedJevOutputs} from './jev-config.js';
+
 /** Exact aggregation over every processed row; never the chat sample. */
 export function buildJevReport(result) {
     result = result.jev.sourceResult || result;
     const config = result.jev.config;
-    const definitions = [...config.questions, ...(config.derived || [])];
+    const definitions = orderedJevOutputs(config);
     const coverage = {total: result.jev.totalRows, selected: result.jev.selectedRows,
         processed: result.data.length, successful: 0, review: 0, failed: 0, empty: 0, blocked: 0};
     const reviewRows = [];
