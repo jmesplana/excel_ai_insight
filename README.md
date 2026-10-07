@@ -494,7 +494,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - `static/js/app.js`: workflow orchestration and event wiring.
 - `static/js/results.js`: results tables and chat controls, initialized with explicit dependencies.
 - `static/js/provider-settings.js`: provider configuration and form visibility.
-- `static/js/batch-runner.js`: resumable in-memory batch execution.
+- `static/js/batch-runner.js`: resumable batch execution that awaits checkpoint writes.
+- `static/js/run-checkpoint.js`: atomic browser storage and incremental row updates.
+- `static/js/recovery-file.js`: portable recovery format and import validation.
 - `static/js/spreadsheet.js`: header validation, typed imports, and table export.
 - `static/js/rendering.js`: text escaping and sanitized Markdown.
 - `templates/partials/`: landing page, settings, and individual workflow steps.
@@ -511,12 +513,39 @@ npm run test:browser
 The browser suite uses Chrome, starts its own local server on port 8091, and
 mocks provider responses. Run `npm install` once to install the test dependency.
 
-Analysis runs can stop after the current batch, download completed rows, and
-resume from the last acknowledged batch using the original settings. Checkpoints
-stay in memory: keep the page open, or download partial results before leaving.
-Cell-level errors are retained in the export; resume retries an interrupted batch,
-not individual cells that already returned an error. A request whose response was
-lost may have incurred provider usage even though its batch must be retried.
+General AI analysis and Jev/Laya classification save source data and settings once,
+then save each completed batch atomically in the browser's IndexedDB before the
+next request. General analysis uses 20 rows per batch; Jev uses its configured
+batch size (4 by default), and Laya uses 1. Keep the laptop awake and the tab open;
+switching windows is fine, but closing the tab or sleeping stops processing.
+
+After a refresh or crash, choose **Restore saved analysis** or **Restore saved
+Jev run** on the first step, then resume. Restoring never starts API calls.
+Completed batches retain their original order and settings. Re-enter credentials
+in API Settings if necessary; API keys are excluded from checkpoints and recovery
+files. A batch whose response was lost can incur provider usage again on retry.
+
+Use **Download recovery file** during processing, while paused, or after completion.
+This JSON includes source rows, completed results, settings and classification audit;
+**Import recovery file** on the first step restores it, including on another computer.
+A reminder appears at each 1,000-row milestone; downloads remain user initiated so
+browser automatic-download restrictions do not interrupt the run. Each backup is
+self-contained and includes all completed rows, so files never need to be merged.
+Keep these files private because they contain the source data and analysis.
+
+The browser retains the latest run per mode. Starting/importing a run replaces that
+mode's saved run; download a recovery file to keep older work. Browser checkpoints
+belong to the same site and browser profile and can be lost if site data is cleared
+or evicted. Recovery downloads provide an independent backup. If a batch cannot be
+saved, processing pauses, keeps its results downloadable in memory, and retries
+saving before making more analysis calls. A stale tab cannot overwrite a checkpoint
+replaced by a different run.
+
+**Download completed rows (CSV)** works during processing and after completion.
+Excel downloads remain available for partial and final results; Jev Excel exports
+also include reports and decision audit. A completed run exports one combined table.
+Cell-level errors remain in the output; general analysis resumes unfinished batches,
+while Jev also supports retrying failed decisions.
 
 Exports are **results tables**, containing the selected sheet's values and new
 outputs. They do not preserve the original workbook's other sheets, formulas, or

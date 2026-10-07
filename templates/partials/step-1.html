@@ -132,6 +132,14 @@
                                     </div>
                                 </div>
 
+                                <div class="border rounded p-3 mt-3">
+                                    <p class="small">Resume work saved in this browser, or import a recovery file. Restoring does not start processing. A new run replaces the saved run for that mode; download a recovery file to keep an older run.</p>
+                                    <button id="analysis-restore-start-btn" type="button" class="btn btn-outline-primary mb-2">Restore saved analysis</button>
+                                    <button id="recovery-import-btn" type="button" class="btn btn-outline-secondary mb-2">Import recovery file</button>
+                                    <input id="recovery-import-input" type="file" accept=".json,application/json" class="hidden">
+                                    <div id="analysis-restore-message" class="alert hidden"></div>
+                                    <div id="recovery-import-message" class="alert hidden"></div>
+                                </div>
                                 <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
                                     <button class="btn btn-primary" id="config-next-btn">Next <i class="bi bi-arrow-right"></i></button>
                                 </div>

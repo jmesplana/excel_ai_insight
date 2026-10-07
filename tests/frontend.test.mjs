@@ -325,3 +325,41 @@ test('Laya classifier selection round-trips; profiles never belong in configurat
     assert.throws(() => serializeJevConfig({...input, classifier:{...input.classifier, apiKey:'secret'}}), /credentials/);
     assert.throws(() => deserializeJevConfig({...input, classifier:{provider:'laya', model:'unknown'}}), /checkpoint/);
 });
+
+test('storage failure pauses requests and resume saves pending results before continuing', async () => {
+    const events = []; let fail = true;
+    const run = new BatchRun({rows: [1, 2, 3], batchSize: 2,
+        processBatch: async (rows, start) => { events.push(`request:${start}`); return {rows}; },
+        onCheckpoint: async (current, indices) => {
+            events.push(`save:${indices.join(',')}`);
+            if (fail) throw new Error('Storage full');
+        }});
+    await assert.rejects(run.run(), /Storage full/);
+    assert.deepEqual(run.results, [1, 2]);
+    assert.deepEqual(run.pendingCheckpoint, [0, 1]);
+    await assert.rejects(run.run(), /Storage full/);
+    assert.deepEqual(events, ['request:0', 'save:0,1', 'save:0,1']);
+    fail = false;
+    await run.run();
+    assert.deepEqual(events.slice(3), ['save:0,1', 'request:2', 'save:2']);
+    assert.deepEqual(run.results, [1, 2, 3]);
+});
+
+import {recoveryDocument, parseRecovery} from '../static/js/recovery-file.js';
+
+test('recovery files omit provider credentials and reject damaged progress or row order', () => {
+    const run = {version:1,runId:'run',filename:'data.csv',sheetName:'Sheet1',sourceColumns:['Text'],
+        columns:['Text','Answer'],outputColumns:['Answer'],rows:[{Text:'first'},{Text:'second'}],totalRows:2,
+        results:[{Text:'first',Answer:'ok'}],cursor:1,batchSize:20,errors:0,generalInstructions:'original',
+        columnConfigs:[{id:'a',column:'Text',columns:['Text'],prompt:'Classify',resolvedName:'Answer',maxOutputTokens:1024}],
+        providerConfig:{provider:'azure',apiKey:'private-key',azureEndpoint:'https://example.openai.azure.com',azureDeployment:'original'},
+        apiKey:'another-key',pendingCheckpoint:[0],onProgress:()=>{}};
+    const doc = recoveryDocument('analysis',run);
+    assert.equal(JSON.stringify(doc).includes('private-key'),false);
+    assert.equal(JSON.stringify(doc).includes('another-key'),false);
+    assert.equal(doc.run.pendingCheckpoint,undefined);
+    assert.equal(parseRecovery(doc).run.providerConfig.azureDeployment,'original');
+    assert.throws(()=>parseRecovery({...doc,version:99}),/Invalid/);
+    assert.throws(()=>parseRecovery({...doc,run:{...doc.run,cursor:2}}),/Invalid/);
+    assert.throws(()=>parseRecovery({...doc,run:{...doc.run,results:[{Text:'second',Answer:'ok'}]}}),/Invalid/);
+});

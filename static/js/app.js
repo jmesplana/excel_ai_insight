@@ -12,6 +12,8 @@ import { serializeJevConfig, deserializeJevConfig, jevConfigFilename, parseOptio
 
 import {buildJevReport, narrativePacket} from './jev-report.js';
 import {checkpoint} from './jev-checkpoint.js';
+import {saveCheckpoint} from './run-checkpoint.js';
+import {snapshotRun, recoveryDocument, parseRecovery} from './recovery-file.js';
 
 /* Global variables */
 let availableColumns = [];
@@ -669,6 +671,7 @@ function goToStep(step) {
     applyModePanels(step);
 
     currentStep = step;
+    updateRecoveryTools();
 }
 
 // Show/hide the analysis vs ICD panels for the given step according to appMode.
@@ -1459,7 +1462,7 @@ function useCategoriesInPrompt() {
 
 /* Column Analysis */
 async function analyzeColumns(isTestRun = false) {
-    if (activeAnalysis?.running) return;
+    if (activeAnalysis?.running || activeAnalysis?.preparing) return;
     // Clear previous results before starting a new analysis, but only if elements exist
     const resultPreview = document.getElementById('result-preview');
     const chartContent = document.getElementById('chart-content');
@@ -1512,45 +1515,109 @@ async function analyzeColumns(isTestRun = false) {
         cfg.resolvedName = name;
     });
 
-    const serverConfigs = columnConfigs.map(c => ({
-        id: c.id, column: c.column, prompt: c.prompt, outputColumnName: c.resolvedName, maxOutputTokens: c.maxOutputTokens
-    }));
-    const providerConfig = getLLMConfig();
-    const outColumns = sheet.columns.concat(columnConfigs.map(c => c.resolvedName));
-    activeAnalysis = new BatchRun({
-        rows: allRows.slice(0, rowCount), batchSize: ANALYZE_BATCH_SIZE,
-        processBatch: async (batch, start) => {
-            const rows = batch.map((row, offset) => ({ rowIndex: start + offset,
-                inputs: Object.fromEntries(columnConfigs.map(cfg => [cfg.id, buildAnalysisInput(row, cfg)])) }));
-            const response = await fetch('/analyze_batch', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...providerConfig, generalInstructions,
-                    isFirstBatch: start === 0, configs: serverConfigs, rows })
-            });
-            const result = await readJson(response);
-            if (!response.ok || result.error) throw new Error(result.error || 'Analysis failed.');
-            const values = new Map((result.results || []).map(r => [r.rowIndex, r.values]));
-            if (rows.some(row => !values.has(row.rowIndex))) throw new Error('Incomplete batch response. Resume to retry.');
-            return { rows: batch.map((row, i) => ({ ...row, ...values.get(start + i) })), errors: result.errors };
-        },
-        onProgress: run => {
-            analyzedResult = { sheetName: selectedSheet, columns: outColumns,
-                data: run.results, partial: !run.complete, outputColumns: serverConfigs.map(c => c.outputColumnName) };
-            updateProgress(Math.round(run.cursor / rowCount * 100), run.cursor, rowCount,
-                `Analyzed ${run.cursor} of ${rowCount} rows`);
-        }
-    });
-    activeAnalysis.isTestRun = isTestRun;
+    const run = makeAnalysisRun({version: 1, runId: crypto.randomUUID(), filename: fileData.filename,
+        sheetName: selectedSheet, sourceColumns: sheet.columns,
+        columns: sheet.columns.concat(columnConfigs.map(c => c.resolvedName)),
+        outputColumns: columnConfigs.map(c => c.resolvedName),
+        rows: allRows.slice(0, rowCount), totalRows: allRows.length,
+        ...(isTestRun ? {sourceRows: allRows} : {}),
+        batchSize: ANALYZE_BATCH_SIZE, columnConfigs, generalInstructions,
+        providerConfig: snapshotRun('analysis', {providerConfig: getLLMConfig()}).providerConfig,
+        isTestRun, cursor: 0, results: [], errors: 0});
+    activeAnalysis = run;
     analyzedResult = null;
-    // A new run invalidates any split staged against the previous results.
     cleanDataResults?.reset();
+    run.needsCheckpointStart = true;
     await continueAnalysis();
 }
 
 let activeAnalysis = null;
+
+function makeAnalysisRun(saved) {
+    const serverConfigs = saved.columnConfigs.map(c => ({id: c.id, column: c.column, prompt: c.prompt,
+        outputColumnName: c.resolvedName, maxOutputTokens: c.maxOutputTokens}));
+    const run = new BatchRun({rows: saved.rows, batchSize: saved.batchSize,
+        processBatch: async (batch, start) => {
+            const rows = batch.map((row, offset) => ({rowIndex: start + offset,
+                inputs: Object.fromEntries(saved.columnConfigs.map(cfg => [cfg.id, buildAnalysisInput(row, cfg)]))}));
+            // Keep the original provider/model/settings, but obtain credentials afresh after restore.
+            const keyId = saved.providerConfig.provider === 'azure' ? 'modal-azure-api-key' : 'modal-api-key';
+            const apiKey = saved.providerConfig.provider === 'ollama' ? undefined : document.getElementById(keyId).value.trim() || null;
+            const response = await fetch('/analyze_batch', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({...saved.providerConfig, apiKey, generalInstructions: saved.generalInstructions,
+                    isFirstBatch: start === 0, configs: serverConfigs, rows})
+            });
+            const result = await readJson(response);
+            if (!response.ok || result.error) throw new Error(result.error || 'Analysis failed.');
+            const values = new Map((result.results || []).map(r => [r.rowIndex, r.values]));
+            if (values.size !== rows.length || rows.some(row => !values.has(row.rowIndex))) {
+                throw new Error('Incomplete batch response. Resume to retry.');
+            }
+            return {rows: batch.map((row, i) => ({...row, ...values.get(start + i)})), errors: result.errors};
+        },
+        onCheckpoint: async (current, indices) => {
+            try { await saveCheckpoint('analysis', 'put', snapshotRun('analysis', current), indices); }
+            catch (error) { throw new Error(`Could not save progress in this browser. Download a recovery file before leaving. ${error.message}`); }
+            current.savedCursor = current.cursor;
+        },
+        onProgress: current => {
+            syncAnalysisResult();
+            updateProgress(Math.round(current.cursor / current.rows.length * 100), current.cursor, current.rows.length,
+                `Analyzed ${current.cursor} of ${current.rows.length} rows`);
+            updateRecoveryTools();
+        }
+    });
+    Object.assign(run, saved, {savedCursor: saved.cursor});
+    return run;
+}
+
+function syncAnalysisResult() {
+    const run = activeAnalysis;
+    if (!run) return;
+    analyzedResult = {sheetName: run.sheetName, columns: run.columns, data: run.results,
+        partial: !run.complete, outputColumns: run.outputColumns};
+}
+
+async function restoreAnalysisRun(saved) {
+    if (activeAnalysis?.running || activeJevRun?.running) return;
+    try {
+        if (!saved?.runId) saved = await saveCheckpoint('analysis', 'get');
+        if (!saved) throw new Error('No saved analysis in this browser.');
+        activeAnalysis = makeAnalysisRun(saved);
+        appMode = 'analysis';
+        document.getElementById('mode-analysis').checked = true;
+        fileData = {filename: saved.filename, sheets: {[saved.sheetName]: {columns: saved.sourceColumns, data: saved.sourceRows || saved.rows}}};
+        availableColumns = saved.sourceColumns;
+        document.getElementById('sheet-select').replaceChildren(new Option(saved.sheetName, saved.sheetName));
+        document.getElementById('general-instructions').value = saved.generalInstructions;
+        document.getElementById('column-configs').innerHTML = '';
+        saved.columnConfigs.forEach(c => addColumnConfig(c));
+        cleanDataResults?.reset();
+        syncAnalysisResult();
+        goToStep(4);
+        document.getElementById('analysis-recovery').classList.remove('hidden');
+        document.getElementById('resume-analysis-btn').disabled = activeAnalysis.complete;
+        document.getElementById('partial-download-btn').disabled = !saved.cursor;
+        showAlert('analyze-message', `Restored ${saved.cursor} of ${saved.rows.length} rows. Resume uses the saved settings; credentials come from API Settings or the server.`, 'info');
+        if (activeAnalysis.complete) {
+            resultsUI.load({sheets: {[saved.sheetName]: analyzedResult}});
+            document.getElementById('result-message').textContent = `Restored ${saved.cursor} of ${saved.rows.length} rows.`;
+            document.getElementById('download-link').onclick = event => { event.preventDefault(); downloadAnalyzedFile(); };
+            goToStep(5);
+        }
+        updateRecoveryTools();
+    } catch (error) {
+        showAlert('analysis-restore-message', error.message, 'danger');
+        showAlert('analyze-message', error.message, 'danger');
+    }
+}
+
 async function continueAnalysis() {
     const run = activeAnalysis;
-    if (!run || run.running) return;
+    if (!run || run.running || run.preparing) return;
+    run.preparing = true;
+    run.stopped = false;
     document.querySelectorAll('.test-run-preview-panel').forEach(panel => panel.remove());
     showSpinner(true, 'Analyzing rows…', true);
     const stopButton = document.getElementById('stop-analysis-btn');
@@ -1560,23 +1627,35 @@ async function continueAnalysis() {
     stopButton.onclick = () => { run.stop(); stopButton.disabled = true; stopButton.textContent = 'Stopping after current batch…'; };
     document.getElementById('analysis-recovery').classList.add('hidden');
     let failure = null;
-    try { await run.run(); } catch (error) { failure = error; }
-    finally { showSpinner(false); stopButton.classList.add('hidden'); }
-    const message = `${run.complete ? 'Analysis complete' : 'Analysis paused'}: ${run.cursor} of ${run.rows.length} rows. ${run.errors} cell(s) had errors.`;
+    try {
+        if (run.needsCheckpointStart) {
+            try { await saveCheckpoint('analysis', 'start', snapshotRun('analysis', run)); }
+            catch (error) { throw new Error(`Could not create a saved run in this browser. Free browser storage and resume, or download a recovery file. ${error.message}`); }
+            run.needsCheckpointStart = false;
+            run.savedCursor = run.cursor;
+        }
+        updateRecoveryTools();
+        if (!run.stopped) await run.run();
+    } catch (error) { failure = error; }
+    finally { run.preparing = false; showSpinner(false); stopButton.classList.add('hidden'); }
+    syncAnalysisResult();
+    updateRecoveryTools();
+    const message = `${run.complete && !failure ? 'Analysis complete' : 'Analysis paused'}: ${run.cursor} of ${run.rows.length} rows. ${run.errors} cell(s) had errors.`;
     showAlert('analyze-message', failure ? `${message} ${failure.message}` : message,
         failure ? 'danger' : run.complete ? 'success' : 'info');
     const recovery = document.getElementById('analysis-recovery');
-    recovery.classList.toggle('hidden', run.complete);
+    recovery.classList.toggle('hidden', run.complete && !failure);
+    document.getElementById('resume-analysis-btn').disabled = run.complete && !failure;
     document.getElementById('partial-download-btn').disabled = !run.cursor;
     document.getElementById('resume-analysis-btn').onclick = continueAnalysis;
     document.getElementById('partial-download-btn').onclick = downloadAnalyzedFile;
-    if (!analyzedResult) return;
-    document.getElementById('result-message').textContent = message;
+    if (!run.cursor) return;
+    document.getElementById('result-message').textContent = failure ? `${message} ${failure.message}` : message;
     const downloadLink = document.getElementById('download-link');
     downloadLink.href = '#';
     downloadLink.onclick = event => { event.preventDefault(); downloadAnalyzedFile(); };
-    if (run.isTestRun && run.complete) previewAnalyzedData(run.results, true);
-    else if (run.complete) {
+    if (run.isTestRun && run.complete && !failure) previewAnalyzedData(run.results, true);
+    else if (run.complete && !failure) {
         resultsUI.load({ sheets: { [analyzedResult.sheetName]: analyzedResult } });
         goToStep(5);
     }
@@ -1930,6 +2009,8 @@ async function runJevClassification(isTestRun = false) {
                 ...(providerConfig.classificationProvider === 'laya' ? {layaEndpoint: providerConfig.layaEndpoint, layaModel: providerConfig.layaModel} : {jevModel: providerConfig.jevModel})},
             config, isTestRun, cursor: 0, results: [], audit: [], running: false, stopped: false};
         await checkpoint('start', activeJevRun);
+        activeJevRun.savedCursor = 0;
+        updateRecoveryTools();
         analyzedResult = null;
         cleanDataResults?.reset();
         await continueJevRun();
@@ -1962,7 +2043,13 @@ async function continueJevRun(retryFailed = false) {
     document.querySelectorAll('.test-run-preview-panel').forEach(panel => panel.remove());
     let failure = null;
     try {
-        if (run.needsCheckpointStart) { await checkpoint('start', run); run.needsCheckpointStart = false; }
+        if (run.needsCheckpointStart) {
+            await checkpoint('start', run);
+            run.needsCheckpointStart = false;
+            run.savedCursor = run.cursor;
+        }
+        await flushJevCheckpoint(run);
+        updateRecoveryTools();
         const batchSize = classifier.classificationProvider === 'laya' ? 1 : (run.config.execution?.batchSize ?? 4);
         for (let offset = 0; offset < pending.length && !run.stopped; offset += batchSize) {
             const indices = pending.slice(offset, offset + batchSize);
@@ -1985,36 +2072,48 @@ async function continueJevRun(retryFailed = false) {
                 run.audit[i] = {rowIndex: i, decisions: answer.decisions || {}, calls: [...(run.audit[i]?.calls || []), ...(answer.calls || [])]};
             }
             if (!retryFailed) run.cursor += indices.length;
+            run.pendingCheckpoint = indices;
             syncJevResult();
             updateProgress(Math.round(run.cursor / run.rows.length * 100), run.cursor, run.rows.length, `Classified ${run.cursor} of ${run.rows.length} rows`);
-            try { await checkpoint('put', run, indices); }
-            catch (error) { throw new Error('Results are in memory, but local checkpoint storage failed. Download completed rows before leaving this page.'); }
+            await flushJevCheckpoint(run);
         }
     } catch (error) { failure = error; }
     finally { run.running = false; showSpinner(false); stop.classList.add('hidden'); }
     const errors = run.audit.filter(a => Object.values(a.decisions).some(d => d.status === 'error')).length;
     const complete = run.cursor === run.rows.length;
-    const message = `${complete ? 'Classification complete' : 'Classification paused'}: ${run.cursor} of ${run.rows.length} rows. ${errors} row(s) had errors.`;
+    const message = `${complete && !failure ? 'Classification complete' : 'Classification paused'}: ${run.cursor} of ${run.rows.length} rows. ${errors} row(s) had errors.`;
     showAlert('jev-message', escapeHtml(failure ? `${message} ${failure.message}` : message), failure ? 'danger' : complete ? 'success' : 'info');
-    document.getElementById('jev-recovery').classList.toggle('hidden', complete);
+    document.getElementById('jev-recovery').classList.toggle('hidden', complete && !failure);
+    updateRecoveryTools();
     document.getElementById('jev-partial-download-btn').disabled = !run.cursor;
     if (!run.cursor) return;
     syncJevResult();
     document.getElementById('result-message').textContent = failure ? `${message} ${failure.message}` : message;
     document.getElementById('download-link').onclick = event => { event.preventDefault(); downloadAnalyzedFile(); };
-    if (run.isTestRun && complete && !retryFailed) previewAnalyzedData(run.results, true);
+    if (run.isTestRun && complete && !retryFailed && !failure) previewAnalyzedData(run.results, true);
     else {
         resultsUI.load({sheets: {[run.sheetName]: analyzedResult}});
         goToStep(5);
     }
 }
 
-async function restoreJevRun() {
+async function flushJevCheckpoint(run) {
+    if (!run.pendingCheckpoint?.length) return;
+    try { await checkpoint('put', run, run.pendingCheckpoint); }
+    catch (error) { throw new Error(`Could not save progress in this browser. Download a recovery file before leaving. ${error.message}`); }
+    run.pendingCheckpoint = [];
+    run.savedCursor = run.cursor;
+    updateRecoveryTools();
+}
+
+async function restoreJevRun(saved) {
     if (activeJevRun?.running) return;
     try {
-        const saved = await checkpoint('get');
+        if (!saved?.runId) saved = await checkpoint('get');
         if (!saved) throw new Error('No saved Jev run in this browser.');
-        activeJevRun = {...saved, running: false, stopped: false};
+        activeJevRun = {...saved, running: false, stopped: false, savedCursor: saved.cursor};
+        analyzedResult = null;
+        cleanDataResults?.reset();
         appMode = 'jev';
         document.getElementById('mode-jev').checked = true;
         fileData = {filename: saved.filename, sheets: {[saved.sheetName]: {columns: saved.sourceColumns, data: saved.sourceRows || saved.rows}}};
@@ -2031,9 +2130,75 @@ async function restoreJevRun() {
             goToStep(5);
         }
         document.getElementById('jev-recovery').classList.toggle('hidden', saved.cursor === saved.rows.length);
+        updateRecoveryTools();
     } catch (error) {
         showAlert('jev-message', escapeHtml(error.message), 'danger');
         showAlert('jev-restore-message', escapeHtml(error.message), 'danger');
+    }
+}
+
+function recoveryRun() {
+    return appMode === 'analysis' ? activeAnalysis : appMode === 'jev' ? activeJevRun : null;
+}
+
+function updateRecoveryTools() {
+    const run = recoveryRun();
+    document.querySelectorAll('[data-recovery-tools]').forEach(el => el.classList.toggle('hidden', !run));
+    if (!run) return;
+    const saved = run.savedCursor || 0;
+    const unsaved = run.pendingCheckpoint?.length || 0;
+    const message = `${saved} of ${run.rows.length} rows saved in this browser.`
+        + (unsaved ? ` ${unsaved} updated rows are waiting to be saved; download a recovery file if saving fails.` : '');
+    document.querySelectorAll('[data-recovery-status]').forEach(el => { el.textContent = message; });
+    const milestone = Math.floor(saved / 1000) * 1000;
+    document.querySelectorAll('[data-recovery-reminder]').forEach(el => {
+        el.classList.toggle('hidden', milestone === 0 || milestone <= (run.lastBackupCursor || 0));
+        el.textContent = `${milestone.toLocaleString()} rows saved. This is a good time to download a recovery backup.`;
+    });
+    document.querySelectorAll('[data-recovery-csv]').forEach(el => { el.disabled = !run.cursor; });
+}
+
+function downloadRecovery() {
+    const run = recoveryRun();
+    if (!run) return;
+    // Serialize synchronously: a subsequent batch cannot change this download midway through.
+    const text = JSON.stringify(recoveryDocument(appMode, run));
+    downloadBlob(new Blob([text], {type: 'application/json'}),
+        `recovery_${run.filename.replace(/\.[^.]+$/, '')}_${run.cursor}-of-${run.rows.length}.json`);
+    run.lastBackupCursor = run.cursor;
+    updateRecoveryTools();
+}
+
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = filename; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadRunCsv() {
+    const run = recoveryRun();
+    if (!run?.cursor) return;
+    const sheet = XLSX.utils.json_to_sheet(run.results, {header: run.columns});
+    const csv = XLSX.utils.sheet_to_csv(sheet);
+    downloadBlob(new Blob(['\ufeff', csv], {type: 'text/csv;charset=utf-8'}),
+        `${run.cursor < run.rows.length ? 'partial' : 'analyzed'}_${run.filename.replace(/\.[^.]+$/, '')}.csv`);
+}
+
+async function importRecovery(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || activeAnalysis?.running || activeJevRun?.running) return;
+    try {
+        const {kind, run} = parseRecovery(JSON.parse(await file.text()));
+        // Treat an imported copy as a new run, preventing stale tabs from writing into it.
+        run.runId = crypto.randomUUID();
+        await saveCheckpoint(kind, 'start', run);
+        if (kind === 'analysis') await restoreAnalysisRun(run);
+        else await restoreJevRun(run);
+        showAlert('recovery-import-message', 'Recovery file restored. Resume when ready; no analysis calls have started.', 'info');
+    } catch (error) {
+        showAlert('recovery-import-message', `Could not restore recovery file: ${error.message}`, 'danger');
     }
 }
 
@@ -2391,6 +2556,15 @@ document.addEventListener('DOMContentLoaded', function() {
         importConfigInput.addEventListener('change', importAnalysisConfig);
     }
 
+    document.getElementById('analysis-restore-start-btn').onclick = () => restoreAnalysisRun();
+    document.getElementById('analysis-restore-btn').onclick = () => restoreAnalysisRun();
+    document.getElementById('resume-analysis-btn').onclick = continueAnalysis;
+    document.getElementById('partial-download-btn').onclick = downloadAnalyzedFile;
+    document.getElementById('recovery-import-btn').onclick = () => document.getElementById('recovery-import-input').click();
+    document.getElementById('recovery-import-input').onchange = importRecovery;
+    document.querySelectorAll('[data-recovery-download]').forEach(el => { el.onclick = downloadRecovery; });
+    document.querySelectorAll('[data-recovery-csv]').forEach(el => { el.onclick = downloadRunCsv; });
+
     // Jev Classification workflow
     const jevAddQuestionBtn = document.getElementById('jev-add-question-btn');
     const jevExportBtn = document.getElementById('jev-export-config-btn');
@@ -2417,7 +2591,12 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('jev-restore-start-btn').onclick = restoreJevRun;
     document.getElementById('jev-forget-btn').onclick = async () => {
         if (activeJevRun?.running) return;
-        try { await checkpoint('delete'); if (activeJevRun) activeJevRun.needsCheckpointStart = true; showAlert('jev-message', 'Saved checkpoint removed from this browser.', 'success'); }
+        try {
+            await checkpoint('delete');
+            if (activeJevRun) { activeJevRun.needsCheckpointStart = true; activeJevRun.savedCursor = 0; }
+            updateRecoveryTools();
+            showAlert('jev-message', 'Saved checkpoint removed from this browser.', 'success');
+        }
         catch (error) { showAlert('jev-message', escapeHtml(error.message), 'danger'); }
     };
     document.addEventListener('jev-retry', () => continueJevRun(true));

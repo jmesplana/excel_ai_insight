@@ -85,6 +85,8 @@
                                     <input type="file" id="import-config-input" accept="application/json,.json" class="hidden">
                                 </div>
                                 
+                                <button id="analysis-restore-btn" type="button" class="btn btn-outline-secondary mb-2">Restore saved analysis</button>
+                                {% include 'partials/recovery-tools.html' %}
                                 <div id="analysis-recovery" class="alert alert-info hidden" role="status">
                                     <p>Completed batches are saved in this browser. Resume uses the original settings; restore the saved run after a reload.</p>
                                     <button type="button" id="resume-analysis-btn" class="btn btn-primary">Resume analysis</button>
@@ -169,6 +171,7 @@
                                         </label>
                                     </div>
 
+                                    {% include 'partials/recovery-tools.html' %}
                                     <div id="jev-recovery" class="alert alert-info hidden" role="status">
                                         <p>Completed batches are saved in this browser. Resume uses the original settings; restore the saved run after a reload.</p>
                                         <button type="button" id="jev-resume-btn" class="btn btn-primary">Resume analysis</button>
