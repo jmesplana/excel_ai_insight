@@ -45,7 +45,7 @@ export function validateQuestion(question) {
     if (!question.instructions || (typeof question.instructions === 'string' && !question.instructions.trim())) {
         return `"${name}" needs instructions telling Jev what to decide.`;
     }
-    if (question.branches) return null;
+    if (question.branches || question.sourceBranches || question.sourceExcerpt) return null;
     const options = question.options || [];
     if (question.questionType === 'choice') {
         if (options.length < 2) {
@@ -67,7 +67,7 @@ export function validateQuestion(question) {
  * Build the portable document from the configuration currently on screen.
  * @param {object} state - { sourceColumns, includeConfidence, questions }
  */
-const QUESTION_FIELDS = ['outputColumnName', 'questionType', 'instructions', 'options', 'review', 'dependsOn', 'branches', 'criteria'];
+const QUESTION_FIELDS = ['outputColumnName', 'questionType', 'instructions', 'options', 'review', 'dependsOn', 'allowReviewDependencies', 'branches', 'sourceBranches', 'sourceExcerpt', 'criteria'];
 const ADVANCED_FIELDS = ['derived', 'report', 'execution', 'model', 'classifier', 'outputOrder'];
 const ROOT_FIELDS = ['format', 'version', 'exportedAt', 'sheetName', 'sourceColumns', 'includeConfidence', 'questions', ...ADVANCED_FIELDS];
 const copy = value => JSON.parse(JSON.stringify(value));
@@ -126,8 +126,22 @@ export function validateReportConfig(config, columns) {
     for (const field of ['title', 'instructions']) if (report[field] !== undefined && typeof report[field] !== 'string') throw new Error(`${field} must be text.`);
     for (const field of ['groupBy', 'evidenceColumns', 'crossTabs']) if (report[field] !== undefined && !Array.isArray(report[field])) throw new Error(`${field} must be an array.`);
     const execution = config.execution || {};
-    if (typeof execution !== 'object' || Array.isArray(execution) || Object.keys(execution).some(k => !['batchSize', 'workers', 'requestsPerMinute', 'tokensPerSecond', 'maxAttempts', 'structuredState'].includes(k))) throw new Error('Unknown execution setting.');
+    if (typeof execution !== 'object' || Array.isArray(execution) || Object.keys(execution).some(k => !['batchSize', 'workers', 'requestsPerMinute', 'tokensPerSecond', 'maxAttempts', 'structuredState', 'reuseIdenticalRows'].includes(k))) throw new Error('Unknown execution setting.');
     if (execution.structuredState !== undefined && typeof execution.structuredState !== 'boolean') throw new Error('structuredState must be true or false.');
+    if (execution.reuseIdenticalRows !== undefined && typeof execution.reuseIdenticalRows !== 'boolean') throw new Error('reuseIdenticalRows must be true or false.');
+    for (const q of config.questions) {
+        if (q.sourceExcerpt) {
+            const field = q.sourceExcerpt.column;
+            if (!execution.structuredState) throw new Error('Source excerpts require structuredState: true.');
+            if (!config.sourceColumns?.includes(field) || !columns.includes(field)) throw new Error(`Select source column "${field}" required by sourceExcerpt.`);
+        }
+        if (!q.sourceBranches) continue;
+        if (!Array.isArray(q.sourceBranches)) throw new Error('sourceBranches must be an array.');
+        if (!execution.structuredState) throw new Error('Source branches require structuredState: true.');
+        for (const b of q.sourceBranches) for (const field of Object.keys(b.when || {})) {
+            if (!config.sourceColumns?.includes(field) || !columns.includes(field)) throw new Error(`Select source column "${field}" required by sourceBranches.`);
+        }
+    }
     const known = new Set([...columns, ...config.questions.map(q => q.outputColumnName), ...(config.derived || []).map(d => d.outputColumnName)]);
     const fields = [...(report.groupBy || []), ...(report.evidenceColumns || []), ...(report.crossTabs || []).flat()];
     for (const field of fields) if (!known.has(field)) throw new Error(`Report column "${field}" is not in this dataset or workflow.`);

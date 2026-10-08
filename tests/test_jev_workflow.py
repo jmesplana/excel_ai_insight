@@ -44,6 +44,42 @@ class WorkflowTests(unittest.TestCase):
         self.assertIsNone(records['Flag']['value'])
         self.assertEqual(records['Flag']['detail'], .6)
 
+    def test_optional_uncertain_dependency_keeps_values_and_propagates_review_on_retry(self):
+        child = {**self.child, 'allowReviewDependencies': True}
+        validate_workflow([self.parent, child])
+        call = Mock(side_effect=[{'answers': {'q0': choice(confidence=.3)}},
+                                 {'answers': {'q1': choice(confidence=.99)}}])
+        records, calls = evaluate_row({'Feedback': 'Two clauses'}, [self.parent, child], [], call)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(call.call_args.args[0], {'record': {'Feedback': 'Two clauses'}, 'decisions': {'Category': 'A'}})
+        self.assertEqual(records['Detail']['value'], 'A')
+        self.assertEqual(records['Detail']['confidence'], .99)
+        self.assertEqual(records['Detail']['status'], 'review')
+        self.assertIn('dependency', records['Detail']['reason'])
+        retry = Mock()
+        reused, _ = evaluate_row({'Feedback': 'Two clauses'}, [self.parent, child], [], retry, records)
+        retry.assert_not_called()
+        self.assertEqual(reused['Detail']['status'], 'review')
+        self.assertIn('dependency', reused['Detail']['reason'])
+
+    def test_optional_uncertain_dependency_never_uses_failed_or_unassigned_parent(self):
+        child = {**self.child, 'allowReviewDependencies': True}
+        call = Mock(side_effect=JevError('Temporary failure'))
+        records, _ = evaluate_row('Source', [self.parent, child], [], call)
+        self.assertEqual(call.call_count, 1)
+        self.assertEqual(records['Detail']['status'], 'blocked')
+        parent = {**self.parent, 'sourceBranches': [{'when': {'Type': 'Known'}, 'options': ['A', 'B']}]}
+        call = Mock()
+        records, _ = evaluate_row({'Type': 'Unknown'}, [parent, child], [], call)
+        call.assert_not_called()
+        self.assertEqual(records['Detail']['status'], 'blocked')
+
+    def test_optional_dependency_policy_is_validated(self):
+        for config in [{**self.parent, 'allowReviewDependencies': True},
+                       {**self.child, 'allowReviewDependencies': 'yes'}]:
+            with self.assertRaises(JevConfigError):
+                validate_workflow([config] if config['outputColumnName'] == 'Category' else [self.parent, config])
+
     def test_invalid_graphs_fail_before_api(self):
         with self.assertRaises(JevConfigError): validate_workflow([self.child, self.parent])
         with self.assertRaises(JevConfigError): validate_workflow([self.parent, self.parent])

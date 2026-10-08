@@ -251,3 +251,102 @@ test('configurable report, failed-decision retry and checkpoint restore', async 
   expect(sheets).toContain('Summary'); expect(sheets).toContain('Decision audit'); expect(sheets).toContain('Run metadata');
   expect(errors).toEqual([]);
 });
+
+test('source-routed config reuses identical text and type across batches and recovery', async ({page}) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/');
+  await page.locator('#start-analyzing-btn').click();
+  await page.locator('#mode-card-jev').click();
+  await page.locator('#config-next-btn').click();
+  const csv = 'ID,Feedback,type_of_feedback\n1,Question and request,Questions\n1,Question and request,Demandes\n2,Question and request,Questions\n3,Question and request,Questions\n4,Question and request,Demandes\n';
+  await page.locator('#file').setInputFiles({name:'repeated.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});
+  await page.locator('#upload-form button[type=submit]').click();
+  await page.locator('#preview-next-btn').click();
+  const config = {format:'aidstack-insights-jev-config',version:2,sourceColumns:['Feedback','type_of_feedback'],
+    questions:[{outputColumnName:'Code',questionType:'choice',instructions:'Classify the assigned type only.',options:[],
+      sourceBranches:[{when:{type_of_feedback:'Questions'},options:['Q1','Q2']},{when:{type_of_feedback:'Demandes'},options:['D1','D2']}]}],
+    execution:{batchSize:2,workers:8,structuredState:true,reuseIdenticalRows:true}};
+  await page.locator('#jev-import-config-input').setInputFiles({name:'typed.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(config))});
+  await expect(page.locator('#jev-message')).toContainText('Imported');
+  let requests = 0;
+  await page.route('**/analyze_batch_jev', async route => {
+    requests++;
+    const body = route.request().postDataJSON();
+    expect(body.configs[0].sourceBranches).toEqual(config.questions[0].sourceBranches);
+    expect(body.rows.map(r => r.state.type_of_feedback)).toEqual(['Questions','Demandes']);
+    await route.fulfill({json:{results:body.rows.map(row => {
+      const value = row.state.type_of_feedback === 'Questions' ? 'Q1' : 'D1';
+      return {rowIndex:row.rowIndex,values:{Code:value},decisions:{Code:{status:'ok',value}},
+        calls:[{model:'jev-pinned',usage:{input_tokens:10},elapsedSeconds:.1}]};
+    }),errors:0}});
+  });
+  await page.locator('#jev-run-btn').click();
+  await expect(page.locator('#result-message')).toContainText('Classification complete: 5 of 5');
+  expect(requests).toBe(1);
+  const download = page.waitForEvent('download');
+  await page.locator('#download-link').click();
+  const bytes = fs.readFileSync(await (await download).path());
+  const exported = await page.evaluate(bytes => {
+    const wb=XLSX.read(new Uint8Array(bytes),{type:'array'});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    const audit=XLSX.utils.sheet_to_json(wb.Sheets['Decision audit']);
+    const meta=JSON.parse(XLSX.utils.sheet_to_json(wb.Sheets['Run metadata']).map(r=>r.text).join(''));
+    return {rows,audit,meta};
+  },Array.from(bytes));
+  expect(exported.rows.map(r=>r.ID)).toEqual([1,1,2,3,4]);
+  expect(exported.rows.map(r=>r.Code)).toEqual(['Q1','D1','Q1','Q1','D1']);
+  expect(exported.meta.inputTokens).toBe(20);
+  expect(exported.meta.execution.reusedRows).toBe(3);
+  expect(exported.audit[2].reusedFromRow).toBe(1);
+  await page.reload();
+  await page.locator('#start-analyzing-btn').click();
+  await page.locator('#mode-card-jev').click();
+  await page.locator('#jev-restore-start-btn').click();
+  await expect(page.locator('#jev-coverage')).toContainText('5 of 5');
+  expect(requests).toBe(1);
+  expect(errors).toEqual([]);
+});
+
+test('refined Ebola configuration imports, exports and validates dependent assessments', async ({page}) => {
+  const path = require('path').join(__dirname, '../../sample_jev/ebola-feedback-coding.refined.config.json');
+  test.skip(!fs.existsSync(path), 'Local reviewed Ebola configuration not present');
+  const config=JSON.parse(fs.readFileSync(path,'utf8'));
+  await openJevConfig(page);
+  await page.locator('#jev-import-config-input').setInputFiles(path);
+  await expect(page.locator('#jev-message')).toContainText('Imported 7 result column(s)');
+  const download=page.waitForEvent('download');
+  await page.locator('#jev-export-config-btn').click();
+  const roundTrip=JSON.parse(fs.readFileSync(await (await download).path(),'utf8'));
+  expect(roundTrip.questions).toEqual(config.questions);
+  expect(roundTrip.derived).toEqual(config.derived);
+  expect(roundTrip.questions[1].allowReviewDependencies).toBe(true);
+  const validation=await page.request.post('/validate_jev_config', {data:{configs:roundTrip.questions,derived:roundTrip.derived}});
+  expect(validation.ok()).toBe(true);
+  expect(await validation.json()).toEqual({ok:true});
+});
+
+test('excerpt configuration round trips its source selector and dependency graph', async ({page}) => {
+  const path = require('path').join(__dirname, '../../sample_jev/ebola-feedback-coding.excerpt.config.json');
+  test.skip(!fs.existsSync(path), 'Local excerpt configuration not present');
+  const config=JSON.parse(fs.readFileSync(path,'utf8'));
+  await openJevConfig(page);
+  await page.locator('#jev-import-config-input').setInputFiles(path);
+  await expect(page.locator('#jev-message')).toContainText('Imported 8 result column(s)');
+  const download=page.waitForEvent('download');
+  await page.locator('#jev-export-config-btn').click();
+  const saved=JSON.parse(fs.readFileSync(await (await download).path(),'utf8'));
+  expect(saved.questions).toEqual(config.questions);
+  expect(saved.derived).toEqual(config.derived);
+  expect(saved.questions[0].sourceExcerpt.column).toBe('Feedback');
+  expect(saved.questions[1].dependsOn).toEqual(['feedback_excerpt']);
+  expect(saved.questions[2].questionType).toBe('choice');
+  expect(saved.outputOrder).toEqual(config.outputOrder);
+  expect(saved.outputOrder.indexOf('feedback_sector_suggested')).toBe(saved.outputOrder.indexOf('feedback_sector') + 1);
+  expect(saved.questions.some(q => q.outputColumnName === 'feedback_sector_suggested')).toBe(true);
+  const routing = saved.derived.find(d => d.outputColumnName === 'feedback_sector');
+  expect(routing.inputs).toEqual(['feedback_action', 'feedback_sector_suggested']);
+  expect(routing.table.find(row => row.when.feedback_action === 'Trigger public health alert'
+    && row.when.feedback_sector_suggested === 'Clinical care').value).toBe('Surveillance');
+  const response=await page.request.post('/validate_jev_config',{data:{configs:saved.questions,derived:saved.derived}});
+  expect(await response.json()).toEqual({ok:true});
+});

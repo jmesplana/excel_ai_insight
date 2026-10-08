@@ -1,5 +1,7 @@
 """Jev routes: concurrent rows, staged questions, explicit decision audits."""
 import logging
+import threading
+from contextlib import ExitStack
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
@@ -90,14 +92,18 @@ def analyze_batch_jev():
         return jsonify(error=public_error(e)), 400
 
     deadline = time.monotonic() + 40
+    worker = threading.local()
+    sessions = ExitStack()
     def run_row(row):
-        with requests.Session() as session:
-            def call(state, questions):
-                return classify(state, questions, config=config,
-                    session=session, details=True, deadline=deadline,
-                    requests_per_minute=settings['requestsPerMinute'],
-                    tokens_per_second=settings['tokensPerSecond'], max_attempts=settings['maxAttempts'])
-            records, calls = evaluate_row(row.get('state'), configs, derived, call, row.get('previous'))
+        # Each worker reuses its connection for successive rows in this batch.
+        if not hasattr(worker, 'session'):
+            worker.session = sessions.enter_context(requests.Session())
+        def call(state, questions):
+            return classify(state, questions, config=config,
+                session=worker.session, details=True, deadline=deadline,
+                requests_per_minute=settings['requestsPerMinute'],
+                tokens_per_second=settings['tokensPerSecond'], max_attempts=settings['maxAttempts'])
+        records, calls = evaluate_row(row.get('state'), configs, derived, call, row.get('previous'))
         values = {}
         for name, record in records.items():
             # Classification cells contain configured values only. Missing
@@ -109,7 +115,7 @@ def analyze_batch_jev():
                     values[name + '__score'] = record['detail']
         return {'rowIndex': row['rowIndex'], 'values': values, 'decisions': records, 'calls': calls}
 
-    with ThreadPoolExecutor(max_workers=1 if config.get('provider') == 'laya' else settings['workers']) as executor:
+    with sessions, ThreadPoolExecutor(max_workers=1 if config.get('provider') == 'laya' else settings['workers']) as executor:
         results = list(executor.map(run_row, rows))
     errors = sum(any(d['status'] == 'error' for d in r['decisions'].values()) for r in results)
     return jsonify(results=results, errors=errors)

@@ -18,6 +18,11 @@ uploads/*.xlsx
 uploads/*.xls
 uploads/*.csv
 /tmp/
+sample_jev/
+*.xlsx
+*.XLSX
+*:Zone.Identifier
+*:sec.endpointdlp
 
 # Vercel
 .vercel

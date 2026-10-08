@@ -363,3 +363,79 @@ test('recovery files omit provider credentials and reject damaged progress or ro
     assert.throws(()=>parseRecovery({...doc,run:{...doc.run,cursor:2}}),/Invalid/);
     assert.throws(()=>parseRecovery({...doc,run:{...doc.run,results:[{Text:'second',Answer:'ok'}]}}),/Invalid/);
 });
+
+// Source routing survives the editor/export boundary and requires its input.
+import {JevRowReuse} from '../static/js/jev-reuse.js';
+test('source branches round trip and require the selected structured source', () => {
+    const q = {outputColumnName:'Code', questionType:'choice', instructions:'Assigned type only', options:[],
+        sourceBranches:[{when:{type_of_feedback:'Questions'},options:['A','B']}]};
+    const config = serializeJevConfig({sourceColumns:['Feedback','type_of_feedback'], questions:[q],
+        execution:{structuredState:true,reuseIdenticalRows:true,batchSize:16}});
+    const imported = deserializeJevConfig(config, ['Feedback','type_of_feedback']);
+    assert.deepEqual(imported.questions[0].sourceBranches, q.sourceBranches);
+    assert.equal(validateQuestion(q), null);
+    validateReportConfig(config, ['Feedback','type_of_feedback']);
+    assert.throws(() => validateReportConfig({...config, sourceColumns:['Feedback']}, ['Feedback','type_of_feedback']), /Select source column/);
+    assert.throws(() => validateReportConfig({...config, execution:{}}, ['Feedback','type_of_feedback']), /structuredState/);
+});
+
+function reusableRun() {
+    return {cursor:0, outputColumns:['Code'], results:[], audit:[],
+        config:{sourceColumns:['Feedback','type_of_feedback'], questions:[{outputColumnName:'Code'}],
+            execution:{structuredState:true,reuseIdenticalRows:true}},
+        rows:[{ID:1,Feedback:'Question and request',type_of_feedback:'Questions'},
+              {ID:1,Feedback:'Question and request',type_of_feedback:'Demandes'},
+              {ID:2,Feedback:'Question and request',type_of_feedback:'Questions'},
+              {ID:3,Feedback:'Question and request',type_of_feedback:'Questions'}]};
+}
+test('identical source reuse preserves type, original rows, audit and usage', () => {
+    const run = reusableRun(), reuse = new JevRowReuse(run);
+    const plan = reuse.plan([0,1,2]);
+    assert.deepEqual(plan.rows.map(r => r.rowIndex), [0,1]);
+    assert.equal(plan.reused.get(2), 0);
+    run.results[0] = {...run.rows[0],Code:'A'};
+    run.audit[0] = {rowIndex:0,decisions:{Code:{status:'review',value:'A'}},calls:[{usage:{input_tokens:100}}]};
+    reuse.remember(0); reuse.copy(0,2);
+    assert.equal(run.results[2].ID, 2);
+    assert.equal(run.results[2].Code, 'A');
+    assert.equal(run.audit[2].decisions.Code.status, 'review');
+    assert.deepEqual(run.audit[2].calls, []);
+    assert.equal(run.audit[2].reusedFrom, 0);
+    assert.equal(reuse.plan([3]).rows.length, 0);
+    run.cursor = 3;
+    const restored = new JevRowReuse(run);
+    assert.equal(restored.plan([3]).rows.length, 0);
+});
+test('failed and missing decisions are never reused from completed rows', () => {
+    for (const decision of [{status:'error',value:null}, {status:'blocked',value:null}, {status:'review',value:null}, undefined]) {
+        const run = reusableRun();
+        run.cursor=1;run.audit[0]={decisions:{Code:decision}};
+        assert.equal(new JevRowReuse(run).plan([2]).rows.length, 1);
+    }
+    const run = reusableRun();
+    assert.equal(new JevRowReuse(run, false).plan([0,1,2]).rows.length, 3);
+    run.config.sourceColumns.push('ID');
+    assert.equal(new JevRowReuse(run).plan([0,1,2]).rows.length, 3);
+});
+
+test('assessment dependency review policy survives configuration import and export', () => {
+    const questions = [
+        {outputColumnName:'Path',questionType:'choice',instructions:'Code',options:['A','B']},
+        {outputColumnName:'Action',questionType:'choice',instructions:'Assess decisions.Path',options:['Act','Wait'],
+            dependsOn:['Path'],allowReviewDependencies:true}];
+    const raw=serializeJevConfig({sourceColumns:['Feedback'],questions});
+    const imported=deserializeJevConfig(raw,['Feedback']);
+    assert.deepEqual(imported.questions, questions);
+    assert.deepEqual(serializeJevConfig(imported).questions, questions);
+});
+
+test('source excerpt definitions round trip and require the source field', () => {
+    const q={outputColumnName:'Excerpt',questionType:'choice',instructions:'Select matching excerpt',options:[],
+        sourceExcerpt:{column:'Feedback',separators:[';','?'],splitBefore:['et vous']}};
+    const doc=serializeJevConfig({sourceColumns:['Feedback','type_of_feedback'],questions:[q],execution:{structuredState:true}});
+    assert.equal(validateQuestion(q),null);
+    assert.deepEqual(deserializeJevConfig(doc,['Feedback','type_of_feedback']).questions,[q]);
+    validateReportConfig(doc,['Feedback','type_of_feedback']);
+    assert.throws(()=>validateReportConfig({...doc,sourceColumns:['type_of_feedback']},['Feedback','type_of_feedback']),/sourceExcerpt/);
+    assert.throws(()=>validateReportConfig({...doc,execution:{}},['Feedback','type_of_feedback']),/structuredState/);
+});

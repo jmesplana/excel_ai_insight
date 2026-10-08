@@ -16,6 +16,7 @@ export function buildJevReport(result) {
     const crossTabs = (config.report?.crossTabs || []).map(fields => ({fields, counts: new Map(), excluded: 0}));
     const models = new Set();
     let inputTokens = 0;
+    const execution = {successfulCalls: 0, reusedRows: 0, totalCallSeconds: 0};
     const examples = [];
     const exampleKeys = new Set();
     const evidenceColumns = config.report?.evidenceColumns || config.sourceColumns;
@@ -23,6 +24,7 @@ export function buildJevReport(result) {
     for (let index = 0; index < result.data.length; index++) {
         const row = result.data[index];
         const audit = result.jev.audit[index];
+        if (Number.isInteger(audit?.reusedFrom)) execution.reusedRows++;
         const decisions = audit?.decisions || {};
         const statuses = Object.values(decisions).map(d => d.status);
         const status = !statuses.length || statuses.includes('error') ? 'failed' : statuses.every(s => s === 'empty') ? 'empty'
@@ -32,6 +34,8 @@ export function buildJevReport(result) {
             issues: Object.entries(decisions).filter(([, d]) => ['error', 'blocked', 'review'].includes(d.status))
                 .map(([name, d]) => ({question: name, status: d.status, reason: d.reason, value: d.value}))});
         for (const call of audit?.calls || []) {
+            execution.successfulCalls++;
+            if (Number.isFinite(call.elapsedSeconds)) execution.totalCallSeconds += call.elapsedSeconds;
             if (call.model) models.add(call.model);
             if (Number.isFinite(call.usage?.input_tokens)) inputTokens += call.usage.input_tokens;
         }
@@ -85,7 +89,7 @@ export function buildJevReport(result) {
             numeric: {...column.numeric, mean: column.numeric.count ? column.numeric.sum / column.numeric.count : null}};
     });
     return {title: config.report?.title || 'Dataset summary', sheet: result.sheetName,
-        runId: result.jev.runId, coverage, models: [...models], inputTokens,
+        runId: result.jev.runId, coverage, models: [...models], inputTokens, execution,
         scope: coverage.unprocessed ? 'Partial dataset' : 'All rows in the selected sheet',
         definitions: config.questions, distributions,
         groups: [...groups].map(([key, count]) => ({fields: JSON.parse(key), count})),

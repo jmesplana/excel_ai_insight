@@ -1,6 +1,7 @@
 """Dataset-independent Jev workflow configuration and row evaluation."""
 import math
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 from jev_provider import JevConfigError, build_question, decode_answer
@@ -14,10 +15,12 @@ def validate_workflow(configs, derived=None):
     if not isinstance(configs, list) or not 1 <= len(configs) <= 100:
         raise JevConfigError('Use 1–100 questions per workflow.')
     seen = set()
-    for config in configs:
+    ancestors = {}
+    excerpt_name = None
+    for position, config in enumerate(configs):
         if not isinstance(config, dict):
             raise JevConfigError('Each question must be an object.')
-        unknown = set(config) - {'outputColumnName', 'questionType', 'instructions', 'options', 'review', 'dependsOn', 'branches', 'criteria'}
+        unknown = set(config) - {'outputColumnName', 'questionType', 'instructions', 'options', 'review', 'dependsOn', 'allowReviewDependencies', 'branches', 'sourceBranches', 'sourceExcerpt', 'criteria'}
         if unknown:
             raise JevConfigError('Unknown question settings: ' + ', '.join(sorted(unknown)))
         if config.get('questionType') != 'noul' and 'criteria' in config:
@@ -28,6 +31,38 @@ def validate_workflow(configs, derived=None):
         deps = config.get('dependsOn', [])
         if not isinstance(deps, list) or any(d not in seen for d in deps):
             raise JevConfigError(f'{name}: dependencies must name earlier questions.')
+        if 'allowReviewDependencies' in config and (type(config['allowReviewDependencies']) is not bool or not deps):
+            raise JevConfigError(f'{name}: allowReviewDependencies must be a boolean on a dependent question.')
+        ancestors[name] = set(deps).union(*(ancestors[d] for d in deps))
+        if excerpt_name and excerpt_name not in ancestors[name]:
+            raise JevConfigError(f'{name}: every question must depend on the source excerpt, directly or indirectly.')
+        if 'sourceExcerpt' in config:
+            if position != 0 or config.get('questionType') != 'choice' or deps or any(k in config for k in ('branches', 'sourceBranches')):
+                raise JevConfigError('sourceExcerpt must be the first, independent Choice question.')
+            from .jev_excerpt import validate_excerpt
+            validate_excerpt(config)
+            excerpt_name = name
+        source_branches = config.get('sourceBranches')
+        if 'sourceBranches' in config:
+            if config.get('questionType') != 'choice' or 'branches' in config:
+                raise JevConfigError(f'{name}: sourceBranches requires a Choice question without decision branches.')
+            if not isinstance(source_branches, list) or not source_branches:
+                raise JevConfigError(f'{name}: sourceBranches must be a non-empty array.')
+            matches, fields = set(), None
+            for branch in source_branches:
+                if (not isinstance(branch, dict) or set(branch) != {'when', 'options'}
+                        or not isinstance(branch['when'], dict) or not branch['when']
+                        or any(not isinstance(k, str) or not k.strip() or not isinstance(v, str) or not v.strip()
+                               for k, v in branch['when'].items())):
+                    raise JevConfigError(f'{name}: source branches need when source fields and options.')
+                if fields is not None and set(branch['when']) != fields:
+                    raise JevConfigError(f'{name}: source branches must match the same fields.')
+                fields = set(branch['when'])
+                match = tuple(sorted(branch['when'].items()))
+                if match in matches:
+                    raise JevConfigError(f'{name}: duplicate source branch conditions.')
+                matches.add(match)
+                build_question({**config, 'type': 'choice', 'options': branch['options']})
         branches = config.get('branches')
         if branches is not None:
             if not deps or not isinstance(branches, list) or not branches:
@@ -43,7 +78,7 @@ def validate_workflow(configs, derived=None):
                     raise JevConfigError(f'{name}: duplicate branch conditions.')
                 matches.add(match)
                 build_question({**config, 'type': config.get('questionType'), 'options': branch.get('options', [])})
-        else:
+        elif source_branches is None and 'sourceExcerpt' not in config:
             build_question({**config, 'type': config.get('questionType')})
         review = config.get('review', {})
         if not isinstance(review, dict) or any(not finite(v) or not 0 <= v <= 1 for v in review.values()):
@@ -98,6 +133,7 @@ def evaluate_row(state, configs, derived, call, previous=None):
     records = {}
     remaining = dict(enumerate(configs))
     calls = []
+    excerpt_config = next((c for c in configs if 'sourceExcerpt' in c), None)
     empty = state is None or (isinstance(state, str) and not state.strip())
     while remaining:
         questions, decoders, active = {}, {}, {}
@@ -110,11 +146,21 @@ def evaluate_row(state, configs, derived, call, previous=None):
                 records[name] = {'status': 'empty', 'value': None}
                 del remaining[i]
                 continue
-            if any(records[d]['status'] != 'ok' for d in deps):
+            usable = ('ok', 'review') if config.get('allowReviewDependencies') else ('ok',)
+            if any(records[d]['status'] not in usable or records[d].get('value') is None for d in deps):
                 records[name] = {'status': 'blocked', 'value': None, 'reason': 'Dependency requires review or retry.'}
                 del remaining[i]
                 continue
             spec = {**config, 'type': config.get('questionType')}
+            if 'sourceBranches' in config:
+                branch = next((b for b in config['sourceBranches'] if isinstance(state, dict)
+                               and all(state.get(k) == v for k, v in b['when'].items())), None)
+                if branch is None:
+                    records[name] = {'status': 'review', 'value': None,
+                                     'reason': 'Missing or unrecognized source value for configured source branches.'}
+                    del remaining[i]
+                    continue
+                spec['options'] = branch['options']
             if 'branches' in config:
                 branch = next((b for b in config['branches'] if all(records[d]['value'] == b['when'][d] for d in deps)), None)
                 if branch is None:
@@ -122,12 +168,21 @@ def evaluate_row(state, configs, derived, call, previous=None):
                     del remaining[i]
                     continue
                 spec['options'] = branch['options']
-            question, decoder = build_question(spec)
+            if 'sourceExcerpt' in config:
+                from .jev_excerpt import excerpt_question
+                question, decoder, direct = excerpt_question(state, config)
+                if direct is not None:
+                    records[name] = direct
+                    del remaining[i]
+                    continue
+            else:
+                question, decoder = build_question(spec)
             key = f'q{i}'
             old = (previous or {}).get(name, {})
             if old.get('status') in ('ok', 'review') and old.get('raw'):
                 try:
                     records[name] = make_record(old['raw'], decoder, config)
+                    inherit_dependency_review(records[name], config, records)
                     records[name]['model'] = old.get('model')
                     del remaining[i]
                     continue
@@ -140,10 +195,20 @@ def evaluate_row(state, configs, derived, call, previous=None):
                 continue
             break
         dependencies = {d for _, c in active.values() for d in c.get('dependsOn', [])}
-        context = {'record': state, 'decisions': {d: records[d]['value'] for d in dependencies}} if dependencies else state
+        scoped_state = state
+        if excerpt_config and excerpt_config['outputColumnName'] in records:
+            # The original text remains in the spreadsheet and selection audit,
+            # but is physically absent from every downstream provider request.
+            scoped_state = {**state, excerpt_config['sourceExcerpt']['column']:
+                            records[excerpt_config['outputColumnName']]['value']}
+        context = {'record': scoped_state, 'decisions': {d: records[d]['value'] for d in dependencies}} if dependencies else scoped_state
         try:
+            started = time.monotonic()
             response = call(context, questions)
-            calls.append({'model': response.get('model'), 'usage': response.get('usage', {})})
+            calls.append({'model': response.get('model'), 'usage': response.get('usage', {}),
+                          'elapsedSeconds': round(time.monotonic() - started, 3),
+                          'questionCount': len(questions),
+                          'optionCount': sum(len(q.get('criteria', {})) for q in questions.values())})
             answers = response['answers']
             error = None
         except Exception as exc:
@@ -157,6 +222,7 @@ def evaluate_row(state, configs, derived, call, previous=None):
                     from jev_provider import JevError
                     raise JevError(error)
                 records[name] = make_record(answers.get(key), decoders[key], config)
+                inherit_dependency_review(records[name], config, records)
                 records[name]['model'] = response.get('model')
             except Exception as exc:
                 from .errors import public_error
@@ -185,6 +251,14 @@ def evaluate_row(state, configs, derived, call, previous=None):
     return records, calls
 
 
+def inherit_dependency_review(record, config, records):
+    """An uncertain assigned parent can inform a child, but cannot certify it."""
+    if any(records[d]['status'] == 'review' for d in config.get('dependsOn', [])):
+        record['status'] = 'review'
+        reason = 'Based on an assigned dependency that requires review.'
+        record['reason'] = (record.get('reason') + ' ' + reason) if record.get('reason') else reason
+
+
 def make_record(answer, decoder, config):
     value, confidence, detail = decode_answer(answer, decoder)
     review = config.get('review', {})
@@ -192,7 +266,14 @@ def make_record(answer, decoder, config):
     if decoder['type'] == 'noul':
         uncertain = review.get('noMax', .2) < detail < review.get('yesMin', .8)
         value = decoder['yes'] if detail >= review.get('yesMin', .8) else decoder['no'] if detail <= review.get('noMax', .2) else None
-    return {'status': 'review' if uncertain else 'ok', 'value': value,
+    record = {'status': 'review' if uncertain else 'ok', 'value': value,
             'confidence': confidence, 'detail': detail, 'raw': answer,
             'labels': decoder.get('labels'),
             'reason': 'Below configured certainty threshold.' if uncertain else None}
+    if 'sourceExcerpt' in config:
+        record['sourceColumn'] = config['sourceExcerpt']['column']
+        record['sourceSpan'] = decoder['spans'].get(answer.get('choice'))
+        record['method'] = 'selected_excerpt'
+        if value is None:
+            record.update(status='review', reason='No unambiguous matching excerpt; review the source row.')
+    return record

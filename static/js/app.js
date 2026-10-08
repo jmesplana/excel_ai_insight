@@ -8,10 +8,11 @@ import { BatchRun } from './batch-runner.js';
 import { serializeConfig, deserializeConfig, configFilename } from './analysis-config.js';
 import { getJevConfig } from './provider-settings.js';
 import { serializeJevConfig, deserializeJevConfig, jevConfigFilename, parseOptions,
-    formatOptions, validateQuestion, validateReportConfig, orderedJevOutputs, buildJevState, DEFAULT_QUESTION_TYPE } from './jev-config.js';
+    formatOptions, validateQuestion, validateReportConfig, orderedJevOutputs, DEFAULT_QUESTION_TYPE } from './jev-config.js';
 
 import {buildJevReport, narrativePacket} from './jev-report.js';
 import {checkpoint} from './jev-checkpoint.js';
+import {JevRowReuse} from './jev-reuse.js';
 import {saveCheckpoint} from './run-checkpoint.js';
 import {snapshotRun, recoveryDocument, parseRecovery} from './recovery-file.js';
 
@@ -1866,7 +1867,7 @@ function applyJevPreset(card, preset) {
     card.querySelector('[name="jev-output-column-name"]').value = preset.outputColumnName || '';
     card.querySelector('[name="jev-question-type"]').value = preset.questionType || DEFAULT_QUESTION_TYPE;
     card.querySelector('[name="jev-instructions"]').value = typeof preset.instructions === 'object' ? JSON.stringify(preset.instructions, null, 2) : preset.instructions || '';
-    const extras = Object.fromEntries(['review', 'dependsOn', 'branches', 'criteria'].filter(k => preset[k] !== undefined).map(k => [k, preset[k]]));
+    const extras = Object.fromEntries(['review', 'dependsOn', 'allowReviewDependencies', 'branches', 'sourceBranches', 'sourceExcerpt', 'criteria'].filter(k => preset[k] !== undefined).map(k => [k, preset[k]]));
     card.querySelector('.jev-question-advanced').value = JSON.stringify(extras, null, 2);
     card.querySelector('.jev-options').value = formatOptions(preset.options);
     card.querySelector('.jev-options').dispatchEvent(new Event('input'));
@@ -2051,25 +2052,32 @@ async function continueJevRun(retryFailed = false) {
         await flushJevCheckpoint(run);
         updateRecoveryTools();
         const batchSize = classifier.classificationProvider === 'laya' ? 1 : (run.config.execution?.batchSize ?? 4);
+        const reuse = new JevRowReuse(run, !retryFailed && run.config.execution?.reuseIdenticalRows === true);
         for (let offset = 0; offset < pending.length && !run.stopped; offset += batchSize) {
             const indices = pending.slice(offset, offset + batchSize);
-            const rows = indices.map(i => ({rowIndex: i, state: buildJevState(run.rows[i], run.config.sourceColumns, run.config.execution?.structuredState),
-                previous: retryFailed ? run.audit[i]?.decisions : undefined}));
-            const response = await classifierFetch('/analyze_batch_jev', {...classifier, ...credentials, ...(classifier.classificationProvider !== 'laya' && run.config.model ? {jevModel: run.config.model} : {}),
+            const {rows, reused} = reuse.plan(indices, retryFailed);
+            let result = {results: []};
+            if (rows.length) {
+                const response = await classifierFetch('/analyze_batch_jev', {...classifier, ...credentials, ...(classifier.classificationProvider !== 'laya' && run.config.model ? {jevModel: run.config.model} : {}),
                     configs: run.config.questions, derived: run.config.derived, execution: run.config.execution,
                     includeConfidence: run.config.includeConfidence, rows});
-            const result = await readJson(response);
-            if (!response.ok) throw new Error(result.error || 'Classification failed.');
+                result = await readJson(response);
+                if (!response.ok) throw new Error(result.error || 'Classification failed.');
+            }
             if (classifier.classificationProvider !== 'laya' && !run.config.model) {
                 const model = result.results?.flatMap(r => r.calls || []).find(c => c.model)?.model;
                 if (model) run.config.model = model;
             }
             const answers = new Map((result.results || []).map(r => [r.rowIndex, r]));
-            if (answers.size !== indices.length || indices.some(i => !answers.has(i))) throw new Error('Incomplete batch response. Resume to retry this batch.');
+            if (answers.size !== rows.length || rows.some(r => !answers.has(r.rowIndex))) throw new Error('Incomplete batch response. Resume to retry this batch.');
             for (const i of indices) {
-                const answer = answers.get(i);
-                run.results[i] = {...run.rows[i], ...answer.values};
-                run.audit[i] = {rowIndex: i, decisions: answer.decisions || {}, calls: [...(run.audit[i]?.calls || []), ...(answer.calls || [])]};
+                if (reused.has(i)) reuse.copy(reused.get(i), i);
+                else {
+                    const answer = answers.get(i);
+                    run.results[i] = {...run.rows[i], ...answer.values};
+                    run.audit[i] = {rowIndex: i, decisions: answer.decisions || {}, calls: [...(run.audit[i]?.calls || []), ...(answer.calls || [])]};
+                }
+                reuse.remember(i);
             }
             if (!retryFailed) run.cursor += indices.length;
             run.pendingCheckpoint = indices;

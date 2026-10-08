@@ -5,7 +5,7 @@ from jev_provider import JevError, JevConfigError
 
 def validate_configs(configs):
     for question in configs or []:
-        options = [question.get('options', [])] + [b.get('options', []) for b in question.get('branches', [])]
+        options = [question.get('options', [])] + [b.get('options', []) for b in question.get('branches', []) + question.get('sourceBranches', [])]
         if any(len(values) > 100 for values in options):
             raise JevConfigError('Laya supports up to 100 choices per question. Split this question into stages or use Jev.')
 

@@ -136,6 +136,52 @@ The Excel download includes results, summary distributions, raw score summaries,
 
 Defaults above favor reliability. Allowed ranges: batchSize 1–25; workers 1–8; requestsPerMinute 1–1,200; tokensPerSecond 1–250,000; maxAttempts 1–4. These application ceilings can be updated if the provider changes its limits; they are not dataset assumptions. Structured state preserves selected field names and values as JSON. Otherwise the legacy labeled-text format is used.
 
+`tokensPerSecond` currently uses UTF-8 request bytes as a conservative token upper bound, including question instructions, criteria keys and descriptions. Large vocabularies can therefore be limited by application pacing even when Jev itself responds quickly. Raising worker count alone does not remove this limit. Actual input-token usage is recorded separately.
+
+For a human-assigned source field, use `sourceBranches` on an independent Choice question to select its vocabulary **before** inference. This avoids asking the model to infer a known type or sending irrelevant vocabularies. Use `execution.structuredState: true` and select every field named in `when` as a source column:
+
+```json
+{
+  "outputColumnName": "code",
+  "questionType": "choice",
+  "instructions": "Classify only the clause matching state.type_of_feedback.",
+  "options": [],
+  "sourceBranches": [
+    {"when": {"type_of_feedback": "Questions"}, "options": ["Question A", "Question B"]},
+    {"when": {"type_of_feedback": "Demandes"}, "options": ["Request A", "Request B"]}
+  ]
+}
+```
+
+Conditions match exact source values. All branches must use the same fields, with unique conditions and 2–255 options each. They can follow a dependency such as a source excerpt, but cannot be combined with decision `branches`. Unknown/missing source values produce a blank decision requiring review, without a model call for that question. Use lookups to derive category and subcode from the chosen codebook path; uncertainty carries through to those outputs.
+
+Independent questions cannot read one another's answers. To keep operational assessments tied to the chosen code, give them `dependsOn: ["feedback_path"]` and reference `record.Feedback`, `record.type_of_feedback` and `decisions.feedback_path` in their instructions. This requires a second API stage. By default an uncertain dependency blocks its children. Setting `allowReviewDependencies: true` on a dependent question permits an assigned `review` answer to provide context; the child retains its answer and raw confidence but is also flagged for review. Failed, blocked or unassigned parents still block the child. This flag never makes an uncertain parent certain, including on retry.
+
+For feedback containing multiple speech acts, an optional first Choice question can select an exact source excerpt:
+
+```json
+{
+  "outputColumnName": "feedback_excerpt",
+  "questionType": "choice",
+  "instructions": "Choose the excerpt matching state.type_of_feedback, or no_match if ambiguous.",
+  "options": [],
+  "sourceExcerpt": {
+    "column": "Feedback",
+    "separators": [";", "?", "!", "\n", "."],
+    "splitBefore": ["et vous", "et nous"]
+  },
+  "review": {"minConfidence": 0.7}
+}
+```
+
+Use structured state and select the named source column. `separators` and `splitBefore` are literal strings, not regular expressions. Separators stay at the end of the preceding excerpt; splitBefore phrases start the next one. Decimal points between digits do not split. Candidates are exact source spans, with only surrounding whitespace excluded. One candidate is carried through without a selection API call or invented confidence; its semantic type match is left to the code question. Multiple candidates are sent as choices plus `no_match`. Missing, ambiguous or oversized selections remain unassigned for review; there is no full-text fallback or silent truncation. Every later question must depend on this first question, directly or indirectly.
+
+Once selected, the source column is replaced with the chosen excerpt in **every downstream provider request**, including retries. Other selected source columns are preserved, so do not select another column containing a duplicate of the full feedback. Original spreadsheet cells remain unchanged. The excerpt output and audit retain the chosen text, selection confidence when applicable, method, and zero-based Unicode code-point start/end offsets (end exclusive). This isolates downstream evidence, but segmentation and model selection can still be wrong: inspect the excerpt when reviewing a decision. Other real safety concerns in the full row are not disproven or resolved by their exclusion from this type-specific excerpt.
+
+`execution.reuseIdenticalRows: true` opts into reuse within a frozen run. Every selected source value participates in the key: select both feedback and its assigned type. IDs participate only if selected as source columns. All original rows and metadata remain in the output. Reused rows keep the original decisions and review flags, and do not double-count API usage. Errors, blocked decisions and unassigned review decisions are not cached across batches; retry mode preserves each row's own successful decisions. Recovery reconstructs the reuse index. The export identifies `reusedFromRow` and reports successful call count, reused row count and summed call durations (including pacing/retries, **not** wall-clock duration under concurrency).
+
+The Ebola configuration builders and workload/regression scripts in `scripts/` use local files in `sample_jev/`. That directory and Excel workbooks are intentionally excluded from Git. Their sample-specific tests skip when the local configuration is absent; generic workflow tests still run. To rebuild a sample configuration, provide the source workbook and configuration at the paths documented by the script.
+
 Retries handle transient network errors and HTTP 429/500/502/503/504/529, honor Retry-After, and stop within a batch time budget. Calls that exceed the remaining budget are marked failed so they can be retried. Lower the batch size for deep workflows. Rate pacing is shared within one backend process and estimates token pressure conservatively from request bytes. Multiple independent server instances sharing an API key still need an account-wide queue for strict quota enforcement.
 
 **Continue unfinished run** processes rows not yet acknowledged. **Retry failed decisions** retries failed/blocked rows, reuses validated successful or uncertain answers, and recomputes derived outputs. An unresolved human-review parent stays blocked; retries do not override its uncertainty. Changing a rubric requires a new run, so old answers cannot silently be mixed with new definitions.

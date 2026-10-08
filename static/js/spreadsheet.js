@@ -39,10 +39,12 @@ export function exportResults(result, filename, prefix = 'analyzed', xlsx = XLSX
         add('Review', report.reviewRows.flatMap(r => r.issues.map(issue => ({rowId: r.rowId, ...issue}))));
         const audited = result.jev.sourceResult || result;
         add('Decision audit', audited.jev.audit.flatMap(a => Object.entries(a.decisions).map(([question, d]) => ({
-            rowId: a.rowIndex + 1, question, status: d.status, value: d.value, confidence: d.confidence, rawScore: d.detail,
+            rowId: a.rowIndex + 1, reusedFromRow: Number.isInteger(a.reusedFrom) ? a.reusedFrom + 1 : undefined,
+            question, status: d.status, value: d.value, confidence: d.confidence, rawScore: d.detail,
+            sourceColumn: d.sourceColumn, excerptStart: d.sourceSpan?.[0], excerptEnd: d.sourceSpan?.[1], selectionMethod: d.method,
             model: d.model, reason: d.reason, probabilities: JSON.stringify(d.raw?.probabilities || {}), labels: JSON.stringify(d.labels || {})}))));
         const metadata = JSON.stringify({runId: report.runId, sheet: report.sheet, coverage: report.coverage, models: report.models,
-            inputTokens: report.inputTokens, config: result.jev.config, notes: report.notes}, null, 2);
+            inputTokens: report.inputTokens, execution: report.execution, config: result.jev.config, notes: report.notes}, null, 2);
         const chunks = text => Array.from({length: Math.ceil(text.length / 30000)}, (_, i) => ({part: i + 1, text: text.slice(i * 30000, (i + 1) * 30000)}));
         add('Run metadata', chunks(metadata));
         if (result.jev.narrative) add('Written report', chunks(result.jev.narrative));
