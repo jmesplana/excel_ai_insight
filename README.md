@@ -18,7 +18,7 @@ Perfect for anyone drowning in Excel data: e-commerce managers analyzing custome
 - **Pattern Detection**: Discover categories and themes in your data automatically
 - **Multi-Column Analysis**: Analyze multiple columns together for deeper insights
 - **Test Mode**: Try your prompts on a sample before the full run — set how many rows in the **Test rows** box next to the Test Run button
-- **Progress Tracking**: Real-time progress updates during analysis
+- **Progress Tracking**: Live row counts, elapsed session time and estimated time remaining for classification, AI analysis and ICD translation. Estimates use observed processing speed; resuming starts a fresh timer for the remaining work.
 - **Dark Mode**: Easy on the eyes for long analysis sessions
 - **Privacy First**: Files parsed locally; selected rows and credentials pass through the server for processing
 
@@ -525,6 +525,19 @@ Completed batches retain their original order and settings. Re-enter credentials
 in API Settings if necessary; API keys are excluded from checkpoints and recovery
 files. A batch whose response was lost can incur provider usage again on retry.
 
+If restoring a large run causes an **Out of Memory** error, open
+`/static/checkpoint-recovery.html` at the **same site address and in the same browser
+profile**. The first step also links to **Download saved results without restoring**.
+This separate page reads 25 saved records at a time and exports their original
+columns and classification outputs as CSV, without rendering the results table,
+building an Excel workbook or collecting the decision audits. On browsers with
+File System Access it writes directly to the selected file; other browsers keep
+only CSV blobs for the download. It makes no classification calls and does not
+modify the checkpoint. This is a results export, not a resumable recovery JSON.
+Older checkpoints require reading their initial source/settings record once;
+checkpoints originally imported from recovery files may also hold baseline results
+there. Keep site data intact and stop any other run before exporting.
+
 Use **Download recovery file** during processing, while paused, or after completion.
 This JSON includes source rows, completed results, settings and classification audit;
 **Import recovery file** on the first step restores it, including on another computer.
@@ -541,7 +554,10 @@ saved, processing pauses, keeps its results downloadable in memory, and retries
 saving before making more analysis calls. A stale tab cannot overwrite a checkpoint
 replaced by a different run.
 
-**Download completed rows (CSV)** works during processing and after completion.
+**Download completed rows (CSV)** works during processing and after completion,
+and **Download Results (CSV)** exports the current results table. Both build only
+CSV blobs, without creating an intermediate Excel workbook. Prefer CSV for large
+runs if Excel export exhausts the browser's memory.
 Excel downloads remain available for partial and final results; Jev Excel exports
 also include reports and decision audit. A completed run exports one combined table.
 Cell-level errors remain in the output; general analysis resumes unfinished batches,

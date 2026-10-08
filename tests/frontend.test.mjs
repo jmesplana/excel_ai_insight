@@ -1,10 +1,73 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BatchRun } from '../static/js/batch-runner.js';
+import { ProgressTimer, formatDuration } from '../static/js/progress-timer.js';
+import { csvLine, resultsCsvBlob } from '../static/js/csv-export.js';
 import { parseWorkbook, explodeColumn, splitCell } from '../static/js/spreadsheet.js';
 import { serializeConfig, deserializeConfig, configFilename, DEFAULT_OUTPUT_TOKENS } from '../static/js/analysis-config.js';
 import { serializeJevConfig, deserializeJevConfig, jevConfigFilename, parseOptions,
     validateQuestion, buildJevState, MAX_CHOICE_OPTIONS } from '../static/js/jev-config.js';
+
+test('CSV preserves column order, quotes, Unicode, newlines, nulls and numeric values without XLSX', async () => {
+    assert.equal(csvLine(['A,B','Ébola "test"','line\r\nbreak',null,0,false]),
+        '"A,B","Ébola ""test""","line\r\nbreak",,0,false\r\n');
+    const rows = Array.from({length:35000}, (_, i) => ({ID:i,Feedback:`row${i}`,Code:'A'}));
+    const csv = await resultsCsvBlob(rows,['Code','Feedback','ID']).text();
+    assert.ok(csv.startsWith('Code,Feedback,ID\r\nA,row0,0\r\n'));
+    assert.ok(csv.endsWith('A,row34999,34999\r\n'));
+    assert.equal(csv.split('\r\n').length,35002);
+});
+
+test('ETA uses measured throughput and waits for completed work', () => {
+    let now = 0;
+    const timer = new ProgressTimer(() => now);
+    timer.start({total:35000});
+    now = 6000;
+    assert.equal(timer.snapshot().remainingMs, null);
+    timer.update(16, 35000);
+    assert.deepEqual(timer.snapshot(), {elapsedMs:6000, remainingMs:13119000, total:35000});
+    // A slower next batch reduces the estimated rate.
+    now = 18000;
+    timer.update(32, 35000);
+    assert.equal(timer.snapshot().remainingMs, 34968 * 18000 / 32);
+});
+
+test('resuming excludes old rows and paused time; retries start a separate count', () => {
+    let now = 0;
+    const timer = new ProgressTimer(() => now);
+    timer.start({total:35000});
+    now = 6000; timer.update(16, 35000); timer.stop();
+    now = 3600000;
+    assert.equal(timer.snapshot().elapsedMs, 6000);
+    timer.start({completed:16, total:35000});
+    assert.equal(timer.snapshot().remainingMs, null);
+    now += 6000; timer.update(32, 35000);
+    assert.equal(timer.snapshot().remainingMs, 34968 * 6000 / 16);
+    timer.stop(); timer.start({total:4});
+    assert.equal(timer.snapshot().remainingMs, null);
+    now += 6000; timer.update(2, 4);
+    assert.equal(timer.snapshot().remainingMs, 6000);
+    timer.update(4, 4);
+    assert.equal(timer.snapshot().remainingMs, 0);
+});
+
+test('unknown work shows elapsed only and a stalled batch never looks finished', () => {
+    let now = 0;
+    const timer = new ProgressTimer(() => now);
+    timer.start(); now = 6000;
+    assert.deepEqual(timer.snapshot(), {elapsedMs:6000, remainingMs:null, total:null});
+    timer.start({total:32}); now += 6000; timer.update(16,32);
+    now += 60000;
+    assert.equal(timer.snapshot().remainingMs, 66000);
+    timer.start({total:16}); now += 10; timer.update(8,16);
+    assert.equal(timer.snapshot().remainingMs, null);
+    timer.update(16,16);
+    assert.equal(timer.snapshot().remainingMs, 0);
+    assert.equal(formatDuration(0), '0s');
+    assert.equal(formatDuration(61000), '1m 1s');
+    assert.equal(formatDuration(13125000), '3h 38m 45s');
+    assert.equal(formatDuration(90000000), '25h 0m 0s');
+});
 
 test('failed batch preserves earlier work and resume skips paid completed batches', async () => {
     const calls = []; let fail = true;

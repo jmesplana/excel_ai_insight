@@ -135,10 +135,14 @@
                             <button type="button" class="btn btn-outline-secondary" id="results-back-btn">
                                 <i class="bi bi-arrow-left"></i> Back to Configure
                             </button>
-                            <a id="download-link" href="#" class="btn btn-success">
-                                <i class="bi bi-download"></i> Download Results
+                            <button id="download-results-csv" type="button" class="btn btn-success">
+                                <i class="bi bi-download"></i> Download Results (CSV)
+                            </button>
+                            <a id="download-link" href="#" class="btn btn-outline-success">
+                                <i class="bi bi-download"></i> Download Results (Excel)
                             </a>
                         </div>
+                        <p class="small text-muted mt-2">For large datasets, use CSV. It uses less memory and opens in Excel. The CSV contains the results table; the Excel download also includes classification reports and audit sheets when available.</p>
                     </div>
                 </div>
                 </div>
@@ -187,5 +191,3 @@
                 </div>
                 <!-- /icd-results -->
             </div>
-
-    

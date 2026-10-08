@@ -120,6 +120,7 @@
 
                                 <div id="jev-intro-block" class="hidden">
                                     <button id="jev-restore-start-btn" type="button" class="btn btn-outline-primary mb-2">Restore saved Jev run</button>
+                                    <a href="/static/checkpoint-recovery.html?kind=jev" class="btn btn-outline-secondary mb-2">Download saved results without restoring</a>
                                     <div id="jev-restore-message" class="alert hidden"></div>
                                     <div class="alert alert-primary small">
                                         <i class="bi bi-shield-check"></i> <strong>Classification (Jev / Laya):</strong> for each row, your classifier picks one label from a list you define &mdash; it cannot return anything outside that list, and it reports how confident it is. Best for coding feedback, triage and categorisation where the categories are already fixed. Choose <strong>Jev or Laya</strong> in <strong>API Settings</strong>. Define the lists on the next configuration step.
@@ -135,6 +136,7 @@
                                 <div class="border rounded p-3 mt-3">
                                     <p class="small">Resume work saved in this browser, or import a recovery file. Restoring does not start processing. A new run replaces the saved run for that mode; download a recovery file to keep an older run.</p>
                                     <button id="analysis-restore-start-btn" type="button" class="btn btn-outline-primary mb-2">Restore saved analysis</button>
+                                    <a href="/static/checkpoint-recovery.html?kind=analysis" class="btn btn-outline-secondary mb-2">Download saved analysis without restoring</a>
                                     <button id="recovery-import-btn" type="button" class="btn btn-outline-secondary mb-2">Import recovery file</button>
                                     <input id="recovery-import-input" type="file" accept=".json,application/json" class="hidden">
                                     <div id="analysis-restore-message" class="alert hidden"></div>

@@ -23,6 +23,8 @@ export async function saveCheckpoint(kind, action, value, changedIndices = []) {
                     store.clear();
                     store.put(value, 'latest');
                     store.put(value.runId, 'runId');
+                    store.put({runId:value.runId, filename:value.filename, columns:value.columns,
+                        totalRows:value.rows.length, cursor:value.cursor}, 'exportInfo');
                 } catch (error) {
                     tx.abort();
                     reject(error);

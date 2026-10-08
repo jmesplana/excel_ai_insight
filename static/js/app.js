@@ -5,6 +5,8 @@ import { getLLMConfig, hasLocalCredentials, initProviderSettings, syncProviderUI
 import { escapeHtml, renderMarkdown } from './rendering.js';
 import { parseWorkbook, exportResults, explodeColumn } from './spreadsheet.js';
 import { BatchRun } from './batch-runner.js';
+import { ProgressTimerView } from './progress-timer.js';
+import { resultsCsvBlob } from './csv-export.js';
 import { serializeConfig, deserializeConfig, configFilename } from './analysis-config.js';
 import { getJevConfig } from './provider-settings.js';
 import { serializeJevConfig, deserializeJevConfig, jevConfigFilename, parseOptions,
@@ -440,7 +442,8 @@ async function runIcdTranslation(isTestRun = false) {
         }
 
         // Batch translate.
-        showSpinner(true, isTestRun ? `Running test on first ${rowCount} rows...` : 'Translating to ICD-11...', true);
+        showSpinner(true, isTestRun ? `Running test on first ${rowCount} rows...` : 'Translating to ICD-11...', true,
+            {total: rowCount});
         updateProgress(0, 0, rowCount, 'Starting translation...');
 
         const resultsByIndex = {};
@@ -589,7 +592,9 @@ async function runIcdTranslation(isTestRun = false) {
 }
 
 /* Utility functions */
-function showSpinner(show, message = 'Processing...', showProgress = false) {
+const progressTimer = new ProgressTimerView();
+
+function showSpinner(show, message = 'Processing...', showProgress = false, {completed = 0, total = null} = {}) {
     const spinner = document.getElementById('spinner-overlay');
     const progressContainer = document.getElementById('progress-container');
     
@@ -597,31 +602,32 @@ function showSpinner(show, message = 'Processing...', showProgress = false) {
     
     if (show) {
         spinner.classList.remove('hidden');
+        progressTimer.start({completed, total: showProgress ? total : null});
         
         // Show or hide progress tracking UI
         if (showProgress) {
             progressContainer.classList.remove('hidden');
-            resetProgress();
+            resetProgress(completed, total);
         } else {
             progressContainer.classList.add('hidden');
         }
     } else {
+        progressTimer.stop();
         spinner.classList.add('hidden');
         progressContainer.classList.add('hidden');
     }
 }
 
-function resetProgress() {
-    document.getElementById('progress-percentage').textContent = '0%';
-    document.getElementById('operations-count').textContent = '0/0';
-    document.getElementById('progress-bar').style.width = '0%';
-    document.getElementById('current-operation').textContent = 'Initializing...';
+function resetProgress(completed = 0, total = null) {
+    updateProgress(total ? Math.round(completed / total * 100) : 0, completed, total, 'Initializing...');
 }
 
 function updateProgress(percentage, completedOperations, totalOperations, currentOperation = null) {
     document.getElementById('progress-percentage').textContent = `${percentage}%`;
-    document.getElementById('operations-count').textContent = `${completedOperations}/${totalOperations}`;
+    document.getElementById('operations-count').textContent = `${completedOperations}/${totalOperations ?? 0}`;
     document.getElementById('progress-bar').style.width = `${percentage}%`;
+    document.getElementById('progress-bar').setAttribute('aria-valuenow', percentage);
+    progressTimer.update(completedOperations, totalOperations);
     
     if (currentOperation) {
         document.getElementById('current-operation').textContent = currentOperation;
@@ -1620,7 +1626,7 @@ async function continueAnalysis() {
     run.preparing = true;
     run.stopped = false;
     document.querySelectorAll('.test-run-preview-panel').forEach(panel => panel.remove());
-    showSpinner(true, 'Analyzing rows…', true);
+    showSpinner(true, 'Analyzing rows…', true, {completed: run.cursor, total: run.rows.length});
     const stopButton = document.getElementById('stop-analysis-btn');
     stopButton.classList.remove('hidden');
     stopButton.disabled = false;
@@ -2037,7 +2043,8 @@ async function continueJevRun(retryFailed = false) {
         : {jevApiKey: document.getElementById('modal-jev-api-key').value.trim()};
     const pending = retryFailed ? run.audit.flatMap((a, i) => Object.values(a.decisions || {}).some(d => ['error', 'blocked'].includes(d.status)) ? [i] : [])
         : Array.from({length: run.rows.length - run.cursor}, (_, i) => run.cursor + i);
-    showSpinner(true, retryFailed ? 'Retrying unfinished decisions…' : 'Classifying rows…', true);
+    showSpinner(true, retryFailed ? 'Retrying unfinished decisions…' : 'Classifying rows…', true,
+        {completed: retryFailed ? 0 : run.cursor, total: retryFailed ? pending.length : run.rows.length});
     const stop = document.getElementById('stop-analysis-btn');
     stop.classList.remove('hidden'); stop.disabled = false; stop.textContent = 'Stop after current batch';
     stop.onclick = () => { run.stopped = true; stop.disabled = true; };
@@ -2082,8 +2089,11 @@ async function continueJevRun(retryFailed = false) {
             if (!retryFailed) run.cursor += indices.length;
             run.pendingCheckpoint = indices;
             syncJevResult();
-            updateProgress(Math.round(run.cursor / run.rows.length * 100), run.cursor, run.rows.length, `Classified ${run.cursor} of ${run.rows.length} rows`);
             await flushJevCheckpoint(run);
+            const completed = retryFailed ? offset + indices.length : run.cursor;
+            const total = retryFailed ? pending.length : run.rows.length;
+            updateProgress(Math.round(completed / total * 100), completed, total,
+                retryFailed ? `Retried ${completed} of ${total} rows` : `Classified ${completed} of ${total} rows`);
         }
     } catch (error) { failure = error; }
     finally { run.running = false; showSpinner(false); stop.classList.add('hidden'); }
@@ -2187,9 +2197,7 @@ function downloadBlob(blob, filename) {
 function downloadRunCsv() {
     const run = recoveryRun();
     if (!run?.cursor) return;
-    const sheet = XLSX.utils.json_to_sheet(run.results, {header: run.columns});
-    const csv = XLSX.utils.sheet_to_csv(sheet);
-    downloadBlob(new Blob(['\ufeff', csv], {type: 'text/csv;charset=utf-8'}),
+    downloadBlob(resultsCsvBlob(run.results, run.columns),
         `${run.cursor < run.rows.length ? 'partial' : 'analyzed'}_${run.filename.replace(/\.[^.]+$/, '')}.csv`);
 }
 
@@ -2572,6 +2580,11 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('recovery-import-input').onchange = importRecovery;
     document.querySelectorAll('[data-recovery-download]').forEach(el => { el.onclick = downloadRecovery; });
     document.querySelectorAll('[data-recovery-csv]').forEach(el => { el.onclick = downloadRunCsv; });
+    document.getElementById('download-results-csv').onclick = () => {
+        if (!analyzedResult) return;
+        downloadBlob(resultsCsvBlob(analyzedResult.data, analyzedResult.columns),
+            `${analyzedResult.partial ? 'partial' : 'analyzed'}_${(fileData.filename || 'data').replace(/\.[^.]+$/, '')}.csv`);
+    };
 
     // Jev Classification workflow
     const jevAddQuestionBtn = document.getElementById('jev-add-question-btn');

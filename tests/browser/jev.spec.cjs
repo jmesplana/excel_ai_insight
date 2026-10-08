@@ -96,6 +96,17 @@ test('Jev mode classifies every row and writes the chosen labels into the sheet'
   expect(firstRow).toContain('Question');
   expect(firstRow).toContain('Moyenne');
 
+  // Large-result CSV downloads must never allocate an intermediate workbook.
+  await page.evaluate(() => { XLSX.utils.json_to_sheet = () => { throw new Error('CSV must not build a workbook'); }; });
+  for (const button of ['#download-results-csv', '[data-recovery-csv]:visible']) {
+    const download = page.waitForEvent('download');
+    await page.locator(button).click();
+    const csv = fs.readFileSync(await (await download).path(), 'utf8');
+    expect(csv).toContain('feedback_type');
+    expect(csv).toContain('Merci pour les informations');
+    expect(csv).toContain('Question');
+  }
+
   if (errors.length) throw Error(errors.join('; '));
 });
 

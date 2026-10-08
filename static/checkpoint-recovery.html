@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Recover saved results — Aidstack Insights</title>
+    <style>
+        body { font: 16px/1.6 system-ui, sans-serif; max-width: 680px; margin: 3rem auto; padding: 0 1.25rem; color: #172c24; background: #f6faf8; }
+        h1 { line-height: 1.2; }
+        label { display: block; margin-top: 1.5rem; }
+        select, button { font: inherit; padding: .65rem .85rem; margin-top: .5rem; max-width: 100%; }
+        button { display: block; background: #176440; color: white; border: 0; border-radius: .35rem; cursor: pointer; }
+        button:disabled { opacity: .6; cursor: wait; }
+        progress { width: 100%; }
+        a { color: #176440; }
+        #status { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>Recover saved results</h1>
+    <p>Download your classified rows without opening the full results table. This page reads the checkpoint in small batches and does not rerun analysis or change the saved data.</p>
+    <p>Use the same website address and browser profile as the original run. Stop any analysis still running in another tab before exporting.</p>
+    <label for="kind">Saved run</label>
+    <select id="kind">
+        <option value="jev">Classification (Jev / Laya)</option>
+        <option value="analysis">General AI analysis</option>
+    </select>
+    <button id="download" type="button">Download saved results (CSV)</button>
+    <p id="status" role="status" aria-live="polite"></p>
+    <progress id="progress" value="0" max="1" hidden aria-label="Saved rows exported"></progress>
+    <p>The CSV contains the original columns and saved classification outputs. It does not include the detailed decision audit. Rows that were not saved before the crash cannot be included.</p>
+    <p><a href="/">Back to the app</a></p>
+    <script type="module" src="./js/checkpoint-export-ui.js"></script>
+</body>
+</html>
