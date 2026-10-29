@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { BatchRun } from '../static/js/batch-runner.js';
 import { ProgressTimer, formatDuration } from '../static/js/progress-timer.js';
 import { csvLine, resultsCsvBlob } from '../static/js/csv-export.js';
@@ -164,6 +165,60 @@ test('exploding twice splits on a second separator without losing rows', () => {
     const twice = explodeColumn(once, 'cat', [';']);
     assert.deepEqual(twice.data.map(r=>r.cat), ['A','B','C']);
     assert.deepEqual(twice.data.map(r=>r.id), [1,1,1]);
+});
+
+test('paired feedback produces seven matched rows, preserving repeats and other columns', () => {
+    const {types, excerpts} = JSON.parse(readFileSync(new URL('./fixtures/paired-feedback.json', import.meta.url)));
+    const source = {columns:['id','type_of_feedback','feedback_excerpt','active'], data:[{
+        id:42, type_of_feedback:types.join(' ||   '), feedback_excerpt:excerpts.join(' || '), active:false,
+    }]};
+    const original = structuredClone(source);
+    const out = explodeColumn(source, 'type_of_feedback', ['||'], {
+        pairedColumn:'feedback_excerpt', outputColumn:'type', dedupe:true,
+    });
+    assert.deepEqual(out.columns, ['id','type','feedback_excerpt','active']);
+    assert.deepEqual(out.data, types.map((type, i) => ({id:42, type, feedback_excerpt:excerpts[i], active:false})));
+    assert.deepEqual(source, original);
+});
+
+test('paired splitting keeps blank positions, repeated pairs, and unsplit rows', () => {
+    const source = {columns:['a','b'], data:[
+        {a:'A || || A || ', b:'first || second || first || last'},
+        {a:'single', b:'value'}, {a:null, b:undefined}, {a:0, b:false},
+    ]};
+    assert.deepEqual(explodeColumn(source, 'a', ['|','||'], {pairedColumn:'b'}).data, [
+        {a:'A', b:'first'}, {a:'', b:'second'}, {a:'A', b:'first'}, {a:'', b:'last'},
+        {a:'single', b:'value'}, {a:'', b:''}, {a:'0', b:'false'},
+    ]);
+});
+
+test('paired splitting copies mismatched cells verbatim and pairs matching rows in the same sheet', () => {
+    const {types, excerpts} = JSON.parse(readFileSync(new URL('./fixtures/paired-feedback.json', import.meta.url)));
+    const sixExcerpts = '  ' + excerpts.slice(0, 6).join(' || ') + '  ';
+    const source = {columns:['id','a','b'], data:[
+        {id:1, a:types.join(' || '), b:sixExcerpts},
+        {id:2, a:'A || B', b:'one || two'},
+        {id:3, a:'A', b:'one || two'},
+        {id:4, a:'A || B', b:null},
+    ]};
+    const original = structuredClone(source);
+    assert.deepEqual(explodeColumn(source, 'a', ['||'], {pairedColumn:'b', outputColumn:'type', copyMismatched:true}).data, [
+        ...types.map(type => ({id:1, type, b:sixExcerpts})),
+        {id:2, type:'A', b:'one'}, {id:2, type:'B', b:'two'},
+        {id:3, type:'A', b:'one || two'},
+        {id:4, type:'A', b:null}, {id:4, type:'B', b:null},
+    ]);
+    assert.deepEqual(source, original);
+});
+
+test('paired splitting rejects mismatched counts by default and invalid columns without changing the source', () => {
+    const source = {columns:['a','b'], data:[{a:'A || B', b:'one || two'}, {a:'A || B', b:'one'}]};
+    const original = structuredClone(source);
+    assert.throws(() => explodeColumn(source, 'a', ['||'], {pairedColumn:'b'}), /Data row 2.*Copy the second column/);
+    assert.throws(() => explodeColumn(source, 'a', ['||'], {pairedColumn:'missing'}), /not in this sheet/);
+    assert.throws(() => explodeColumn(source, 'a', ['||'], {pairedColumn:'a'}), /different columns/);
+    assert.throws(() => explodeColumn(source, 'a', ['||'], {pairedColumn:'b', outputColumn:'b'}), /already exists/);
+    assert.deepEqual(source, original);
 });
 
 // --- Configure Analysis export / import ---------------------------------

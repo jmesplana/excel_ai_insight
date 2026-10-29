@@ -62,20 +62,20 @@ function escapeRegExp(text) {
  * Split one cell on a separator, longest-first so "||" wins over "|".
  *
  * Separators are matched literally, never as regex, so a user typing "|" gets
- * a pipe rather than an alternation. Blank fragments are dropped: "a || || b"
- * is two categories, not four.
+ * a pipe rather than an alternation. Blank fragments are dropped by default;
+ * keepEmpty preserves every position when splitting paired columns.
  */
-export function splitCell(value, separators, { trim = true } = {}) {
-    if (value === null || value === undefined) return [];
+export function splitCell(value, separators, { trim = true, keepEmpty = false } = {}) {
+    if (value === null || value === undefined) return keepEmpty ? [''] : [];
     const text = String(value);
     const active = separators.filter(Boolean);
-    if (!active.length) return text.trim() === '' ? [] : [trim ? text.trim() : text];
+    if (!active.length) return !keepEmpty && text.trim() === '' ? [] : [trim ? text.trim() : text];
     // Longest first: "||" must be consumed before "|" can match half of it.
     const ordered = [...new Set(active)].sort((a, b) => b.length - a.length);
     const pattern = new RegExp(ordered.map(escapeRegExp).join('|'), 'g');
     return text.split(pattern)
         .map(part => (trim ? part.trim() : part))
-        .filter(part => part !== '');
+        .filter(part => keepEmpty || part !== '');
 }
 
 /**
@@ -91,12 +91,21 @@ export function splitCell(value, separators, { trim = true } = {}) {
  * @param {boolean} [options.keepEmpty] - emit a row with an empty value when a
  *   cell has no values at all, instead of dropping the source row.
  * @param {boolean} [options.dedupe] - drop repeated values within one row.
+ * @param {string} [options.pairedColumn] - split a second column by position,
+ *   preserving repeats and empty fragments in both. The dedupe
+ *   and keepEmpty options are ignored when a paired column is selected.
+ * @param {boolean} [options.copyMismatched=false] - when paired counts differ,
+ *   copy the second cell in full instead of rejecting the split.
  * @returns {{columns: string[], data: object[], sheetName?: string}}
  */
 export function explodeColumn(result, column, separators, options = {}) {
-    const { outputColumn = column, keepEmpty = true, dedupe = true } = options;
+    const { outputColumn = column, keepEmpty = true, dedupe = true, pairedColumn, copyMismatched = false } = options;
     if (!result || !Array.isArray(result.data)) throw new Error('No data to clean.');
     if (!result.columns.includes(column)) throw new Error(`Column "${column}" is not in this sheet.`);
+    if (pairedColumn) {
+        if (!result.columns.includes(pairedColumn)) throw new Error(`Column "${pairedColumn}" is not in this sheet.`);
+        if (pairedColumn === column) throw new Error('Choose two different columns to split together.');
+    }
     if (outputColumn !== column && result.columns.includes(outputColumn)) {
         throw new Error(`Column "${outputColumn}" already exists. Choose another name.`);
     }
@@ -104,11 +113,27 @@ export function explodeColumn(result, column, separators, options = {}) {
     const columns = result.columns.map(name => (name === column ? outputColumn : name));
     // Build each output row from `columns` so a renamed column leaves no
     // stray key behind and the field order matches the header exactly.
-    const buildRow = (row, value) => Object.fromEntries(
-        columns.map(name => [name, name === outputColumn ? value : row[name]]));
+    const buildRow = (row, value, pairedValue) => Object.fromEntries(
+        columns.map(name => [name, name === outputColumn ? value
+            : pairedColumn && name === pairedColumn ? pairedValue : row[name]]));
 
     const data = [];
-    for (const row of result.data) {
+    for (const [rowIndex, row] of result.data.entries()) {
+        if (pairedColumn) {
+            // Keep every position: deduplicating or dropping blanks independently
+            // would pair values from different positions.
+            const values = splitCell(row[column], separators, { keepEmpty: true });
+            const pairedValues = splitCell(row[pairedColumn], separators, { keepEmpty: true });
+            const matched = values.length === pairedValues.length;
+            if (!matched && !copyMismatched) {
+                throw new Error(`Data row ${rowIndex + 1}: "${column}" has ${values.length} parts but `
+                    + `"${pairedColumn}" has ${pairedValues.length}. Correct the counts or enable `
+                    + '"Copy the second column in full when counts differ".');
+            }
+            values.forEach((value, index) => data.push(buildRow(row, value,
+                matched ? pairedValues[index] : row[pairedColumn])));
+            continue;
+        }
         let values = splitCell(row[column], separators);
         if (dedupe) values = [...new Set(values)];
         if (!values.length) {

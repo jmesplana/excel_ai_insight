@@ -1,4 +1,84 @@
 const {test, expect} = require('@playwright/test');
+const {types, excerpts} = require('../fixtures/paired-feedback.json');
+
+test('paired cleaning pairs matching rows and copies mismatched cells through download, apply and undo', async ({page}) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/');
+  await page.locator('#start-analyzing-btn').click();
+  await page.locator('#mode-card-clean').click();
+  await page.locator('#config-next-btn').click();
+  const quote = value => `"${value.replaceAll('"', '""')}"`;
+  const sixExcerpts = excerpts.slice(0, 6).join(' || ');
+  const expected = [
+    ...types.map((type, i) => ({id:42, item_codes:type, item_details:excerpts[i]})),
+    ...types.map(type => ({id:43, item_codes:type, item_details:sixExcerpts})),
+  ];
+  const csv = 'id,item_codes,item_details\n'
+    + `42,${quote(types.join(' ||   '))},${quote(excerpts.join(' || '))}\n`
+    + `43,${quote(types.join(' || '))},${quote(sixExcerpts)}\n`;
+  await page.locator('#file').setInputFiles({name:'paired.csv', mimeType:'text/csv', buffer:Buffer.from('\ufeff' + csv)});
+  await page.locator('#upload-form button[type=submit]').click();
+  await expect(page.locator('#pre-explode-paired-column')).toHaveValue('');
+  await expect(page.locator('#pre-explode-copy-mismatched')).not.toBeChecked();
+  await expect(page.locator('#pre-explode-copy-mismatched')).toBeDisabled();
+  await page.locator('#pre-explode-column').selectOption('item_codes');
+  await page.locator('#pre-explode-paired-column').selectOption('item_details');
+  await expect(page.locator('#pre-explode-dedupe')).toBeDisabled();
+  await page.locator('#pre-explode-preview-btn').click();
+  await expect(page.locator('#pre-explode-message')).toContainText('Data row 2');
+  await expect(page.locator('#pre-explode-preview')).toBeHidden();
+  await expect(page.locator('#pre-explode-download-btn')).toBeHidden();
+  await page.locator('#pre-explode-copy-mismatched').check();
+  await page.locator('#pre-explode-preview-btn').click();
+  await expect(page.locator('#pre-explode-message')).toContainText('2 rows become 14 rows');
+  const rows = page.locator('#pre-explode-preview-table tbody tr');
+  await expect(rows).toHaveCount(14);
+  for (let i = 0; i < expected.length; i++) {
+    await expect(rows.nth(i).locator('td')).toHaveText(Object.values(expected[i]).map(String));
+  }
+  await expect(page.locator('#pre-explode-preview-table th.table-warning')).toHaveCount(2);
+  await page.locator('#pre-explode-apply-btn').click();
+  await expect(page.locator('#preview-table tbody tr')).toHaveCount(10);
+  await expect(page.locator('#preview-table')).toContainText('Showing first 10 of 14 rows');
+  const pending = page.waitForEvent('download');
+  await page.locator('#pre-explode-download-btn').click();
+  const download = await pending;
+  const bytes = require('fs').readFileSync(await download.path()).toString('base64');
+  const saved = await page.evaluate(bytes => {
+    const wb = XLSX.read(bytes, {type:'base64'});
+    return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+  }, bytes);
+  expect(saved).toEqual(expected);
+  await page.locator('#pre-explode-undo-btn').click();
+  await expect(page.locator('#preview-table tbody tr')).toHaveCount(2);
+
+  // Turning off fallback invalidates the preview and restores strict matching.
+  await page.locator('#pre-explode-preview-btn').click();
+  await page.locator('#pre-explode-copy-mismatched').uncheck();
+  await expect(page.locator('#pre-explode-download-btn')).toBeHidden();
+  await page.locator('#pre-explode-preview-btn').click();
+  await expect(page.locator('#pre-explode-message')).toContainText('Data row 2');
+  await page.locator('#pre-explode-copy-mismatched').check();
+
+  // Invalid settings must not leave a stale preview or download available.
+  await page.locator('#pre-explode-preview-btn').click();
+  await expect(page.locator('#pre-explode-download-btn')).toBeVisible();
+  await page.locator('#pre-explode-separator').fill('');
+  await expect(page.locator('#pre-explode-download-btn')).toBeHidden();
+  await page.locator('#pre-explode-preview-btn').click();
+  await expect(page.locator('#pre-explode-message')).toContainText('Enter at least one separator');
+  await expect(page.locator('#pre-explode-preview')).toBeHidden();
+  await expect(page.locator('#pre-explode-download-btn')).toBeHidden();
+  await expect(page.locator('#preview-table tbody tr')).toHaveCount(2);
+  // A new upload does not inherit paired splitting or fallback from this file.
+  await page.locator('#preview-back-btn').click();
+  await page.locator('#file').setInputFiles({name:'another.csv', mimeType:'text/csv', buffer:Buffer.from('code,description\nA,single\n')});
+  await page.locator('#upload-form button[type=submit]').click();
+  await expect(page.locator('#pre-explode-paired-column')).toHaveValue('');
+  await expect(page.locator('#pre-explode-copy-mismatched')).not.toBeChecked();
+  await expect(page.locator('#pre-explode-copy-mismatched')).toBeDisabled();
+  expect(errors).toEqual([]);
+});
 
 // The pre-analysis path: upload a file with multi-value cells, split it, and
 // download the result without ever calling the AI or supplying an API key.
@@ -70,7 +150,7 @@ test('splits AI output on the results step', async ({page}) => {
   await page.goto('/');
   await page.locator('#start-analyzing-btn').click();
   await page.locator('#config-next-btn').click();
-  const csv = 'id,feedback\n1,alpha\n2,beta\n';
+  const csv = 'id,feedback\n1,alpha || bravo\n2,charlie || delta\n';
   await page.locator('#file').setInputFiles({name:'f.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});
   await page.locator('#upload-form button[type=submit]').click();
   await page.locator('#preview-next-btn').click();
@@ -85,9 +165,17 @@ test('splits AI output on the results step', async ({page}) => {
   // The picker defaults to the newest AI output column.
   const selected = await column.inputValue();
   if (!selected.includes('feedback')) throw Error('unexpected default column ' + selected);
+  await page.locator('#explode-paired-column').selectOption('feedback');
+  await expect(page.locator('#explode-dedupe')).toBeDisabled();
   await page.locator('#explode-separator').fill('||');
   await page.locator('#explode-preview-btn').click();
   await expect(page.locator('#explode-message')).toContainText('2 rows become 4 rows');
+  const pairedRows = page.locator('#explode-preview-table tbody tr');
+  await expect(pairedRows).toHaveCount(4);
+  for (const [i, excerpt] of ['alpha', 'bravo', 'charlie', 'delta'].entries()) {
+    await expect(pairedRows.nth(i)).toContainText(excerpt);
+    await expect(pairedRows.nth(i)).toContainText(i % 2 === 0 ? 'Questions' : 'Demandes');
+  }
 
   await page.locator('#explode-apply-btn').click();
   await expect(page.locator('#explode-message')).toContainText('now 4 rows');

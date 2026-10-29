@@ -169,13 +169,38 @@ function createCleanDataPanel({ prefix, getSource, onApply, preferredColumns = (
             const preferred = preferredColumns().filter(c => source.columns.includes(c));
             if (preferred.length) select.value = preferred[preferred.length - 1];
         }
+        refreshPairedColumns();
     }
 
-    function renderPreview(result, column) {
+    function refreshPairedColumns() {
+        const select = el('paired-column');
+        const previous = select.value;
+        const available = (getSource()?.columns || []).filter(col => col !== el('column').value);
+        select.innerHTML = '<option value="">None — split one column</option>'
+            + available.map(col => `<option value="${escapeHtml(col)}">${escapeHtml(col)}</option>`).join('');
+        if (available.includes(previous)) select.value = previous;
+        updatePairedOptions();
+    }
+
+    function updatePairedOptions() {
+        const paired = Boolean(el('paired-column').value);
+        el('dedupe').disabled = paired;
+        el('copy-mismatched').disabled = !paired;
+    }
+
+    function clearPreview() {
+        preview = null;
+        downloadable = null;
+        el('preview').classList.add('hidden');
+        el('download-btn').classList.add('hidden');
+        setMessage('');
+    }
+
+    function renderPreview(result, columns) {
         const rows = result.data.slice(0, 20);
         let html = '<thead class="table-light"><tr>';
         result.columns.forEach(col => {
-            html += `<th${col === column ? ' class="table-warning"' : ''}>${escapeHtml(col)}</th>`;
+            html += `<th${columns.includes(col) ? ' class="table-warning"' : ''}>${escapeHtml(col)}</th>`;
         });
         html += '</tr></thead><tbody>';
         rows.forEach(row => {
@@ -193,9 +218,11 @@ function createCleanDataPanel({ prefix, getSource, onApply, preferredColumns = (
     }
 
     function buildPreview() {
+        clearPreview();
         const source = getSource();
         if (!source) { setMessage('Load a file first.', 'warning'); return; }
         const column = el('column').value;
+        const pairedColumn = el('paired-column').value;
         const separators = parseSeparators(el('separator').value);
         const rename = (el('output').value || '').trim();
         const dedupe = el('dedupe').checked;
@@ -203,16 +230,17 @@ function createCleanDataPanel({ prefix, getSource, onApply, preferredColumns = (
 
         try {
             const exploded = explodeColumn(source, column, separators,
-                { outputColumn: rename || column, dedupe });
+                { outputColumn: rename || column, dedupe, pairedColumn,
+                    copyMismatched: el('copy-mismatched').checked });
             preview = { result: exploded, column: rename || column };
             const before = source.data.length, after = exploded.data.length;
-            if (after === before) {
+            if (after === before && !pairedColumn) {
                 setMessage(`No cell in "${column}" contained ${separators.join(' or ')}. `
                     + 'Check the separator and retry.', 'warning');
             } else {
                 setMessage(`${before} rows become ${after} rows.`, 'success');
             }
-            renderPreview(exploded, rename || column);
+            renderPreview(exploded, [rename || column, pairedColumn]);
             downloadable = exploded;
             el('download-btn').classList.remove('hidden');
         } catch (error) {
@@ -235,6 +263,7 @@ function createCleanDataPanel({ prefix, getSource, onApply, preferredColumns = (
         // letting it fall back to the first column in the sheet.
         const select = el('column');
         if (select && applied.columns.includes(producedColumn)) select.value = producedColumn;
+        refreshPairedColumns();
         el('undo-btn').classList.remove('hidden');
         el('preview').classList.add('hidden');
         // Applying replaces the working sheet; the download stays armed so the
@@ -248,6 +277,7 @@ function createCleanDataPanel({ prefix, getSource, onApply, preferredColumns = (
 
     function undo() {
         if (!beforeApply) return;
+        clearPreview();
         onApply(beforeApply);
         setMessage(`Reverted — back to ${beforeApply.data.length} rows.`, 'info');
         beforeApply = null;
@@ -264,6 +294,9 @@ function createCleanDataPanel({ prefix, getSource, onApply, preferredColumns = (
         preview = null;
         beforeApply = null;
         downloadable = null;
+        el('paired-column').value = '';
+        el('copy-mismatched').checked = false;
+        updatePairedOptions();
         el('preview')?.classList.add('hidden');
         el('undo-btn')?.classList.add('hidden');
         el('download-btn')?.classList.add('hidden');
@@ -273,6 +306,17 @@ function createCleanDataPanel({ prefix, getSource, onApply, preferredColumns = (
     const previewBtn = el('preview-btn');
     if (!previewBtn) return { refreshColumns() {}, reset() {} };
     previewBtn.addEventListener('click', buildPreview);
+    el('column').addEventListener('change', () => {
+        refreshPairedColumns();
+        clearPreview();
+    });
+    el('paired-column').addEventListener('change', () => {
+        updatePairedOptions();
+        clearPreview();
+    });
+    for (const suffix of ['separator', 'output', 'dedupe', 'copy-mismatched']) {
+        el(suffix).addEventListener('input', clearPreview);
+    }
     el('apply-btn').addEventListener('click', apply);
     el('undo-btn').addEventListener('click', undo);
     el('download-btn').addEventListener('click', () => {

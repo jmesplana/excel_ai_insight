@@ -58,10 +58,33 @@
                                     </button>
                                 </div>
                             </div>
+                            <div class="mt-3">
+                                <label class="form-label" for="pre-explode-paired-column">Second column to split together (optional)</label>
+                                <select class="form-select" id="pre-explode-paired-column" aria-describedby="pre-explode-paired-help">
+                                    <option value="">None — split one column</option>
+                                </select>
+                                <div class="form-text" id="pre-explode-paired-help">
+                                    Pairs the first value in each column, then the second, and so on using the same separator.
+                                    By default, both columns must have the same number of parts in each row.
+                                    Repeated values and blank positions are kept.
+                                    Other columns are copied to each row. The new name applies to the first column only.
+                                </div>
+                            </div>
+                            <div class="form-check mt-3">
+                                <input class="form-check-input" type="checkbox" id="pre-explode-copy-mismatched" disabled
+                                       aria-describedby="pre-explode-copy-mismatched-help">
+                                <label class="form-check-label" for="pre-explode-copy-mismatched">
+                                    Copy the second column in full when counts differ
+                                </label>
+                                <div class="form-text" id="pre-explode-copy-mismatched-help">
+                                    Optional: copies its entire original cell to every row created by the first column.
+                                    Rows with matching counts still split into pairs.
+                                </div>
+                            </div>
                             <div class="form-check mt-3">
                                 <input class="form-check-input" type="checkbox" id="pre-explode-dedupe" checked>
                                 <label class="form-check-label" for="pre-explode-dedupe">
-                                    Drop values repeated within the same row
+                                    Drop values repeated within the same row (single-column splits only)
                                 </label>
                             </div>
                             <div id="pre-explode-message" class="mt-3"></div>
