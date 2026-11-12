@@ -8,7 +8,7 @@
     "start": "node scripts/dev.mjs --no-debug",
     "setup": "node scripts/dev.mjs --setup-only",
     "clean": "rm -rf venv __pycache__ .pytest_cache",
-    "test": "node --test tests/frontend.test.mjs",
+    "test": "node --test tests/*.test.mjs",
     "test:backend": "venv/bin/python -m unittest discover -s tests -v",
     "test:browser": "playwright test",
     "setup:laya": "node scripts/laya.mjs --setup",

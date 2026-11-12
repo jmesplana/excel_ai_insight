@@ -1,6 +1,16 @@
 const {test, expect} = require('@playwright/test');
 
 async function setup(page, mode, count) {
+    await page.addInitScript(() => {
+        window.screenLocks = [];
+        Object.defineProperty(navigator, 'wakeLock', {value: {request: async () => {
+            const lock = new EventTarget();
+            lock.released = false;
+            lock.release = async () => { lock.released = true; lock.dispatchEvent(new Event('release')); };
+            window.screenLocks.push(lock);
+            return lock;
+        }}});
+    });
     await page.goto('/');
     await page.locator('#start-analyzing-btn').click();
     if (mode !== 'analysis') await page.locator(`#mode-card-${mode}`).click();
@@ -32,6 +42,8 @@ async function holdRequests(page, url) {
     return async function take() {
         await expect.poll(() => pending.length).toBeGreaterThan(0);
         const {route, resolve} = pending.shift();
+        await expect(page.locator('#screen-wake-status')).toHaveText('Keeping your screen awake while processing.');
+        expect(await page.evaluate(() => window.screenLocks.filter(lock => !lock.released).length)).toBe(1);
         return {body:route.request().postDataJSON(), respond:async response => {
             await route.fulfill(response); resolve();
         }};
@@ -60,6 +72,7 @@ test('classification timer follows batches, pause, resume and the retry subset',
     await page.locator('#stop-analysis-btn').click();
     await request.respond(jevResponse(request.body));
     await expect(page.locator('#spinner-overlay')).toBeHidden();
+    expect(await page.evaluate(() => window.screenLocks.every(lock => lock.released))).toBe(true);
     const elapsed = await page.locator('#progress-elapsed').textContent();
     await page.clock.fastForward(60000);
     await expect(page.locator('#progress-elapsed')).toHaveText(elapsed);
@@ -80,6 +93,7 @@ test('classification timer follows batches, pause, resume and the retry subset',
     await request.respond(jevResponse(request.body));
     await expect(page.locator('#spinner-overlay')).toBeHidden();
     await expect(page.locator('#operations-count')).toHaveText('2/2');
+    expect(await page.evaluate(() => window.screenLocks.every(lock => lock.released))).toBe(true);
     expect(errors).toEqual([]);
 });
 
@@ -99,6 +113,7 @@ test('general analysis timer resets its rate after a failed batch and resume', a
     await expect(page.locator('#progress-remaining')).toContainText('About');
     await request.respond({status:503,json:{error:'Temporary failure'}});
     await expect(page.locator('#spinner-overlay')).toBeHidden();
+    expect(await page.evaluate(() => window.screenLocks.every(lock => lock.released))).toBe(true);
     await page.clock.fastForward(60000);
     await page.locator('#resume-analysis-btn').click();
     request = await take();
@@ -107,6 +122,7 @@ test('general analysis timer resets its rate after a failed batch and resume', a
     await request.respond(success(request.body));
     await expect(page.locator('#spinner-overlay')).toBeHidden();
     await expect(page.locator('#result-message')).toContainText('Analysis complete');
+    expect(await page.evaluate(() => window.screenLocks.every(lock => lock.released))).toBe(true);
 });
 
 test('ICD shows elapsed during validation and an ETA during row translation', async ({page}) => {
@@ -131,4 +147,5 @@ test('ICD shows elapsed during validation and an ETA during row translation', as
     await request.respond({json:{results:request.body.rows.map(row => ({rowIndex:row.rowIndex})),errors:0}});
     await expect(page.locator('#spinner-overlay')).toBeHidden();
     await expect(page.locator('#icd-result-message')).toContainText('Translation complete');
+    expect(await page.evaluate(() => window.screenLocks.every(lock => lock.released))).toBe(true);
 });

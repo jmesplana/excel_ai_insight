@@ -6,6 +6,7 @@ import { escapeHtml, renderMarkdown } from './rendering.js';
 import { parseWorkbook, exportResults, explodeColumn } from './spreadsheet.js';
 import { BatchRun } from './batch-runner.js';
 import { ProgressTimerView } from './progress-timer.js';
+import { ScreenWakeLock } from './screen-wake-lock.js';
 import { resultsCsvBlob } from './csv-export.js';
 import { serializeConfig, deserializeConfig, configFilename } from './analysis-config.js';
 import { getJevConfig } from './provider-settings.js';
@@ -637,6 +638,9 @@ async function runIcdTranslation(isTestRun = false) {
 
 /* Utility functions */
 const progressTimer = new ProgressTimerView();
+const screenWakeLock = new ScreenWakeLock({
+    onStatus: message => { document.getElementById('screen-wake-status').textContent = message; }
+});
 
 function showSpinner(show, message = 'Processing...', showProgress = false, {completed = 0, total = null} = {}) {
     const spinner = document.getElementById('spinner-overlay');
@@ -647,6 +651,7 @@ function showSpinner(show, message = 'Processing...', showProgress = false, {com
     if (show) {
         spinner.classList.remove('hidden');
         progressTimer.start({completed, total: showProgress ? total : null});
+        screenWakeLock.start();
         
         // Show or hide progress tracking UI
         if (showProgress) {
@@ -657,6 +662,7 @@ function showSpinner(show, message = 'Processing...', showProgress = false, {com
         }
     } else {
         progressTimer.stop();
+        screenWakeLock.stop();
         spinner.classList.add('hidden');
         progressContainer.classList.add('hidden');
     }
