@@ -28,12 +28,13 @@ const fields = {
     'modal-icd-client-id': 'excel_ai_insight_icd_client_id',
     'modal-icd-client-secret': 'excel_ai_insight_icd_client_secret'
 };
+const profileStorage = () => sessionStorage.getItem(PROVIDER_STORAGE_KEY) !== null ? sessionStorage : localStorage;
 const field = id => {
     const element = document.getElementById(id);
-    return (element ? element.value : localStorage.getItem(fields[id]))?.trim() || null;
+    return (element ? element.value : profileStorage().getItem(fields[id]))?.trim() || null;
 };
 const selected = (name, key, fallback) => document.querySelector(`input[name="${name}"]:checked`)?.value
-    || localStorage.getItem(key) || fallback;
+    || profileStorage().getItem(key) || fallback;
 
 export function getLLMConfig() {
     const provider = selected('llm-provider', PROVIDER_STORAGE_KEY, 'openai');
@@ -72,30 +73,31 @@ export function restoreSettings() {
         if (!localStorage.getItem(key)) localStorage.setItem(key, legacy);
         localStorage.removeItem('excel_ai_insight_api_key');
     }
+    const storage = profileStorage();
     for (const [id, key] of Object.entries(fields)) {
         const el = document.getElementById(id);
-        if (el && localStorage.getItem(key) !== null) el.value = localStorage.getItem(key);
+        if (el && storage.getItem(key) !== null) el.value = storage.getItem(key);
     }
-    const provider = localStorage.getItem(PROVIDER_STORAGE_KEY) || 'openai';
-    const classifier = localStorage.getItem(CLASSIFIER) || 'jev';
+    const provider = storage.getItem(PROVIDER_STORAGE_KEY) || 'openai';
+    const classifier = storage.getItem(CLASSIFIER) || 'jev';
     const llmRadio = document.getElementById(`provider-${provider}`);
     if (llmRadio) llmRadio.checked = true;
     const classRadio = document.getElementById(`classifier-${classifier}`);
     if (classRadio) classRadio.checked = true;
-    document.getElementById('modal-save-api-key').checked = localStorage.getItem(REMEMBER) === 'true'
-        || Object.values(fields).some(key => !!localStorage.getItem(key));
+    document.getElementById('modal-save-api-key').checked = storage === localStorage &&
+        (localStorage.getItem(REMEMBER) === 'true' || Object.values(fields).some(key => !!localStorage.getItem(key)));
     syncProviderUI();
 }
 export function saveSettings() {
     const remember = document.getElementById('modal-save-api-key').checked;
-    for (const [id, key] of Object.entries(fields)) {
-        const value = field(id);
-        if (remember && value) localStorage.setItem(key, value);
-        else localStorage.removeItem(key);
-    }
-    for (const [key, value] of [[PROVIDER_STORAGE_KEY, getLLMConfig().provider], [CLASSIFIER, getJevConfig().classificationProvider]]) {
-        if (remember) localStorage.setItem(key, value);
-        else localStorage.removeItem(key);
+    const storage = remember ? localStorage : sessionStorage;
+    const previous = remember ? sessionStorage : localStorage;
+    const profile = Object.entries(fields).map(([id, key]) => [key, field(id)]);
+    profile.push([PROVIDER_STORAGE_KEY, getLLMConfig().provider], [CLASSIFIER, getJevConfig().classificationProvider]);
+    for (const [key, value] of profile) {
+        if (value) storage.setItem(key, value);
+        else storage.removeItem(key);
+        previous.removeItem(key);
     }
     localStorage.setItem(REMEMBER, String(remember));
     syncProviderUI();

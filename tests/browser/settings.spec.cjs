@@ -44,7 +44,7 @@ test('independent keys survive switching, saving and reload; requests send only 
   expect(errors).toEqual([]);
 });
 
-test('legacy Azure key migrates only to Azure; session-only values survive reopening but not reload', async ({page}) => {
+test('legacy Azure key migrates only to Azure and tab settings survive refresh in Pipeline Studio', async ({page}) => {
   await page.goto('/');
   await page.evaluate(()=>{localStorage.setItem('excel_ai_insight_api_key','legacy-azure');localStorage.setItem('excel_ai_insight_provider','azure');});
   await page.reload(); await open(page);
@@ -54,8 +54,19 @@ test('legacy Azure key migrates only to Azure; session-only values survive reope
   await page.locator('#modal-api-key').fill('session-secret');
   await page.locator('#modal-save-api-key').uncheck(); await save(page); await open(page);
   await expect(page.locator('#modal-api-key')).toHaveValue('session-secret');
+  await save(page); await page.goto('/pipeline'); await page.reload(); await open(page);
+  await expect(page.locator('#modal-api-key')).toHaveValue('session-secret');
+  await expect(page.locator('#modal-save-api-key')).not.toBeChecked();
+  await page.locator('label[for=provider-azure]').click();
+  await page.locator('#modal-azure-deployment').fill('pipeline-deployment');
   await save(page); await page.reload(); await open(page);
-  await expect(page.locator('#modal-api-key')).toHaveValue('');
+  await expect(page.locator('#provider-azure')).toBeChecked();
+  await expect(page.locator('#modal-azure-api-key')).toHaveValue('legacy-azure');
+  await expect(page.locator('#modal-azure-deployment')).toHaveValue('pipeline-deployment');
+  const freshTab = await page.context().newPage();
+  await freshTab.goto('/pipeline'); await open(freshTab);
+  await expect(freshTab.locator('#modal-api-key')).toHaveValue('');
+  await freshTab.close();
   expect(await page.evaluate(()=>localStorage.getItem('excel_ai_insight_azure_api_key'))).toBeNull();
 });
 

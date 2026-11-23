@@ -1,0 +1,42 @@
+{
+  "format": "aidstack-insights-pipeline",
+  "version": 1,
+  "name": "Paired feedback extraction",
+  "idColumn": "ID",
+  "mappings": {},
+  "nodes": [
+    {
+      "id": "extract-messages",
+      "name": "Extract paired messages",
+      "type": "extract",
+      "inputs": [
+        "Feedback"
+      ],
+      "provider": "azure",
+      "model": "",
+      "instructions": "Extract every distinct message from the feedback, in source order. Pair each exact verbatim excerpt with its feedback type. Keep repeated types. Preserve the entire speech act and necessary context. Interpret French, Swahili, Lingala and mixed language without inventing meaning. A request for an item is Demandes; a request for information is Questions. Flag incomplete or uninterpretable feedback for review. French, Congolese Swahili, Lingala and mixtures within one sentence are expected. Language mixing alone is not a reason for review. Interpret every segment before deciding. Short, informal or misspelled wording is not automatically unusable. If interpretation genuinely fails, quote the exact material phrase and explain the unresolved meaning instead of a generic language/context rejection.",
+      "fields": [
+        {
+          "name": "feedback_excerpt",
+          "options": []
+        },
+        {
+          "name": "type_of_feedback",
+          "options": [
+            "Appréciations",
+            "Questions",
+            "Demandes",
+            "Suggestions",
+            "Observations, perceptions ou croyances",
+            "Signalements et préoccupations",
+            "Allégations et Signalement d’incident"
+          ]
+        }
+      ],
+      "maxOutputTokens": 4096,
+      "responseMode": "schema",
+      "verbatimInput": "Feedback",
+      "verbatimField": "feedback_excerpt"
+    }
+  ]
+}

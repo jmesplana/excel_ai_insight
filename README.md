@@ -588,3 +588,7 @@ See [the configuration guide](JEV_CONFIGURATION.md) and [generic import example]
 Use Laya for local classification and Ollama for local text generation alongside
 Jev, OpenAI and Azure. See [local setup and offline use](LOCAL_INFERENCE.md).
 Provider keys are saved independently in the redesigned Settings dialog.
+
+### Pipeline Studio
+
+Open **Pipeline Studio** from the navigation to build reusable spreadsheet intake workflows: map columns, extract paired messages into rows, translate/classify with per-step providers, validate outputs, review/correct failures and append accepted rows to an Excel master with permanent source references. Import/export workflow configurations, append existing analysis or Choice codebooks, and resume saved runs. See [the pipeline guide](PIPELINE.md) and [the ready-to-use DRC feedback pipeline](examples/ebola-feedback.pipeline.json).
