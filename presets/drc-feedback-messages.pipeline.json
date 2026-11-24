@@ -1,0 +1,55 @@
+{
+  "format": "aidstack-insights-pipeline",
+  "version": 2,
+  "name": "DRC feedback messages",
+  "description": "Split each person's feedback into separate messages, each paired with its feedback type. French, Congolese Swahili and Lingala.",
+  "idColumn": "ID",
+  "mappings": {},
+  "context": "Read this as oral community feedback transcribed in the DRC. A single utterance may combine French nouns, Lingala questions, Congolese Swahili verbs and other local varieties. Read across word boundaries, apostrophes and phonetic spellings. In Lingala, “kombo na yango nini” (also “kombo nayango nini”) asks what something is called; a preceding “maladie” supplies the referent. Check apparently capitalized words against nearby pronouns such as “yango” before treating them as place names. In Swahili, forms of “sikia” can express hearing or feeling. “Tuna sikiya ... maneno yenu” reports hearing the addressees’ words. “Basi” may add emphasis or a sense of “just”; the words alone do not establish agreement or hostility. “Kama ... utapata dawa” describes getting medicine under a condition. Read the full utterance for negation, quotation and additional clauses before applying these cues.",
+  "roles": {
+    "excerpt": "feedback_excerpt",
+    "messageType": "type_of_feedback"
+  },
+  "screening": {
+    "requireLetters": true,
+    "minLetters": 2,
+    "randomTyping": true
+  },
+  "nodes": [
+    {
+      "id": "extract-messages",
+      "name": "Extract paired messages",
+      "type": "extract",
+      "inputs": [
+        "Feedback"
+      ],
+      "provider": "azure",
+      "model": "",
+      "instructions": "Extract every distinct message from the feedback, in source order. Pair each exact verbatim excerpt with its feedback type. Keep repeated types. Preserve the entire speech act and necessary context. Interpret French, Congolese Swahili, Lingala and mixtures within the same sentence. Language mixing alone is not a reason for review. Short or informal messages can still have a clear meaning. Do not invent meaning; if a material phrase cannot be understood, quote that phrase and explain the ambiguity. A request for an item is Demandes; a request for information is Questions. Flag incomplete or uninterpretable feedback for review.",
+      "fields": [
+        {
+          "name": "feedback_excerpt",
+          "options": []
+        },
+        {
+          "name": "type_of_feedback",
+          "options": [
+            "Appréciations",
+            "Questions",
+            "Demandes",
+            "Suggestions",
+            "Observations, perceptions ou croyances",
+            "Signalements et préoccupations",
+            "Allégations et Signalement d’incident"
+          ]
+        }
+      ],
+      "maxOutputTokens": 4096,
+      "responseMode": "schema",
+      "verbatimInput": "Feedback",
+      "verbatimField": "feedback_excerpt",
+      "interpretFirst": true,
+      "systemNotes": "Distinguish acknowledging or accepting what someone said from praising or thanking them. Use the observation type for a plain statement of agreement when offered. Assign an appreciation only when the wording also supports gratitude, praise, encouragement or positive evaluation. First write the speaker’s plain meaning in plainMeaning, then use it to make the requested decision. Use original wording for every verbatim output."
+    }
+  ]
+}

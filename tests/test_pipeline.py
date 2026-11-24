@@ -22,7 +22,7 @@ def completion(value, finish='stop'):
 
 class PipelineTests(unittest.TestCase):
     def test_drc_translation_review_rereads_original_without_previous_gloss(self):
-        with self.client.get('/api/pipeline/templates/ebola') as template:
+        with self.client.get('/api/pipeline/presets/drc-ebola-framework') as template:
             node = template.get_json()['nodes'][0]
         record = {'Feedback': 'Tondimi maso bolobi'}
         client = MagicMock()
@@ -58,7 +58,7 @@ class PipelineTests(unittest.TestCase):
         self.assertNotIn('items', result)
 
     def test_translation_review_retains_first_draft_when_recheck_returns_null(self):
-        with self.client.get('/api/pipeline/templates/ebola') as template:
+        with self.client.get('/api/pipeline/presets/drc-ebola-framework') as template:
             node = template.get_json()['nodes'][0]
         client = MagicMock()
         api = client.with_options.return_value.chat.completions.create
@@ -71,7 +71,7 @@ class PipelineTests(unittest.TestCase):
                     result = execute_step(node, {'Feedback': 'Tondimi maso bolobi'}, {})
                 self.assertEqual(result['status'], 'review')
                 self.assertEqual(result['drafts'], {'source_translation_en': 'We accept what you said.'})
-                self.assertTrue(result['tentativeTranslation'])
+                self.assertTrue(result['tentative'])
                 schema = api.call_args.kwargs['response_format']['json_schema']['schema']
                 self.assertEqual(next(iter(schema['properties'])), 'values')
 
@@ -86,10 +86,10 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/pipeline/validate', json={'nodes': [extract()]}).status_code, 200)
 
     def test_builtin_workflow_templates(self):
-        response = self.client.get('/api/pipeline/templates/ebola')
+        response = self.client.get('/api/pipeline/presets/drc-ebola-framework')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()['format'], 'aidstack-insights-pipeline')
-        self.assertEqual(self.client.get('/api/pipeline/templates/unknown').status_code, 404)
+        self.assertEqual(self.client.get('/api/pipeline/presets/unknown').status_code, 404)
 
     def test_numbers_are_review_without_api(self):
         with patch('insights.pipeline.get_client_and_model') as api:
@@ -176,7 +176,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result['status'], 'review')
 
     def test_full_example_validates_and_azure_branch_is_constrained(self):
-        with open('examples/ebola-feedback.pipeline.json', encoding='utf-8') as f:
+        with open('presets/drc-ebola-framework.pipeline.json', encoding='utf-8') as f:
             workflow = json.load(f)
         self.assertEqual(self.client.post('/api/pipeline/validate', json={'nodes': workflow['nodes']}).status_code, 200)
         node = {'type':'classify','inputs':['excerpt','type','prior'], 'provider':'azure', 'instructions':'Classify using decisions.prior', 'fields':[{'name':'code','options':[]}], 'sourceBranches':[{'when':{'type':'Question'},'options':['Centre','Hours']}]}
@@ -252,7 +252,7 @@ class PipelineTests(unittest.TestCase):
 
     def test_ambiguous_referent_can_still_yield_a_verbatim_question(self):
         text = 'Maladie Yangon kombo nayango nini'
-        with self.client.get('/api/pipeline/templates/ebola') as template:
+        with self.client.get('/api/pipeline/presets/drc-ebola-framework') as template:
             node = template.get_json()['nodes'][1]
         gloss = 'What is this disease called?'
         item = {'translation_en': gloss, 'feedback_excerpt': text, 'type_of_feedback': 'Questions'}
@@ -268,7 +268,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(response.get_json()['attempts'], 2)
 
     def test_drc_action_review_reconsiders_operational_consequence(self):
-        with self.client.get('/api/pipeline/templates/ebola') as template:
+        with self.client.get('/api/pipeline/presets/drc-ebola-framework') as template:
             node = next(n for n in template.get_json()['nodes'] if n['name'] == 'feedback_action')
         record = {'feedback_excerpt': 'Kama una cikia ile utapata dawa',
                   'type_of_feedback': 'Observations, perceptions ou croyances',
@@ -290,7 +290,7 @@ class PipelineTests(unittest.TestCase):
         self.assertIn('same first action', retry['reviewCheck'])
 
     def test_no_code_path_rechecks_even_if_model_said_ok_and_keeps_uncertain_candidate_in_review(self):
-        with self.client.get('/api/pipeline/templates/ebola') as template:
+        with self.client.get('/api/pipeline/presets/drc-ebola-framework') as template:
             node = next(n for n in template.get_json()['nodes'] if n['name'] == 'feedback_path')
         record = {'feedback_excerpt': 'Tondimi maso bolobi', 'translation_en': 'We accepted what you said.',
                   'type_of_feedback': 'Appréciations'}
@@ -314,7 +314,7 @@ class PipelineTests(unittest.TestCase):
                 self.assertNotIn(no_code, choices)
 
     def test_drc_path_receives_translation_and_rechecks_within_assigned_type(self):
-        with self.client.get('/api/pipeline/templates/ebola') as template:
+        with self.client.get('/api/pipeline/presets/drc-ebola-framework') as template:
             node = next(n for n in template.get_json()['nodes'] if n['name'] == 'feedback_path')
         for excerpt, gloss, kind, path in [
             ('Maladie Yangon kombo nayango nini', 'What is this disease called?', 'Questions',
@@ -337,11 +337,108 @@ class PipelineTests(unittest.TestCase):
                 self.assertEqual(retry['record'], record)
                 self.assertIn('available paths', retry['reviewCheck'])
 
+    def test_presets_folder_is_listed_and_served_by_id(self):
+        listing = self.client.get('/api/pipeline/presets').get_json()['presets']
+        ids = [p['id'] for p in listing]
+        self.assertIn('drc-ebola-framework', ids)
+        self.assertIn('drc-feedback-messages', ids)
+        self.assertTrue(all(p['name'] and p['description'] and p['steps'] for p in listing))
+        for bad in ('unknown', '..%2Fapp', 'drc-ebola-framework.pipeline'):
+            self.assertEqual(self.client.get('/api/pipeline/presets/' + bad).status_code, 404)
+
+    def test_drc_wording_alone_no_longer_switches_on_hidden_behaviour(self):
+        # Version 1 matched these words and field names in code. Behaviour now comes only from the workflow file.
+        node = {**extract(), 'instructions': 'Feedback from the DRC in Congolese Swahili.',
+                'fields': [{'name': 'excerpt', 'options': []}, {'name': 'type', 'options': ['Thanks']}]}
+        path = {'id': 'p', 'name': 'path', 'type': 'classify', 'inputs': ['excerpt', 'translation_en'], 'provider': 'azure',
+                'instructions': 'In the DRC.', 'fields': [{'name': 'feedback_path', 'options': ['A', 'B']}]}
+        for step, reply in ((node, {'status': 'ok', 'reason': '', 'items': [{'excerpt': 'Merci', 'type': 'Thanks'}]}),
+                            (path, {'status': 'ok', 'reason': '', 'values': {'feedback_path': 'A'}})):
+            client = MagicMock()
+            api = client.with_options.return_value.chat.completions.create
+            api.return_value = completion(reply)
+            with patch('insights.pipeline.get_client_and_model', return_value=(client, 'test')):
+                execute_step(step, {k: 'Merci' for k in step['inputs']}, {})
+            system = api.call_args.kwargs['messages'][0]['content']
+            schema = api.call_args.kwargs['response_format']['json_schema']['schema']
+            self.assertNotIn('oral community feedback', system)
+            self.assertNotIn('plainMeaning', schema['properties'])
+
+    def test_workflow_context_and_step_guidance_reach_the_model(self):
+        node = {**extract(), 'systemNotes': 'Step note.', 'interpretFirst': True}
+        client = MagicMock()
+        api = client.with_options.return_value.chat.completions.create
+        api.return_value = completion({'plainMeaning': 'Thanks', 'status': 'ok', 'reason': '', 'items': [{'excerpt': 'Merci', 'type': 'Thanks'}]})
+        with patch('insights.pipeline.get_client_and_model', return_value=(client, 'test')):
+            self.client.post('/api/pipeline/step', json={'node': node, 'record': {'Feedback': 'Merci'}, 'context': 'Setting note.'})
+            system = api.call_args.kwargs['messages'][0]['content']
+            self.assertTrue(system.endswith('Setting note. Step note. '))
+            self.assertEqual(api.call_args.kwargs['response_format']['json_schema']['schema']['required'][0], 'plainMeaning')
+            self.client.post('/api/pipeline/step', json={'node': {**node, 'useContext': False}, 'record': {'Feedback': 'Merci'}, 'context': 'Setting note.'})
+            self.assertNotIn('Setting note.', api.call_args.kwargs['messages'][0]['content'])
+        self.assertEqual(self.client.post('/api/pipeline/step', json={'node': node, 'record': {}, 'context': 5}).status_code, 400)
+        for bad in ({'useContext': 'yes'}, {'systemNotes': 3}, {'fallbackOption': 'X'}):
+            self.assertEqual(self.client.post('/api/pipeline/validate', json={'nodes': [{**node, **bad}]}).status_code, 400)
+
+    def test_fallback_option_works_for_any_column_name(self):
+        node = {'id': 'c', 'name': 'Topic', 'type': 'classify', 'inputs': ['Feedback'], 'provider': 'azure', 'instructions': 'Pick a topic.',
+                'fields': [{'name': 'topic', 'options': ['Water', 'Health', 'None fits']}], 'fallbackOption': 'None fits',
+                'reviewValues': ['None fits'], 'recheck': 'Look again.'}
+        client = MagicMock()
+        api = client.with_options.return_value.chat.completions.create
+        api.side_effect = [completion({'status': 'ok', 'reason': '', 'values': {'topic': 'None fits'}}),
+                           completion({'status': 'ok', 'reason': '', 'values': {'topic': 'Water'}})]
+        with patch('insights.pipeline.get_client_and_model', return_value=(client, 'test')):
+            result = execute_step(node, {'Feedback': 'No tap'}, {})
+        self.assertEqual(result['items'], [{'topic': 'Water'}])
+        retry = api.call_args.kwargs
+        self.assertEqual(json.loads(retry['messages'][1]['content'])['reviewCheck'], 'Look again.')
+        self.assertNotIn('None fits', retry['response_format']['json_schema']['schema']['properties']['values']['properties']['topic']['enum'])
+
+    def test_reviewer_note_is_sent_apart_from_the_feedback(self):
+        node = {**extract(), 'type': 'analyze', 'fields': [{'name': 'english', 'options': []}]}
+        client = MagicMock()
+        api = client.with_options.return_value.chat.completions.create
+        api.return_value = completion({'status': 'ok', 'reason': '', 'values': {'english': 'We accept your words.'}})
+        with patch('insights.pipeline.get_client_and_model', return_value=(client, 'test')):
+            self.client.post('/api/pipeline/step', json={'node': node, 'record': {'Feedback': 'Tondimi maso bolobi'}, 'note': ' maso = words '})
+            system, user = api.call_args.kwargs['messages']
+            payload = json.loads(user['content'])
+            self.assertEqual(payload['reviewerNote'], 'maso = words')
+            self.assertEqual(payload['record'], {'Feedback': 'Tondimi maso bolobi'})
+            self.assertIn('not as part of the feedback', system['content'])
+            self.client.post('/api/pipeline/step', json={'node': node, 'record': {'Feedback': 'Tondimi maso bolobi'}})
+            system, user = api.call_args.kwargs['messages']
+            self.assertNotIn('reviewerNote', json.loads(user['content']))
+            self.assertNotIn('reviewer', system['content'])
+        self.assertEqual(self.client.post('/api/pipeline/step', json={'node': node, 'record': {}, 'note': 'x' * 5001}).status_code, 400)
+
+    def test_model_may_skip_only_when_the_step_allows_it(self):
+        node = {**extract(), 'type': 'analyze', 'fields': [{'name': 'english', 'options': []}]}
+        client = MagicMock()
+        api = client.with_options.return_value.chat.completions.create
+        api.return_value = completion({'status': 'skip', 'reason': 'Random keystrokes', 'values': {'english': None}})
+        with patch('insights.pipeline.get_client_and_model', return_value=(client, 'test')):
+            result = execute_step({**node, 'allowSkip': True}, {'Feedback': 'kdjfa'}, {})
+            self.assertEqual(result['status'], 'skipped')
+            self.assertEqual(api.call_count, 1)
+            schema = api.call_args.kwargs['response_format']['json_schema']['schema']
+            self.assertEqual(schema['properties']['status']['enum'], ['ok', 'review', 'skip'])
+            self.assertIn('never skip it', api.call_args.kwargs['messages'][0]['content'])
+            api.reset_mock()
+            # Without allowSkip, "skip" is not a valid answer: the record goes to review instead.
+            result = self.client.post('/api/pipeline/step', json={'node': node, 'record': {'Feedback': 'kdjfa'}}).get_json()
+            self.assertEqual(result['status'], 'review')
+            schema = api.call_args.kwargs['response_format']['json_schema']['schema']
+            self.assertEqual(schema['properties']['status']['enum'], ['ok', 'review'])
+            self.assertNotIn('skip', api.call_args.kwargs['messages'][0]['content'])
+        self.assertEqual(self.client.post('/api/pipeline/validate', json={'nodes': [{**node, 'allowSkip': 'yes'}]}).status_code, 400)
+
     def test_pipeline_assets_revalidate_and_entry_module_is_versioned(self):
         page = self.client.get('/pipeline')
         self.assertIn('must-revalidate',page.headers['Cache-Control'])
         self.assertRegex(page.get_data(as_text=True),r'pipeline\.js\?v=[a-f0-9]{12}')
-        asset = self.client.get('/static/js/pipeline-core.js?v=3')
+        asset = self.client.get('/static/js/pipeline-core.js?v=4')
         self.assertEqual(asset.status_code,200)
         self.assertIn('no-cache',asset.headers['Cache-Control'])
         asset.close()

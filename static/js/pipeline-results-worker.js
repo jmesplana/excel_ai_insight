@@ -7,7 +7,7 @@ onmessage = async ({data}) => {
     try {
         if (data.audit) {
             importScripts('../vendor/xlsx.full.min.js');
-            const {buildWorkbook} = await import('./pipeline-workbook.js?v=3');
+            const {buildWorkbook} = await import('./pipeline-workbook.js?v=4');
             sendWorkbook(buildWorkbook(data.audit));
             return;
         }

@@ -2,11 +2,16 @@
 export const FORMAT = 'aidstack-insights-pipeline';
 export const TYPES = ['extract', 'analyze', 'classify', 'split', 'validate', 'lookup'];
 export const PROVIDERS = ['openai', 'azure', 'ollama', 'jev', 'laya'];
-const NODE_KEYS = ['id', 'name', 'type', 'inputs', 'provider', 'model', 'instructions', 'fields', 'verbatimField', 'verbatimInput', 'maxOutputTokens', 'responseMode', 'minConfidence', 'questionType', 'sourceBranches', 'branches', 'delimiter', 'pairedSourceStep', 'table', 'output', 'rules', 'reviewValues'];
+const NODE_KEYS = ['id', 'name', 'type', 'inputs', 'provider', 'model', 'instructions', 'fields', 'verbatimField', 'verbatimInput', 'maxOutputTokens', 'responseMode', 'minConfidence', 'questionType', 'sourceBranches', 'branches', 'delimiter', 'pairedSourceStep', 'table', 'output', 'rules', 'reviewValues', 'useContext', 'systemNotes', 'interpretFirst', 'valuesBeforeStatus', 'recheck', 'recheckWithReason', 'fallbackOption', 'tentativeOnReview', 'allowSkip'];
+// Workflow-level column roles. They name the columns that tentative-translation review, ID preservation and the
+// classification sheet use, so these features carry no hard-coded column names. Absent roles turn the feature off.
+const ROLE_KEYS = ['sourceTranslation', 'messageTranslation', 'excerpt', 'messageType', 'code', 'category'];
+export const VERSION = 2;
 export const REVIEW_SHEET = 'Pipeline review';
 export const LOG_SHEET = 'Pipeline imports';
 export const AUDIT_SHEET = 'Pipeline audit';
-export const META = ['_feedback_id', '_source_dataset_id', '_source_filename', '_source_sheet', '_source_row', '_source_record_id', '_original_id', '_message_number', '_record_key', '_status', '_failed_step', '_reason', '_error_code', '_original_record'];
+export const META = ['_feedback_id', '_source_dataset_id', '_source_filename', '_source_sheet', '_source_row', '_source_record_id', '_original_id', '_message_number', '_record_key', '_status', '_failed_step', '_reason', '_error_code', '_reviewer_note', '_reviewer_decisions', '_skip_reason', '_discard_reason', '_original_record'];
+export const NOTE_LIMIT = 5000;
 const clone = v => structuredClone(v);
 const fail = message => { throw new Error(message); };
 export const outputs = n => n.type === 'split' ? n.inputs : n.type === 'lookup' ? [n.output] : (n.fields || []).map(f => f.name);
@@ -25,9 +30,22 @@ export function defaultNode(type = 'analyze') {
     if (type === 'lookup') Object.assign(node, {output: 'mapped_value', table: [{when: {Feedback: 'example'}, value: 'mapped'}]});
     return node;
 }
-export function defaultWorkflow() { return {format: FORMAT, version: 1, name: 'Community feedback intake', idColumn: 'ID', mappings: {}, nodes: [defaultNode('extract')]}; }
+export function defaultWorkflow() { return {format: FORMAT, version: VERSION, name: 'Community feedback intake', idColumn: 'ID', mappings: {}, nodes: [defaultNode('extract')]}; }
 export function portableConfig(raw) {
-    if (!raw || raw.format !== FORMAT || raw.version !== 1 || !Array.isArray(raw.nodes) || !raw.nodes.length || raw.nodes.length > 100) fail('This is not a supported pipeline configuration (version 1, 1–100 steps).');
+    if (!raw || raw.format !== FORMAT || ![1, VERSION].includes(raw.version) || !Array.isArray(raw.nodes) || !raw.nodes.length || raw.nodes.length > 100) fail('This is not a supported pipeline configuration (version 1 or 2, 1–100 steps).');
+    if (raw.context !== undefined && typeof raw.context !== 'string') fail('Workflow context must be text.');
+    const roles = raw.roles ?? {};
+    if (!roles || typeof roles !== 'object' || Array.isArray(roles) || Object.keys(roles).some(k => ![...ROLE_KEYS, 'tentativeColumns'].includes(k))
+        || ROLE_KEYS.some(k => roles[k] !== undefined && (typeof roles[k] !== 'string' || !roles[k]))
+        || (roles.tentativeColumns !== undefined && (!Array.isArray(roles.tentativeColumns) || roles.tentativeColumns.some(c => typeof c !== 'string')))) fail('Workflow roles must name result columns.');
+    const screening = raw.screening;
+    if (screening !== undefined && (!screening || typeof screening !== 'object' || Array.isArray(screening)
+        || Object.keys(screening).some(k => !['requireLetters', 'minLetters', 'randomTyping', 'columns'].includes(k))
+        || ['requireLetters', 'randomTyping'].some(k => screening[k] !== undefined && typeof screening[k] !== 'boolean')
+        || (screening.minLetters !== undefined && (!Number.isInteger(screening.minLetters) || screening.minLetters < 0 || screening.minLetters > 20))
+        || (screening.columns !== undefined && (!Array.isArray(screening.columns) || !screening.columns.length || screening.columns.some(c => typeof c !== 'string' || !c))))) {
+        fail('Screening needs requireLetters/randomTyping (true or false), minLetters (0–20) and optional input columns.');
+    }
     const ids = new Set();
     const nodes = raw.nodes.map(n => {
         if (!n || !TYPES.includes(n.type) || typeof n.id !== 'string' || !n.id || ids.has(n.id)) fail('Step IDs must be unique and step types supported.');
@@ -43,7 +61,9 @@ export function portableConfig(raw) {
         if (n.type !== 'split' || before?.type !== 'extract' || before.id !== n.pairedSourceStep || JSON.stringify(n.inputs) !== JSON.stringify(outputs(before)))
             fail('Keep the paired split directly after its extractor with the same output columns.');
     });
-    return {format: FORMAT, version: 1, name: String(raw.name || 'Untitled workflow'), idColumn: String(raw.idColumn || ''), mappings: Object.fromEntries(Object.entries(raw.mappings || {}).filter(([k,v]) => typeof v === 'string' && !k.startsWith('_'))), nodes};
+    return {format: FORMAT, version: VERSION, name: String(raw.name || 'Untitled workflow'), ...(raw.description ? {description: String(raw.description)} : {}),
+        ...(raw.context ? {context: raw.context} : {}), ...(Object.keys(roles).length ? {roles: clone(roles)} : {}),
+        ...(screening ? {screening: clone(screening)} : {}), idColumn: String(raw.idColumn || ''), mappings: Object.fromEntries(Object.entries(raw.mappings || {}).filter(([k,v]) => typeof v === 'string' && !k.startsWith('_'))), nodes};
 }
 export function importWorkflow(raw) {
     if (raw?.format === FORMAT) return {config: portableConfig(raw), notice: 'Pipeline configuration loaded.'};
@@ -105,26 +125,48 @@ export function seedRun(config, source, master = {rows: [], review: [], logs: []
         const values = clone(row.values);
         for (const k of inputs) values[k] = row.values[config.mappings[k] || k];
         Object.assign(values, {_source_dataset_id: source.datasetId, _source_filename: source.filename, _source_sheet: source.sheet, _source_row: row.excelRow, _source_record_id: sourceId, _original_id: config.idColumn ? row.values[config.idColumn] : '', _message_number: '1', _record_key: sourceId, _original_record: JSON.stringify(row.values)});
-        work.push({values, node: 0, status: 'pending', history: []});
+        const skip = config.screening && screenText((config.screening.columns || inputs).map(k => values[k]).filter(v => v != null).join(' '), config.screening);
+        if (skip) {
+            values._skip_reason = skip;
+            work.push({values, node: 0, status: 'skipped', reason: skip, history: [{status: 'skipped', reason: skip, by: 'screening', at: new Date().toISOString()}]});
+        } else work.push({values, node: 0, status: 'pending', history: []});
     }
     return {format: 'aidstack-pipeline-run', version: 1, runId: crypto.randomUUID(), createdAt: new Date().toISOString(), config, source: {filename: source.filename, datasetId: source.datasetId, sheet: source.sheet, count: source.rows.length}, master, nextId, work, skipped};
 }
 function assignId(run, entry) {
     if (!entry.values._feedback_id) { if (!Number.isSafeInteger(run.nextId)) fail('Numeric ID limit reached.'); entry.values._feedback_id = run.nextId++; }
 }
-export function nextWorkIndex(run, reviewsOnly, cursor) {
+/* Steps before a paired split run phase by phase over the whole file; after it, each record runs to the end.
+   For parallel runs, isBusy skips records already in flight (or waiting for a busy local model) and the cursor
+   remembers the lowest skipped index, so the runner can rewind to it. A phase ends only when nothing is in flight. */
+export function nextWorkIndex(run, reviewsOnly, cursor, isBusy = () => false, inFlight = 0) {
     const split = run.config.nodes.findIndex(n => n.pairedSourceStep);
     const lastPhase = split + 1;
     while (cursor.phase <= lastPhase) {
         for (; cursor.index < run.work.length; cursor.index++) {
             const entry = run.work[cursor.index];
             if (entry.status === 'pending' && (!reviewsOnly || entry.reviewRetry) &&
-                Math.min(entry.node,lastPhase) === cursor.phase) return cursor.index;
+                Math.min(entry.node,lastPhase) === cursor.phase) {
+                if (!isBusy(entry)) return cursor.index;
+                cursor.skipped = Math.min(cursor.skipped ?? Infinity, cursor.index);
+            }
         }
+        if (inFlight) return -1;
         cursor.phase++;
         cursor.index = 0;
+        delete cursor.skipped;
     }
     return -1;
+}
+// Rows only move later (results replace one row with one or more), so search forward from where it was.
+export function locateEntry(run, entry, hint = 0) {
+    for (let i = Math.max(0, hint); i < run.work.length; i++) if (run.work[i] === entry) return i;
+    return run.work.indexOf(entry);
+}
+// After a result, revisit its position (new rows may need the next step) and anything skipped while busy.
+export function rewindCursor(cursor, index) {
+    cursor.index = Math.min(cursor.index, index, cursor.skipped ?? Infinity);
+    delete cursor.skipped;
 }
 // A translation review stays one source record. Its tentative message codes can be retried together.
 export function activeStep(run, entry) {
@@ -136,7 +178,8 @@ export function activeStep(run, entry) {
     }
     const step = run.config.nodes[entry.node + (queue.messages ? 2 : 1)];
     const node = {...step, instructions: step.instructions + '\nThe English translation is tentative. Use the original wording as evidence. If the supplied English is missing or incomplete, give the best supported English for each excerpt. Assign a category when the meaning supports it; mark genuinely unresolved decisions for review.'};
-    return {node, values: {...entry.values, source_translation_en: entry.drafts.source_translation_en || '', ...queue.messages?.[queue.index]}};
+    const translation = run.config.roles?.sourceTranslation;
+    return {node, values: {...entry.values, ...(translation ? {[translation]: entry.drafts[translation] || ''} : {}), ...queue.messages?.[queue.index]}};
 }
 
 function collectTentativeCodes(run, entry, result) {
@@ -151,14 +194,15 @@ function collectTentativeCodes(run, entry, result) {
     }
     if (queue.messages) {
         const message = queue.messages[queue.index];
-        const path = result.items?.[0]?.feedback_path || result.drafts?.feedback_path;
+        const {code, category} = run.config.roles || {};
+        const path = code && (result.items?.[0]?.[code] || result.drafts?.[code]);
         if (path) {
-            message.feedback_path = path;
-            const lookup = run.config.nodes.find(n => n.type === 'lookup' && n.output === 'feedback_category' && n.inputs.length === 1 && n.inputs[0] === 'feedback_path');
-            const category = lookup?.table.find(row => row.when.feedback_path === path);
-            if (category) message.feedback_category = category.value;
+            message[code] = path;
+            const lookup = category && run.config.nodes.find(n => n.type === 'lookup' && n.output === category && n.inputs.length === 1 && n.inputs[0] === code);
+            const match = lookup?.table.find(row => row.when[code] === path);
+            if (match) message[category] = match.value;
         }
-        if (result.status !== 'ok') message.feedback_path ||= result.reason || 'Category unresolved';
+        if (code && result.status !== 'ok') message[code] ||= result.reason || 'Category unresolved';
         queue.index++;
         if (queue.index < queue.messages.length && result.status !== 'error') return;
         const keys = new Set(queue.messages.flatMap(Object.keys));
@@ -166,7 +210,8 @@ function collectTentativeCodes(run, entry, result) {
             entry.drafts[key] = queue.messages.length === 1 ? queue.messages[0][key]
                 : queue.messages.map((m,i) => `${i+1}. ${m[key] || 'Unresolved'}`).join('\n');
         }
-        entry.drafts.source_translation_en ||= entry.drafts.translation_en;
+        const {sourceTranslation, messageTranslation} = run.config.roles || {};
+        if (sourceTranslation && messageTranslation) entry.drafts[sourceTranslation] ||= entry.drafts[messageTranslation];
     } else {
         Object.assign(entry.drafts, result.drafts || {});
     }
@@ -179,23 +224,32 @@ function collectTentativeCodes(run, entry, result) {
 
 export function applyResult(run, index, result) {
     const entry = run.work[index], {node} = activeStep(run, entry);
-    if (!['ok', 'review', 'error'].includes(result?.status)) fail('Invalid step response; the record remains pending.');
-    const audit = {step: node.id, name: node.name, provider: node.provider || 'local', model: result.model || '', at: new Date().toISOString(), status: result.status, reason: result.reason || '', errorCode: result.errorCode || '', details: result.audit || null};
+    if (!['ok', 'review', 'error', 'skipped'].includes(result?.status)) fail('Invalid step response; the record remains pending.');
+    const audit = {step: node.id, name: node.name, provider: result.decidedBy || node.provider || 'local', model: result.model || '', at: new Date().toISOString(), status: result.status, reason: result.reason || '', errorCode: result.errorCode || '', details: result.audit || null};
+    if (result.status === 'skipped') {
+        // The model judged the text not to be language (random typing). Like screening, this is reversible.
+        const reason = 'Model: ' + (result.reason || 'not language');
+        delete entry.tentativeCoding; delete entry.reviewRetry;
+        entry.status = 'skipped'; entry.reason = reason; entry.values._skip_reason = reason;
+        entry.history.push(audit);
+        return;
+    }
     if (entry.tentativeCoding) {
         entry.history.push({...audit, tentative:true});
         collectTentativeCodes(run, entry, result);
         return;
     }
+    const roles = run.config.roles || {};
+    const tentative = result.status === 'review' && result.tentative && node.tentativeOnReview && roles.sourceTranslation;
     const upcomingSplit = run.config.nodes[entry.node+2]?.pairedSourceStep;
-    if (result.status === 'review' && result.tentativeTranslation && upcomingSplit && upcomingSplit === run.config.nodes[entry.node+1]?.id) {
+    if (tentative && upcomingSplit && upcomingSplit === run.config.nodes[entry.node+1]?.id) {
         entry.translationFlag = {node:entry.node, reason:result.reason || 'Translation needs review.'};
-        entry.values.source_translation_en = result.drafts?.source_translation_en || '';
+        entry.values[roles.sourceTranslation] = result.drafts?.[roles.sourceTranslation] || '';
         entry.history.push(audit);
         entry.node++;
         return;
     }
-    if (result.status === 'review' && result.tentativeTranslation && node.id === 'translate-feedback' &&
-        run.config.nodes[entry.node+1]?.id === 'extract-messages' && run.config.nodes[entry.node+2]?.fields?.[0]?.name === 'feedback_path') {
+    if (tentative && roles.code && run.config.nodes[entry.node+1]?.type === 'extract' && run.config.nodes[entry.node+2]?.fields?.[0]?.name === roles.code) {
         entry.history.push(audit);
         entry.reason = result.reason || 'Translation needs review.';
         entry.drafts = {...result.drafts};
@@ -209,12 +263,12 @@ export function applyResult(run, index, result) {
             const allowed = new Set(outputs(node));
             for (const [k,v] of Object.entries(result.items[0])) if (allowed.has(k)) entry.values[k] = v;
         }
-        if (result.status === 'review' && outputs(node).includes('feedback_path')) {
-            const path = entry.drafts.feedback_path || entry.values.feedback_path;
+        if (result.status === 'review' && roles.code && outputs(node).includes(roles.code)) {
+            const path = entry.drafts[roles.code] || entry.values[roles.code];
             if (path && !(node.reviewValues || []).includes(path)) {
                 for (const lookup of run.config.nodes.slice(entry.node+1)) {
-                    if (lookup.type !== 'lookup' || lookup.inputs.length !== 1 || lookup.inputs[0] !== 'feedback_path') continue;
-                    const match = lookup.table.find(row => row.when.feedback_path === path);
+                    if (lookup.type !== 'lookup' || lookup.inputs.length !== 1 || lookup.inputs[0] !== roles.code) continue;
+                    const match = lookup.table.find(row => row.when[roles.code] === path);
                     if (match) entry.drafts[lookup.output] = match.value;
                 }
             }
@@ -228,7 +282,8 @@ export function applyResult(run, index, result) {
     const split = run.config.nodes[entry.node+1];
     if (split?.pairedSourceStep === node.id) {
         const joined = Object.fromEntries(split.inputs.map(k=>[k,result.items.map(item=>item[k]).join(split.delimiter)]));
-        if (entry.translationFlag && !entry.values.source_translation_en) entry.values.source_translation_en = result.items.map(item=>item.translation_en).join(' ');
+        if (entry.translationFlag && roles.sourceTranslation && roles.messageTranslation && !entry.values[roles.sourceTranslation])
+            entry.values[roles.sourceTranslation] = result.items.map(item=>item[roles.messageTranslation]).join(' ');
         Object.assign(entry.values,joined);
         entry.pairedItems = result.items;
         run.classifications ||= {};
@@ -258,7 +313,7 @@ export function applyResult(run, index, result) {
             }
         }
         if (expanded && previousMessages) {
-            const match=previousMessages.findIndex(m=>m.excerpt===values.feedback_excerpt && m.type===values.type_of_feedback);
+            const match=previousMessages.findIndex(m=>m.excerpt===values[roles.excerpt] && m.type===values[roles.messageType]);
             const previous=match>=0 ? previousMessages.splice(match,1)[0] : null;
             if(previous?.id) values._feedback_id=previous.id;
             if(previous?.discarded) child.status='discarded';
@@ -284,7 +339,7 @@ export function scheduleRateRetry(run, index, result, now = Date.now(), jitter =
     if (entry.rateLimitAttempts >= 3) return 'exhausted';
     return seconds > 60 ? 'pause' : 'retry';
 }
-export function retryEntry(run, index, edits = {}) {
+export function retryEntry(run, index, edits = {}, note) {
     let entry = run.work[index];
     if (!['review', 'error'].includes(entry.status)) fail('Only failed or review records can be retried.');
     const allowed = run.config.nodes[entry.node].inputs;
@@ -292,7 +347,8 @@ export function retryEntry(run, index, edits = {}) {
     if (entry.translationFlag?.node === entry.node && entry.values._record_key !== entry.values._source_record_id) {
         const sourceId=entry.values._source_record_id;
         const siblings=run.work.filter(e=>e.values._source_record_id === sourceId);
-        const previousMessages=siblings.map(e=>({excerpt:e.values.feedback_excerpt,type:e.values.type_of_feedback,id:e.values._feedback_id,discarded:e.status==='discarded'}));
+        const {excerpt, messageType} = run.config.roles || {};
+        const previousMessages=siblings.map(e=>({excerpt:e.values[excerpt],type:e.values[messageType],id:e.values._feedback_id,discarded:e.status==='discarded'}));
         const values={...entry.values,_record_key:sourceId,_message_number:'1'};
         delete values._feedback_id;
         for(const n of run.config.nodes) for(const key of outputs(n)) delete values[key];
@@ -306,28 +362,41 @@ export function retryEntry(run, index, edits = {}) {
         run.work=run.work.filter(e=>e.values._source_record_id!==sourceId);
         run.work.splice(first,0,entry);
     }
-    entry.history.push({step: run.config.nodes[entry.node].id, at: new Date().toISOString(), status: 'corrected', before: Object.fromEntries(Object.keys(edits).map(k => [k, entry.values[k]])), after: clone(edits)});
+    const correction = {step: run.config.nodes[entry.node].id, at: new Date().toISOString(), status: 'corrected', before: Object.fromEntries(Object.keys(edits).map(k => [k, entry.values[k]])), after: clone(edits)};
+    if (note !== undefined) {
+        const text = String(note).trim();
+        if (text.length > NOTE_LIMIT) fail(`Keep the note under ${NOTE_LIMIT.toLocaleString()} characters.`);
+        // The note stays with the record (and the messages split from it) for every later step, and is exported.
+        if (text !== (entry.values._reviewer_note || '')) correction.note = text;
+        if (text) entry.values._reviewer_note = text; else delete entry.values._reviewer_note;
+    }
+    entry.history.push(correction);
     Object.assign(entry.values, edits); entry.status = 'pending'; delete entry.reason; delete entry.errorCode; delete entry.rateLimitAttempts;
     delete entry.drafts;
     const node = run.config.nodes[entry.node];
     for (const key of outputs(node)) if (!node.inputs.includes(key)) delete entry.values[key];
     return entry;
 }
-const noMatchingPath = 'À vérifier : aucun code ne correspond au type fourni';
-function isNoMatchingPath(value) {
-    const text = typeof value === 'string' ? value.trim() : '';
-    return text === noMatchingPath || text === '[Needs Review] | ' + noMatchingPath;
+// A step's fallbackOption ("no code fits") is never written as a result: the cell stays empty for the reviewer.
+function fallbackColumns(config) {
+    return new Map(config.nodes.filter(n => n.fallbackOption && n.fields?.length).map(n => [n.fields[0].name, n.fallbackOption]));
 }
-export function reviewCell(node, entry, column) {
-    const tentative = entry.translationFlag && ['source_translation_en','translation_en','type_of_feedback','feedback_excerpt','feedback_path','feedback_category','feedback_code','feedback_sous_code'].includes(column) && Object.hasOwn(entry.values,column);
+function isFallback(value, option) {
+    const text = typeof value === 'string' ? value.trim() : '';
+    return text === option || text === '[Needs Review] | ' + option;
+}
+export function reviewCell(config, node, entry, column) {
+    const roles = config.roles || {};
+    const tentative = entry.translationFlag && (roles.tentativeColumns || []).includes(column) && Object.hasOwn(entry.values,column);
     if (entry.status !== 'review' || !(tentative || outputs(node).includes(column) || Object.hasOwn(entry.drafts || {}, column))) return null;
     const usable = value => value != null && String(value).trim() !== '' && !/^(null|\[?needs review\]?)$/i.test(String(value).trim());
     let text = [entry.drafts?.[column], entry.values[column]].find(usable);
-    if (column === 'feedback_path' && (text === undefined || isNoMatchingPath(text))) return '';
+    const fallback = fallbackColumns(config).get(column);
+    if (fallback !== undefined && (text === undefined || isFallback(text, fallback))) return '';
     if (text === undefined) {
         const values = entry.values;
-        const source = [values[node.verbatimInput], values.feedback_excerpt, ...node.inputs.map(k => values[k])].find(usable);
-        const translation = [values.translation_en, values.source_translation_en].find(usable);
+        const source = [values[node.verbatimInput], values[roles.excerpt], ...node.inputs.map(k => values[k])].find(usable);
+        const translation = [values[roles.messageTranslation], values[roles.sourceTranslation]].find(usable);
         text = translation !== undefined ? 'Translation: ' + translation
             : source !== undefined ? 'Source: ' + source : entry.reason || 'No text available';
     }
@@ -337,7 +406,7 @@ export function exportedRow(run, entry) {
     const node = run.config.nodes[entry.node];
     const row = {...entry.values, _status: entry.status, _failed_step: node?.name || '', _reason: entry.reason || '', _error_code: entry.errorCode || ''};
     if (entry.status === 'review') for (const key of new Set([...outputs(node), ...Object.keys(row), ...Object.keys(entry.drafts || {})])) {
-        const marked=reviewCell(node,entry,key);
+        const marked=reviewCell(run.config,node,entry,key);
         if(marked==='') delete row[key];
         else if(marked!==null) row[key]=marked;
     }
@@ -345,12 +414,145 @@ export function exportedRow(run, entry) {
 }
 export function mergeRun(run) {
     const rows = clone(run.master.rows), review = clone(run.master.review);
-    for (const row of review) if (isNoMatchingPath(row.feedback_path)) delete row.feedback_path;
+    for (const [column, option] of fallbackColumns(run.config)) for (const row of review) if (isFallback(row[column], option)) delete row[column];
     const seen = new Set([...rows, ...review].map(r => r._record_key).filter(Boolean));
     for (const entry of run.work) {
         if (entry.status === 'pending' || seen.has(entry.values._record_key)) continue;
         (entry.status === 'ok' ? rows : review).push(exportedRow(run, entry)); seen.add(entry.values._record_key);
     }
-    const log = {run_id: run.runId, source_dataset_id: run.source.datasetId, source_file: run.source.filename, source_sheet: run.source.sheet, imported_at: run.createdAt, source_rows: run.source.count, complete: !run.work.some(e => e.status === 'pending'), accepted: run.work.filter(e => e.status === 'ok').length, review: run.work.filter(e => ['review', 'error', 'discarded'].includes(e.status)).length, skipped_sources: run.skipped, workflow: run.config.name};
+    const log = {run_id: run.runId, source_dataset_id: run.source.datasetId, source_file: run.source.filename, source_sheet: run.source.sheet, imported_at: run.createdAt, source_rows: run.source.count, complete: !run.work.some(e => e.status === 'pending'), accepted: run.work.filter(e => e.status === 'ok').length, review: run.work.filter(e => ['review', 'error', 'discarded'].includes(e.status)).length, skipped: run.work.filter(e => e.status === 'skipped').length, skipped_sources: run.skipped, workflow: run.config.name};
     return {rows, review, logs: [...run.master.logs.filter(l => l.run_id !== run.runId), log]};
+}
+
+/* Version 1 workflows relied on the server recognising DRC wording and column names. That recognition now lives
+   only here, as a one-time upgrade: matching steps receive the explicit settings of the DRC preset's equivalent step. */
+const GUIDANCE_KEYS = ['useContext', 'systemNotes', 'interpretFirst', 'valuesBeforeStatus', 'recheck', 'recheckWithReason', 'fallbackOption', 'tentativeOnReview'];
+const LEGACY_MARKERS = ['congolese swahili', 'democratic republic of the congo', 'in the drc'];
+const isLegacyDrcNode = n => ['extract', 'analyze', 'classify'].includes(n.type) && LEGACY_MARKERS.some(m => String(n.instructions || '').toLowerCase().includes(m));
+function legacyRole(n) {
+    if (!isLegacyDrcNode(n)) return 'none';
+    const first = n.fields?.[0]?.name;
+    if (n.type === 'extract') return 'extract';
+    if (n.type === 'analyze') return (n.fields || []).some(f => ['translation_en', 'source_translation_en'].includes(f.name)) ? 'translate' : 'analyze';
+    if (first === 'feedback_action') return 'action';
+    if (first === 'feedback_path') return 'path';
+    return n.inputs.includes('translation_en') ? 'gloss' : 'classify';
+}
+export function needsLegacyUpgrade(config) {
+    return config.nodes.some(isLegacyDrcNode) && !config.context && !config.nodes.some(n => GUIDANCE_KEYS.some(k => n[k] !== undefined));
+}
+export function upgradeLegacyWorkflow(config, preset) {
+    if (!needsLegacyUpgrade(config)) return config;
+    const templates = {};
+    for (const n of preset.nodes) templates[legacyRole(n)] ??= n;
+    const nodes = config.nodes.map(n => {
+        const role = legacyRole(n), template = templates[role];
+        if (!['extract', 'analyze', 'classify'].includes(n.type)) return n;
+        const upgraded = Object.fromEntries(Object.entries(n).filter(([k]) => !GUIDANCE_KEYS.includes(k)));
+        if (role === 'none' || role === 'classify') return {...upgraded, useContext: false};
+        if (role === 'analyze' || !template) return upgraded;
+        for (const k of GUIDANCE_KEYS) if (template[k] !== undefined) upgraded[k] = clone(template[k]);
+        if (upgraded.fallbackOption && !(n.reviewValues || []).includes(upgraded.fallbackOption)) delete upgraded.fallbackOption;
+        return upgraded;
+    });
+    const columns = new Set(nodes.flatMap(n => [...n.inputs, ...outputs(n)]));
+    const roles = Object.fromEntries(Object.entries(preset.roles || {}).filter(([k, v]) => k === 'tentativeColumns' || columns.has(v)));
+    return portableConfig({...config, context: preset.context, roles: {...roles, ...config.roles}, ...(preset.screening && !config.screening ? {screening: preset.screening} : {}), nodes});
+}
+
+/* A reviewer can enter the result of a single-output step themselves. Choice fields keep to the step's allowed
+   values (including the codebook branch for this record); the fallback "no code fits" label is not offered. */
+export const REVIEWER_STEPS = ['analyze', 'classify', 'lookup'];
+export function reviewerFields(node, values) {
+    if (!REVIEWER_STEPS.includes(node.type)) return [];
+    if (node.type === 'lookup') return [{name: node.output, options: []}];
+    return node.fields.map((field, i) => {
+        let options = field.options || [];
+        if (i === 0) for (const key of ['sourceBranches', 'branches']) if (node[key]?.length) {
+            const matches = node[key].filter(b => Object.entries(b.when).every(([k, v]) => values[k] === v));
+            options = matches.length === 1 ? matches[0].options : [];
+        }
+        const labels = options.map(o => typeof o === 'string' ? o : o.label).filter(label => label !== node.fallbackOption);
+        return {name: field.name, options: labels};
+    });
+}
+export function acceptReviewerAnswer(run, index, answer, note) {
+    const current = run.work[index], node = run.config.nodes[current.node];
+    if (!['review', 'error'].includes(current.status)) fail('Only flagged records can be answered.');
+    const fields = reviewerFields(node, current.values);
+    if (!fields.length) fail('Enter results yourself for translation, analysis, classification or lookup steps. For other steps, add a note or correct the input, then retry.');
+    const item = {};
+    for (const field of fields) {
+        const value = String(answer?.[field.name] ?? '').trim();
+        if (!value) fail(`Enter a value for ${field.name}.`);
+        if (field.options.length && !field.options.includes(value)) fail(`Choose one of the allowed values for ${field.name}.`);
+        if (!field.options.length && node.type === 'classify') fail(`No allowed values apply to this record for ${field.name}. Check its codebook branch.`);
+        item[field.name] = value;
+    }
+    const entry = retryEntry(run, index, {}, note);
+    entry.values._reviewer_decisions = [entry.values._reviewer_decisions, node.name].filter(Boolean).join(' | ');
+    const at = locateEntry(run, entry, index - 100);
+    applyResult(run, at, {status: 'ok', items: [item], decidedBy: 'reviewer', reason: 'Entered by a reviewer'});
+    return at;
+}
+
+/* Screening runs before any AI request. It only catches what cannot be feedback: no letters, too few letters,
+   or text in which every word looks like random typing (no vowels, one repeated letter, a repeated 2–3 letter
+   chunk, or five keys in a row on a QWERTY/AZERTY keyboard). Anything else goes to the workflow. */
+const VOWELS = /[aeiouyàâäáãéèêëíìîïóòôöõúùûüœæ]/u;
+const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm', 'azertyuiop', 'qsdfghjklm', 'wxcvbn'];
+const KEY_RUNS = new Set(KEY_ROWS.flatMap(row => Array.from({length: Math.max(0, row.length - 4)}, (_, i) => row.slice(i, i + 5))));
+function looksTyped(word) {
+    if (word.length >= 4 && new Set(word).size === 1) return true;
+    if (word.length >= 5 && !VOWELS.test(word)) return true;
+    if (word.length >= 6 && /^(.{2,3})\1+$/u.test(word)) return true;
+    for (let i = 0; i + 5 <= word.length; i++) if (KEY_RUNS.has(word.slice(i, i + 5))) return true;
+    return false;
+}
+export function screenText(text, {requireLetters = true, minLetters = 2, randomTyping = true} = {}) {
+    const value = String(text ?? '');
+    const letters = (value.match(/\p{L}/gu) || []).length;
+    if (requireLetters && !letters) return value.trim() ? 'No words: only numbers or symbols' : 'Empty feedback';
+    if (letters && letters < minLetters) return `Too short to be feedback (fewer than ${minLetters} letters)`;
+    const words = value.toLowerCase().match(/\p{L}+/gu) || [];
+    if (randomTyping && words.length && words.every(looksTyped)) return 'Looks like random typing';
+    return null;
+}
+
+/* People close records the workflow cannot use. Discarding keeps the record and the reason; restoring undoes it.
+   Skipped records (screening or the model) can be restored for processing. */
+export function sourceSiblings(run, index) {
+    const id = run.work[index].values._source_record_id;
+    let start = index, end = index + 1;
+    while (start > 0 && run.work[start-1].values._source_record_id === id) start--;
+    while (end < run.work.length && run.work[end].values._source_record_id === id) end++;
+    return Array.from({length: end - start}, (_, i) => start + i).filter(i => ['review', 'error'].includes(run.work[i].status));
+}
+export function discardEntries(run, indexes, reason) {
+    const text = String(reason ?? '').trim();
+    if (!text) fail('Choose or write a reason for discarding.');
+    if (text.length > NOTE_LIMIT) fail(`Keep the reason under ${NOTE_LIMIT.toLocaleString()} characters.`);
+    let count = 0;
+    for (const index of new Set(indexes)) {
+        const entry = run.work[index];
+        if (!entry || !['review', 'error'].includes(entry.status)) continue;
+        entry.previousStatus = entry.status;
+        entry.status = 'discarded';
+        entry.values._discard_reason = text;
+        entry.history.push({status: 'discarded', reason: text, at: new Date().toISOString()});
+        count++;
+    }
+    return count;
+}
+export function restoreEntry(run, index) {
+    const entry = run.work[index];
+    if (entry?.status === 'discarded') {
+        entry.status = entry.previousStatus || 'review';
+        delete entry.previousStatus; delete entry.values._discard_reason;
+    } else if (entry?.status === 'skipped') {
+        entry.status = 'pending';
+        delete entry.reason; delete entry.values._skip_reason;
+    } else fail('Only skipped or discarded records can be restored.');
+    entry.history.push({status: 'restored', at: new Date().toISOString()});
+    return entry.status;
 }

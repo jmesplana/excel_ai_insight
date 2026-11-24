@@ -693,7 +693,9 @@ function showAlert(id, message, type = 'success') {
     // Auto-hide success messages after 5 seconds
     if (type === 'success') {
         setTimeout(() => {
-            alertElement.classList.add('hidden');
+            if (alertElement.classList.contains('alert-success') && alertElement.textContent === message) {
+                alertElement.classList.add('hidden');
+            }
         }, 5000);
     }
 }
@@ -1878,8 +1880,19 @@ function addJevQuestion(preset = null) {
     typeSelect.addEventListener('change', syncType);
     optionsField.addEventListener('input', syncType);
 
+    const nameField = card.querySelector('[name="jev-output-column-name"]');
+    let previousName = '';
+    nameField.addEventListener('change', () => {
+        const nextName = nameField.value.trim();
+        // Leave a temporarily blank name alone while the user edits it.
+        if (!nextName) return;
+        updateJevOutputOrder(previousName, nextName);
+        previousName = nextName;
+    });
+
     card.querySelector('.jev-remove-btn').addEventListener('click', () => {
         if (document.querySelectorAll('.jev-question-container').length > 1) {
+            updateJevOutputOrder(previousName, null);
             disposeTooltips(card);
             card.remove();
         } else {
@@ -1918,9 +1931,22 @@ function addJevQuestion(preset = null) {
     return card;
 }
 
+// The output order is presentation metadata; keep it in step with name edits.
+function updateJevOutputOrder(previousName, nextName) {
+    if (!previousName || previousName === nextName) return;
+    const field = document.getElementById('jev-workflow-json');
+    let workflow;
+    try { workflow = JSON.parse(field.value || '{}'); } catch { return; }
+    if (!Array.isArray(workflow?.outputOrder) || !workflow.outputOrder.includes(previousName)) return;
+    workflow.outputOrder = workflow.outputOrder.flatMap(name =>
+        name === previousName ? (nextName === null ? [] : [nextName]) : [name]);
+    field.value = JSON.stringify(workflow, null, 2);
+}
+
 /* Fill a Jev question card from a template or an imported configuration. */
 function applyJevPreset(card, preset) {
     card.querySelector('[name="jev-output-column-name"]').value = preset.outputColumnName || '';
+    card.querySelector('[name="jev-output-column-name"]').dispatchEvent(new Event('change'));
     card.querySelector('[name="jev-question-type"]').value = preset.questionType || DEFAULT_QUESTION_TYPE;
     card.querySelector('[name="jev-instructions"]').value = typeof preset.instructions === 'object' ? JSON.stringify(preset.instructions, null, 2) : preset.instructions || '';
     const extras = Object.fromEntries(['review', 'dependsOn', 'allowReviewDependencies', 'branches', 'sourceBranches', 'sourceExcerpt', 'criteria'].filter(k => preset[k] !== undefined).map(k => [k, preset[k]]));
@@ -2071,7 +2097,7 @@ async function runJevClassification(isTestRun = false) {
         analyzedResult = null;
         cleanDataResults?.reset();
         await continueJevRun();
-    } catch (error) { showAlert('jev-message', escapeHtml(error.message), 'danger'); }
+    } catch (error) { showAlert('jev-message', error.message, 'danger'); }
 }
 
 function syncJevResult() {

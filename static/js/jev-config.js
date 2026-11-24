@@ -101,8 +101,18 @@ export function orderedJevOutputs(config) {
     if (config.outputOrder === undefined) return definitions;
     const order = config.outputOrder;
     const byName = new Map(definitions.map(def => [def.outputColumnName, def]));
-    if (!Array.isArray(order) || order.some(name => typeof name !== 'string' || !byName.has(name)) || new Set(order).size !== order.length) {
-        throw new Error('outputOrder must list unique, existing question or derived output names.');
+    if (!Array.isArray(order) || order.some(name => typeof name !== 'string')) {
+        throw new Error('outputOrder must be an array of result column names in Workflow and report settings (JSON).');
+    }
+    const duplicates = [...new Set(order.filter((name, index) => order.indexOf(name) !== index))];
+    const unknown = [...new Set(order.filter(name => !byName.has(name)))];
+    if (duplicates.length || unknown.length) {
+        const details = [
+            duplicates.length ? `Repeated names: ${duplicates.map(name => JSON.stringify(name)).join(', ')}.` : '',
+            unknown.length ? `Names without a question or derived output: ${unknown.map(name => JSON.stringify(name)).join(', ')}.` : '',
+        ].filter(Boolean).join(' ');
+        throw new Error(`Invalid outputOrder. ${details} Update outputOrder in Workflow and report settings (JSON) `
+            + 'to match your result column names, or remove outputOrder to use the default order.');
     }
     const selected = new Set(order);
     return [...order.map(name => byName.get(name)), ...definitions.filter(def => !selected.has(def.outputColumnName))];

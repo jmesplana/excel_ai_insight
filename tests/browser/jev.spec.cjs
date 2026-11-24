@@ -204,6 +204,48 @@ test('outputOrder imports and places calculated columns between question columns
   expect(errors).toEqual([]);
 });
 
+test('renaming and removing imported questions updates outputOrder before a test run', async ({page}) => {
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  const requests = [];
+  await stubJev(page, body => requests.push(body));
+  await openJevConfig(page);
+  const config = {format:'aidstack-insights-jev-config', version:2, sourceColumns:['Feedback'],
+    questions: ['First', 'Second', 'Third'].map(outputColumnName => ({outputColumnName,
+      questionType:'choice', instructions:'Choose a label.', options:['A', 'B']})),
+    outputOrder:['Third', 'First', 'Second']};
+  await page.locator('#jev-import-config-input').setInputFiles({name:'ordered.json', mimeType:'application/json', buffer:Buffer.from(JSON.stringify(config))});
+  await expect(page.locator('#jev-message')).toContainText('Imported');
+  await page.locator('[name="jev-output-column-name"]').first().fill('Renamed');
+  await page.locator('.jev-remove-btn').nth(1).click();
+  expect(JSON.parse(await page.locator('#jev-workflow-json').inputValue()).outputOrder).toEqual(['Third', 'Renamed']);
+  await page.locator('#jev-test-run-btn').click();
+  await expect(page.locator('#jev-message')).toContainText('Classification complete');
+  expect(requests).toHaveLength(1);
+  expect(requests[0].configs.map(q => q.outputColumnName)).toEqual(['Renamed', 'Third']);
+  await expect(page.locator('.test-run-preview-panel')).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page.locator('#jev-export-config-btn').click();
+  const saved = JSON.parse(fs.readFileSync(await (await download).path(), 'utf8'));
+  expect(saved.outputOrder).toEqual(['Third', 'Renamed']);
+  expect(errors).toEqual([]);
+});
+
+test('invalid imported outputOrder identifies stale and duplicate names before a test run', async ({page}) => {
+  let called = false;
+  await stubJev(page, () => { called = true; });
+  await openJevConfig(page);
+  const config = {format:'aidstack-insights-jev-config', version:2, sourceColumns:['Feedback'],
+    questions:[{outputColumnName:'Current', questionType:'choice', instructions:'Choose.', options:['A', 'B']}],
+    outputOrder:['Old name', 'Old name']};
+  await page.locator('#jev-import-config-input').setInputFiles({name:'stale.json', mimeType:'application/json', buffer:Buffer.from(JSON.stringify(config))});
+  await expect(page.locator('#jev-message')).toContainText('Imported');
+  await page.locator('#jev-test-run-btn').click();
+  await expect(page.locator('#jev-message')).toContainText('Repeated names: "Old name"');
+  await expect(page.locator('#jev-message')).toContainText('Names without a question or derived output: "Old name"');
+  await expect(page.locator('#jev-message')).toContainText('Workflow and report settings');
+  expect(called).toBe(false);
+});
+
 test('configurable report, failed-decision retry and checkpoint restore', async ({page}) => {
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   let requests = 0;

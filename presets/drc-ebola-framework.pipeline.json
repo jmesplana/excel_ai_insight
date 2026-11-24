@@ -1,9 +1,34 @@
 {
   "format": "aidstack-insights-pipeline",
-  "version": 1,
-  "name": "DRC feedback: translation, feedback types and message coding",
+  "version": 2,
+  "name": "DRC Ebola framework",
+  "description": "Translate DRC Ebola community feedback, split it into messages with feedback types, then code each message against the Ebola framework codebook.",
   "idColumn": "ID",
   "mappings": {},
+  "context": "Read this as oral community feedback transcribed in the DRC. A single utterance may combine French nouns, Lingala questions, Congolese Swahili verbs and other local varieties. Read across word boundaries, apostrophes and phonetic spellings. In Lingala, “kombo na yango nini” (also “kombo nayango nini”) asks what something is called; a preceding “maladie” supplies the referent. Check apparently capitalized words against nearby pronouns such as “yango” before treating them as place names. In Swahili, forms of “sikia” can express hearing or feeling. “Tuna sikiya ... maneno yenu” reports hearing the addressees’ words. “Basi” may add emphasis or a sense of “just”; the words alone do not establish agreement or hostility. “Kama ... utapata dawa” describes getting medicine under a condition. Read the full utterance for negation, quotation and additional clauses before applying these cues.",
+  "roles": {
+    "sourceTranslation": "source_translation_en",
+    "messageTranslation": "translation_en",
+    "excerpt": "feedback_excerpt",
+    "messageType": "type_of_feedback",
+    "code": "feedback_path",
+    "category": "feedback_category",
+    "tentativeColumns": [
+      "source_translation_en",
+      "translation_en",
+      "type_of_feedback",
+      "feedback_excerpt",
+      "feedback_path",
+      "feedback_category",
+      "feedback_code",
+      "feedback_sous_code"
+    ]
+  },
+  "screening": {
+    "requireLetters": true,
+    "minLetters": 2,
+    "randomTyping": true
+  },
   "nodes": [
     {
       "id": "translate-feedback",
@@ -22,7 +47,11 @@
         }
       ],
       "maxOutputTokens": 4096,
-      "responseMode": "schema"
+      "responseMode": "schema",
+      "systemNotes": "Use the collection setting stated in the workflow instructions when weighing plausible readings. A short comment can be a conversational reply to something previously said. Preserve references such as “you” or “what you said” even when the exact speaker or preceding message is unknown. Keep unstated advice, actors and disease names out of the English sentence. Translate the utterance as a sentence in natural English. Start with the language or languages that explain the grammar. A whole utterance can be Lingala. Use verb agreement to identify who does what to whom. If a dictionary gloss makes an incoherent clause, reconsider word boundaries, local spelling and the surrounding verbs. When plausible readings share a meaning, translate that shared meaning and preserve the speaker’s tone and degree of certainty. Write that English sentence in values before deciding status. Use ok when uncertainty affects only emphasis and the sentence faithfully expresses the common meaning. For review, include whatever intelligible clause the source supports in values; reserve JSON null for wholly unintelligible text. Where a material detail cannot be recovered, give a readable tentative translation with the unclear span in brackets.",
+      "valuesBeforeStatus": true,
+      "tentativeOnReview": true,
+      "recheck": "Translate the source afresh using the supplied collection setting. Check the subject and object of each verb and whether the English makes sense as something a speaker might say. If the wording supports a coherent shared meaning, give it. Keep the record in review if materially different readings remain. Identify the missing detail and explain how it changes the English meaning."
     },
     {
       "id": "extract-messages",
@@ -60,7 +89,9 @@
       "maxOutputTokens": 4096,
       "responseMode": "schema",
       "verbatimInput": "Feedback",
-      "verbatimField": "feedback_excerpt"
+      "verbatimField": "feedback_excerpt",
+      "interpretFirst": true,
+      "systemNotes": "Distinguish acknowledging or accepting what someone said from praising or thanking them. Use the observation type for a plain statement of agreement when offered. Assign an appreciation only when the wording also supports gratitude, praise, encouragement or positive evaluation. First write the speaker’s plain meaning in plainMeaning, then use it to make the requested decision. Use original wording for every verbatim output."
     },
     {
       "id": "split-classified-messages",
@@ -674,7 +705,11 @@
       ],
       "reviewValues": [
         "À vérifier : aucun code ne correspond au type fourni"
-      ]
+      ],
+      "interpretFirst": true,
+      "systemNotes": "First write the speaker’s plain meaning in plainMeaning, then use it to make the requested decision. Use original wording for every verbatim output. Read translation_en alongside the original excerpt as a working gloss. Resolve discrepancies using the excerpt. Ignore details introduced by translation. Within the supplied type branch, compare the subject and speech act with the allowed paths. Resolve references to prior speech at the level the excerpt supports. When positive reception of a message is expressed, consider an information-related path in the assigned branch. The content of the earlier message can remain unknown. Distinguish plain acknowledgment from thanks or praise. If the wording conflicts with the assigned type, describe that conflict for the reviewer. A question about the name of an illness fits other questions about the disease when there is no naming code. Hearing what responders say is an observation about response information, even if the tone is ambiguous. It takes additional evidence to code misinformation, distrust or a lack of information. Choose the most specific supported path. Use an accurate general category when more specific alternatives require facts absent from the excerpt.",
+      "recheck": "Compare the plain meaning and assigned type with the available paths, including their general categories. Select a supported path if uncertainty affects only a detail or tone. If one path is plausible but needs confirmation, return that path with status review. If no path has textual support, return status review and a null feedback_path; explain whether the assigned type or the topic prevents a match.",
+      "fallbackOption": "À vérifier : aucun code ne correspond au type fourni"
     },
     {
       "id": "codebook-8",
@@ -13995,7 +14030,9 @@
       ],
       "maxOutputTokens": 4096,
       "responseMode": "schema",
-      "minConfidence": 0.6
+      "minConfidence": 0.6,
+      "useContext": false,
+      "systemNotes": "Read translation_en alongside the original excerpt as a working gloss. Resolve discrepancies using the excerpt. Ignore details introduced by translation."
     },
     {
       "id": "codebook-3",
@@ -14035,7 +14072,9 @@
       ],
       "maxOutputTokens": 4096,
       "responseMode": "schema",
-      "minConfidence": 0.6
+      "minConfidence": 0.6,
+      "useContext": false,
+      "systemNotes": "Read translation_en alongside the original excerpt as a working gloss. Resolve discrepancies using the excerpt. Ignore details introduced by translation."
     },
     {
       "id": "codebook-4",
@@ -14064,7 +14103,9 @@
       "minConfidence": 0.6,
       "reviewValues": [
         "Needs review"
-      ]
+      ],
+      "useContext": false,
+      "systemNotes": "Read translation_en alongside the original excerpt as a working gloss. Resolve discrepancies using the excerpt. Ignore details introduced by translation."
     },
     {
       "id": "codebook-5",
@@ -14101,7 +14142,12 @@
       ],
       "maxOutputTokens": 4096,
       "responseMode": "schema",
-      "minConfidence": 0.6
+      "minConfidence": 0.6,
+      "interpretFirst": true,
+      "useContext": false,
+      "systemNotes": "First write the speaker’s plain meaning in plainMeaning, then use it to make the requested decision. Use original wording for every verbatim output. Read translation_en alongside the original excerpt as a working gloss. Resolve discrepancies using the excerpt. Ignore details introduced by translation. Apply the configured action rules. When the excerpt simply records an expectation about availability of medicine, a belief and a reassurance can warrant the same action: use “Document and monitor trend” if offered and supported. A conditional expectation alone does not establish a medicine shortage, a current symptomatic patient, a request for supplies or harmful misinformation.",
+      "recheck": "Compare the plausible readings against the allowed actions and their rules. If the same first action fits either reading, select it. If different actions genuinely depend on missing evidence, identify them and the specific phrase that prevents the decision.",
+      "recheckWithReason": true
     },
     {
       "id": "codebook-6",
@@ -14152,7 +14198,9 @@
       ],
       "maxOutputTokens": 4096,
       "responseMode": "schema",
-      "minConfidence": 0.6
+      "minConfidence": 0.6,
+      "useContext": false,
+      "systemNotes": "Read translation_en alongside the original excerpt as a working gloss. Resolve discrepancies using the excerpt. Ignore details introduced by translation."
     },
     {
       "id": "codebook-7",
@@ -14181,7 +14229,9 @@
       ],
       "maxOutputTokens": 4096,
       "responseMode": "schema",
-      "minConfidence": 0.6
+      "minConfidence": 0.6,
+      "useContext": false,
+      "systemNotes": "Read translation_en alongside the original excerpt as a working gloss. Resolve discrepancies using the excerpt. Ignore details introduced by translation."
     },
     {
       "id": "codebook-13",

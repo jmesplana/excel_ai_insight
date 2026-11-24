@@ -31,7 +31,23 @@ export async function hasSavedPipeline() {
     });
 }
 
-export async function savePipeline(run, index, replace = false) {
+// Saves run one at a time, in call order. A partial save captures its source group when called, because
+// parallel requests can insert rows (and shift indexes) before the write starts.
+let queue = Promise.resolve();
+export function savePipeline(run, index, replace = false) {
+    let group;
+    if (index !== undefined) {
+        const work = run.work, id = work[index].values._source_record_id;
+        let start = index, end = index + 1;
+        while (start > 0 && work[start-1].values._source_record_id === id) start--;
+        while (end < work.length && work[end].values._source_record_id === id) end++;
+        group = {id, entries: work.slice(start, end)};
+    }
+    const write = queue.then(() => writePipeline(run, group, replace));
+    queue = write.catch(() => {});
+    return write;
+}
+async function writePipeline(run, partial, replace) {
     const db = await database();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(['runs', 'sources'], 'readwrite', {durability:'strict'});
@@ -44,27 +60,20 @@ export async function savePipeline(run, index, replace = false) {
             const {work, classifications, nextId, pauseReason, providerCooldowns, elapsedMs, ...header} = run;
             runs.put({nextId, pauseReason, providerCooldowns, elapsedMs}, 'progress');
             runs.put(next, 'revision');
-            const full = index === undefined;
-            if (full) {
-                sources.clear();
-                runs.delete('latest');
-                runs.put(header, 'header');
+            if (partial) {
+                sources.put({entries: partial.entries, classification: classifications?.[partial.id]}, partial.id);
+                return;
             }
+            sources.clear();
+            runs.delete('latest');
+            runs.put(header, 'header');
             let block = [], blockNumber = 0;
-            let start = index ?? 0;
-            if (!full) {
-                while (start > 0 && work[start-1].values._source_record_id === work[index].values._source_record_id) start--;
-            }
+            let start = 0;
             while (start < work.length) {
                 const id = work[start].values._source_record_id;
                 let end = start + 1;
                 while (end < work.length && work[end].values._source_record_id === id) end++;
-                const group = {entries:work.slice(start,end), classification:classifications?.[id]};
-                if (!full) {
-                    sources.put(group, id);
-                    break;
-                }
-                block.push(group);
+                block.push({entries:work.slice(start,end), classification:classifications?.[id]});
                 if (block.length === 250 || end === work.length) {
                     sources.put(block, blockNumber++);
                     block = [];

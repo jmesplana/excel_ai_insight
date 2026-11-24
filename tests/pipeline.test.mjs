@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {webcrypto} from 'node:crypto';
-import {defaultWorkflow, defaultNode, portableConfig, importWorkflow, seedRun, nextWorkIndex, applyResult, retryEntry, reviewCell, scheduleRateRetry, mergeRun, validateMappings} from '../static/js/pipeline-core.js';
+import {defaultWorkflow, defaultNode, portableConfig, importWorkflow, seedRun, nextWorkIndex, applyResult, retryEntry, reviewCell, scheduleRateRetry, mergeRun, validateMappings, needsLegacyUpgrade, upgradeLegacyWorkflow, activeStep, locateEntry, rewindCursor, acceptReviewerAnswer, reviewerFields, restoreEntry, discardEntries, sourceSiblings} from '../static/js/pipeline-core.js';
 import {readSheet, readMaster, buildWorkbook} from '../static/js/pipeline-workbook.js';
 if (!globalThis.crypto) globalThis.crypto=webcrypto;
 const context=vm.createContext({});vm.runInContext(fs.readFileSync('static/vendor/xlsx.full.min.js','utf8'),context);const xlsx=context.XLSX;
@@ -163,10 +163,11 @@ test('tentative translation stays in review export until retry succeeds',()=>{
 });
 
 test('a source translation in review collects tentative codes for each message and retries as one source',()=>{
- const config=JSON.parse(fs.readFileSync('examples/ebola-feedback.pipeline.json','utf8'));
+ const config=JSON.parse(fs.readFileSync('presets/drc-ebola-framework.pipeline.json','utf8'));
  config.nodes=config.nodes.filter(n=>!n.pairedSourceStep); // Legacy saved run, before the file-wide split.
+ delete config.screening; // The numeric fixture row tests review handling here; screening is tested separately.
  const run=seedRun(config,source());
- applyResult(run,0,{status:'review',tentativeTranslation:true,reason:'Uncertain wording',drafts:{source_translation_en:'Thank you. Where?'}});
+ applyResult(run,0,{status:'review',tentative:true,reason:'Uncertain wording',drafts:{source_translation_en:'Thank you. Where?'}});
  assert.equal(run.work[0].status,'pending');
  const messages=pairs.slice(0,2).map((pair,i)=>({...pair,translation_en:['Thank you.','Where?'][i]}));
  applyResult(run,0,{status:'ok',items:messages});
@@ -190,7 +191,7 @@ test('a source translation in review collects tentative codes for each message a
 });
 
 test('DRC phases translate and classify every source, split intact pairs, then code each child',()=>{
- const config=JSON.parse(fs.readFileSync('examples/ebola-feedback.pipeline.json','utf8'));
+ const config=JSON.parse(fs.readFileSync('presets/drc-ebola-framework.pipeline.json','utf8'));
  const input=source();
  input.rows[0].values={ID:123,Feedback:'Où ? Merci || beaucoup.'};
  input.rows[1].values={ID:456,Feedback:'Bravo.'};
@@ -223,12 +224,12 @@ test('DRC phases translate and classify every source, split intact pairs, then c
 });
 
 test('retry a flagged translation once for its split source and retain matched message IDs',()=>{
- const config=JSON.parse(fs.readFileSync('examples/ebola-feedback.pipeline.json','utf8'));
+ const config=JSON.parse(fs.readFileSync('presets/drc-ebola-framework.pipeline.json','utf8'));
  config.nodes=config.nodes.slice(0,4);
  const input=source();input.rows=input.rows.slice(0,1);
  const run=seedRun(config,input);
  const items=pairs.slice(0,2).map((p,i)=>({...p,translation_en:['Thanks','Where?'][i]}));
- applyResult(run,0,{status:'review',tentativeTranslation:true,reason:'Unclear nuance'});
+ applyResult(run,0,{status:'review',tentative:true,reason:'Unclear nuance'});
  applyResult(run,0,{status:'ok',items});
  applyResult(run,0,{status:'ok',items:run.work[0].pairedItems});
  const code={status:'ok',items:[{feedback_path:'Example'}]};
@@ -247,7 +248,8 @@ test('retry a flagged translation once for its split source and retain matched m
 });
 
 test('a review path fills supported lookup drafts and keeps them outside accepted data',()=>{
- const config=JSON.parse(fs.readFileSync('examples/ebola-feedback.pipeline.json','utf8'));
+ const config=JSON.parse(fs.readFileSync('presets/drc-ebola-framework.pipeline.json','utf8'));
+ delete config.screening; // The numeric fixture row tests review handling here; screening is tested separately.
  const run=seedRun(config,source());
  const index=config.nodes.findIndex(n=>n.name==='feedback_path');
  run.work[0].node=index;
@@ -258,8 +260,197 @@ test('a review path fills supported lookup drafts and keeps them outside accepte
  retryEntry(run,0);
  applyResult(run,0,{status:'review',drafts:{feedback_path:config.nodes[index].reviewValues[0]}});
  assert.equal(run.work[0].drafts.feedback_category,undefined);
- assert.equal(reviewCell(config.nodes[index],run.work[0],'feedback_path'),'');
+ assert.equal(reviewCell(config,config.nodes[index],run.work[0],'feedback_path'),'');
  run.master.review.push({_status:'review',feedback_path:'[Needs Review] | '+config.nodes[index].reviewValues[0]});
  const rows=readSheet(buildWorkbook(run,xlsx),'Pipeline review',1,xlsx).rows;
  assert.deepEqual(rows.map(r=>[r.values.feedback_path,r.values._status]),[[null,'review'],[null,'review']]);
+});
+
+const GUIDANCE=['useContext','systemNotes','interpretFirst','valuesBeforeStatus','recheck','recheckWithReason','fallbackOption','tentativeOnReview'];
+const asVersion1=preset=>({...structuredClone(preset),version:1,context:undefined,roles:undefined,
+ nodes:preset.nodes.map(n=>Object.fromEntries(Object.entries(n).filter(([k])=>!GUIDANCE.includes(k))))});
+
+test('version 1 DRC workflows upgrade to exactly the preset settings they used to receive implicitly',()=>{
+ for(const file of ['drc-ebola-framework','drc-feedback-messages']){
+  const preset=JSON.parse(fs.readFileSync(`presets/${file}.pipeline.json`,'utf8'));
+  const legacy=portableConfig(asVersion1(preset));
+  assert.equal(needsLegacyUpgrade(legacy),true);
+  const ebola=JSON.parse(fs.readFileSync('presets/drc-ebola-framework.pipeline.json','utf8'));
+  const upgraded=upgradeLegacyWorkflow(legacy,ebola);
+  assert.equal(upgraded.context,preset.context);
+  assert.deepEqual(upgraded.nodes,portableConfig(preset).nodes,file);
+  for(const [role,column] of Object.entries(preset.roles||{})) assert.deepEqual(upgraded.roles[role],column);
+  assert.equal(needsLegacyUpgrade(upgraded),false);
+ }
+ const generic={...defaultWorkflow(),nodes:[{...defaultNode('analyze'),instructions:'Summarise.'}]};
+ assert.equal(needsLegacyUpgrade(portableConfig(generic)),false);
+});
+
+test('without roles, a tentative review stops the record instead of using DRC column names',()=>{
+ const config={...defaultWorkflow(),nodes:[{...defaultNode('analyze'),id:'t',inputs:['Feedback'],fields:[{name:'english',options:[]}],tentativeOnReview:true},defaultNode('extract')]};
+ const run=seedRun(config,source());
+ applyResult(run,0,{status:'review',tentative:true,reason:'Unclear',drafts:{english:'Thanks'}});
+ assert.equal(run.work[0].status,'review');
+ assert.equal(run.work[0].translationFlag,undefined);
+ assert.equal(run.work[0].tentativeCoding,undefined);
+});
+
+test('workflow context and roles survive export, and malformed roles are rejected',()=>{
+ const saved=portableConfig({...defaultWorkflow(),context:'Setting.',roles:{excerpt:'feedback_excerpt',tentativeColumns:['a']}});
+ assert.equal(saved.version,2);
+ assert.equal(saved.context,'Setting.');
+ assert.deepEqual(saved.roles,{excerpt:'feedback_excerpt',tentativeColumns:['a']});
+ for(const roles of [{excerpt:''},{unknown:'x'},{tentativeColumns:'a'},[]]) assert.throws(()=>portableConfig({...defaultWorkflow(),roles}),/roles/);
+ assert.throws(()=>portableConfig({...defaultWorkflow(),context:5}),/context/);
+});
+
+// Mirrors continueRun's scheduling with simulated responses: limit requests in flight, completed in random order.
+function simulate(config, rows, limit, seed) {
+ let state=seed;const random=()=>(state=(state*1103515245+12345)%2147483648)/2147483648;
+ const run=seedRun(config,{filename:'f.csv',datasetId:'d',sheet:'S',columns:['Feedback'],rows:rows.map((Feedback,i)=>({excelRow:i+2,values:{Feedback}}))});
+ const respond=(node,values)=>{
+  if(node.pairedSourceStep)return null;
+  if(node.type==='analyze')return {status:'ok',items:[{en:'EN '+values.Feedback}]};
+  if(node.type==='extract')return values.Feedback.includes('?')?{status:'review',reason:'unclear'}:
+   {status:'ok',items:values.Feedback.split('.').filter(Boolean).map(t=>({feedback_excerpt:t,type_of_feedback:t.length%2?'Odd':'Even'}))};
+  if(node.type==='classify')return {status:'ok',items:[{topic:values.feedback_excerpt.length>3?'Long':'Short'}]};
+  return {status:'ok',items:[{}]};
+ };
+ const inFlight=new Map(),cursor={phase:0,index:0};
+ for(;;){
+  while(inFlight.size<limit){
+   const index=nextWorkIndex(run,false,cursor,e=>inFlight.has(e),inFlight.size);if(index<0)break;
+   const entry=run.work[index],{node,values}=activeStep(run,entry);
+   inFlight.set(entry,{hint:index,result:respond(node,values)||{status:'ok',items:entry.pairedItems}});
+  }
+  if(!inFlight.size)break;
+  const jobs=[...inFlight];const [entry,job]=jobs[Math.floor(random()*jobs.length)];
+  inFlight.delete(entry);
+  const index=locateEntry(run,entry,job.hint);rewindCursor(cursor,index);applyResult(run,index,job.result);
+ }
+ return run;
+}
+test('parallel scheduling reaches the same records as running one request at a time',()=>{
+ const config={...defaultWorkflow(),idColumn:'',roles:{excerpt:'feedback_excerpt',messageType:'type_of_feedback'},nodes:[
+  {...defaultNode('analyze'),id:'t',inputs:['Feedback'],fields:[{name:'en',options:[]}]},
+  {...defaultNode('extract'),id:'x',inputs:['Feedback','en'],fields:[{name:'feedback_excerpt',options:[]},{name:'type_of_feedback',options:['Odd','Even']}]},
+  {...defaultNode('split'),id:'s',inputs:['feedback_excerpt','type_of_feedback'],pairedSourceStep:'x'},
+  {...defaultNode('classify'),id:'c',inputs:['feedback_excerpt'],fields:[{name:'topic',options:['Long','Short']}]},
+  {...defaultNode('validate'),id:'v',inputs:['topic']}]};
+ const rows=Array.from({length:40},(_,i)=>i%7===3?'Where? '+i:`Hi.Thanks ${i}.Water${'x'.repeat(i%4)}.`);
+ const summary=run=>run.work.map(e=>[e.values._record_key,e.status,e.values.topic,e.values.feedback_excerpt]);
+ const sequential=summary(simulate(config,rows,1,1));
+ assert.equal(sequential.filter(r=>r[1]==='ok').length,102);
+ assert.equal(sequential.filter(r=>r[1]==='review').length,6);
+ for(const seed of [2,3,4,5,6]){
+  const parallel=simulate(config,rows,5,seed);
+  assert.deepEqual(summary(parallel),sequential,'seed '+seed);
+  // Excel rows follow the same order: accepted rows in the master, flagged ones on the review sheet.
+  const order=r=>{const m=mergeRun(r);return [m.rows.map(x=>x._record_key),m.review.map(x=>x._record_key)];};
+  assert.deepEqual(order(parallel),order(simulate(config,rows,1,1)),'export order, seed '+seed);
+  // Feedback IDs are the one thing assigned in completion order.
+  const byKey=r=>r.work.map(e=>e.values._feedback_id);
+  if(seed===2) assert.notDeepEqual(byKey(parallel),byKey(simulate(config,rows,1,1)));
+  const ids=parallel.work.map(e=>e.values._feedback_id);
+  assert.equal(new Set(ids).size,ids.length);
+ }
+});
+
+test('a reviewer note stays with the record and its split messages, and is exported',()=>{
+ const run=seedRun(defaultWorkflow(),source());
+ applyResult(run,0,{status:'review',reason:'Unclear'});
+ const entry=retryEntry(run,0,{},'  “maso” means words  ');
+ assert.equal(entry.values._reviewer_note,'“maso” means words');
+ assert.equal(entry.history.at(-1).note,'“maso” means words');
+ applyResult(run,0,{status:'ok',items:pairs});
+ assert.ok(run.work.slice(0,3).every(e=>e.values._reviewer_note==='“maso” means words'));
+ assert.equal(mergeRun(run).rows[0]._reviewer_note,'“maso” means words');
+ assert.throws(()=>{applyResult(run,3,{status:'review',reason:'x'});retryEntry(run,3,{},'x'.repeat(5001));},/under 5,000/);
+});
+
+test('a reviewer answer keeps to the codebook branch, then the record continues',()=>{
+ const config={...defaultWorkflow(),idColumn:'',nodes:[
+  {...defaultNode('classify'),id:'c',inputs:['Feedback','kind'],fields:[{name:'code',options:[]}],fallbackOption:'None',
+   sourceBranches:[{when:{kind:'Q'},options:[{label:'Ask',description:'d'},'None']},{when:{kind:'R'},options:['Request']}]},
+  {...defaultNode('lookup'),id:'l',inputs:['code'],output:'group',table:[{when:{code:'Ask'},value:'Questions'}]}]};
+ const run=seedRun(config,{filename:'f',datasetId:'d',sheet:'S',columns:['Feedback','kind'],rows:[{excelRow:2,values:{Feedback:'Where?',kind:'Q'}}]});
+ applyResult(run,0,{status:'review',reason:'Unsure',drafts:{code:'Ask'}});
+ assert.deepEqual(reviewerFields(config.nodes[0],run.work[0].values),[{name:'code',options:['Ask']}]);
+ assert.throws(()=>acceptReviewerAnswer(run,0,{code:'Request'}),/allowed values/);
+ assert.throws(()=>acceptReviewerAnswer(run,0,{code:'None'}),/allowed values/);
+ const at=acceptReviewerAnswer(run,0,{code:'Ask'},'Asked where the centre is');
+ const entry=run.work[at];
+ assert.equal(entry.values.code,'Ask');
+ assert.equal(entry.status,'pending');
+ assert.equal(entry.node,1);
+ assert.equal(entry.values._reviewer_decisions,'Classify');
+ assert.equal(entry.history.at(-1).provider,'reviewer');
+ assert.throws(()=>acceptReviewerAnswer(run,at,{group:'x'}),/flagged/);
+ const extract=seedRun(defaultWorkflow(),source());
+ applyResult(extract,0,{status:'review',reason:'Unclear'});
+ assert.throws(()=>acceptReviewerAnswer(extract,0,{}),/add a note/);
+});
+
+test('a reviewer translation reopens a flagged DRC source and codes its messages again',()=>{
+ const config=JSON.parse(fs.readFileSync('presets/drc-ebola-framework.pipeline.json','utf8'));
+ const run=seedRun(config,{filename:'f',datasetId:'d',sheet:'S',columns:['ID','Feedback'],rows:[{excelRow:2,values:{ID:1,Feedback:'Tondimi maso bolobi'}}]});
+ applyResult(run,0,{status:'review',tentative:true,reason:'Unclear word',drafts:{source_translation_en:'We accept eyes'}});
+ // The flagged translation still runs extraction and coding, then waits for review as one source.
+ const cursor={phase:0,index:0};
+ for(let index;(index=nextWorkIndex(run,false,cursor))>=0;){
+  const entry=run.work[index],{node,values}=activeStep(run,entry);
+  const field=reviewerFields(node,values)[0];
+  const match=node.type==='lookup'&&node.table.find(r=>node.inputs.every(k=>r.when[k]===values[k]));
+  applyResult(run,index,node.pairedSourceStep?{status:'ok',items:entry.pairedItems}
+   :node.type==='extract'?{status:'ok',items:[{feedback_excerpt:'Tondimi maso bolobi',type_of_feedback:'Appréciations',translation_en:'We accept'}]}
+   :node.type==='lookup'?(match?{status:'ok',items:[{[node.output]:match.value}]}:{status:'review',reason:'none'})
+   :{status:'ok',items:[{[field.name]:field.options[0]}]});
+ }
+ assert.equal(run.work.length,1);
+ assert.equal(run.work[0].status,'review');
+ assert.ok(run.work[0].translationFlag);
+ const at=acceptReviewerAnswer(run,0,{source_translation_en:'We accept your words.'});
+ const entry=run.work[at];
+ assert.equal(entry.translationFlag,undefined);
+ assert.equal(entry.values.source_translation_en,'We accept your words.');
+ assert.equal(config.nodes[entry.node].id,'extract-messages');
+ assert.equal(entry.status,'pending');
+});
+
+test('screening skips rows that cannot be feedback before any AI step, and they can be processed anyway',()=>{
+ const config=JSON.parse(fs.readFileSync('presets/drc-ebola-framework.pipeline.json','utf8'));
+ const texts=['12345','','sdfgh qwerty','jjjjjj','Tondimi maso bolobi','Kama una cikia ile utapata dawa','polepole','MSF','x'];
+ const run=seedRun(config,{filename:'f',datasetId:'d',sheet:'S',columns:['ID','Feedback'],rows:texts.map((Feedback,i)=>({excelRow:i+2,values:{ID:i,Feedback}}))});
+ assert.deepEqual(run.work.map(e=>e.status),['skipped','skipped','skipped','skipped','pending','pending','pending','pending','skipped']);
+ assert.equal(run.work[0].values._skip_reason,'No words: only numbers or symbols');
+ assert.equal(run.work[2].values._skip_reason,'Looks like random typing');
+ assert.equal(run.work[0].values._feedback_id,undefined);
+ assert.equal(nextWorkIndex(run,false,{phase:0,index:0}),4);
+ const merged=mergeRun(run);
+ assert.equal(merged.review.filter(r=>r._status==='skipped').length,5);
+ assert.equal(merged.logs.at(-1).skipped,5);
+ assert.equal(restoreEntry(run,0),'pending');
+ assert.equal(run.work[0].values._skip_reason,undefined);
+ assert.equal(nextWorkIndex(run,false,{phase:0,index:0}),0);
+ const again=seedRun({...config,screening:undefined},{filename:'f',datasetId:'d2',sheet:'S',columns:['ID','Feedback'],rows:[{excelRow:2,values:{ID:1,Feedback:'12345'}}]});
+ assert.equal(again.work[0].status,'pending');
+});
+
+test('the model can skip a record; discarding needs a reason, can cover a whole source row, and can be restored',()=>{
+ const run=seedRun(defaultWorkflow(),source());
+ applyResult(run,0,{status:'skipped',reason:'Random keystrokes'});
+ assert.equal(run.work[0].status,'skipped');
+ assert.equal(run.work[0].values._skip_reason,'Model: Random keystrokes');
+ restoreEntry(run,0);
+ applyResult(run,0,{status:'ok',items:pairs});
+ for(const i of [0,1,2]) run.work[i].status='review';
+ assert.deepEqual(sourceSiblings(run,1),[0,1,2]);
+ assert.throws(()=>discardEntries(run,[1],'  '),/reason/);
+ assert.equal(discardEntries(run,sourceSiblings(run,1),'Test or random typing'),3);
+ assert.ok(run.work.slice(0,3).every(e=>e.status==='discarded' && e.values._discard_reason==='Test or random typing'));
+ assert.equal(discardEntries(run,[0],'again'),0);
+ assert.equal(mergeRun(run).review.filter(r=>r._discard_reason).length,3);
+ assert.equal(restoreEntry(run,1),'review');
+ assert.equal(run.work[1].values._discard_reason,undefined);
+ assert.throws(()=>restoreEntry(run,1),/Only skipped or discarded/);
 });

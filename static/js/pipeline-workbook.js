@@ -1,4 +1,4 @@
-import {REVIEW_SHEET, LOG_SHEET, AUDIT_SHEET, META, mergeRun, outputs} from './pipeline-core.js?v=3';
+import {REVIEW_SHEET, LOG_SHEET, AUDIT_SHEET, META, mergeRun, outputs} from './pipeline-core.js?v=4';
 /** Read physical Excel row numbers before skipping empty rows. */
 export function readSheet(workbook, name, headerRow = 1, xlsx = XLSX) {
     const ws = workbook.Sheets[name];
@@ -77,9 +77,10 @@ export function buildWorkbook(run, xlsx = XLSX) {
         const name = 'Pipeline classifications';
         const prior = wb.Sheets[name] ? xlsx.utils.sheet_to_json(wb.Sheets[name]) : [];
         const records = [...prior.filter(r=>r.run_id!==run.runId), ...Object.values(run.classifications).map(row=>({...row,run_id:run.runId}))];
-        setSheet(name,records,['run_id','_source_record_id','_original_id','type_of_feedback','feedback_excerpt','translation_en']);
+        const roles=run.config.roles || {};
+        setSheet(name,records,['run_id','_source_record_id','_original_id',...[roles.messageType,roles.excerpt,roles.messageTranslation].filter(Boolean)]);
     }
-    setSheet(LOG_SHEET, merged.logs, ['run_id', 'source_dataset_id', 'source_file', 'source_sheet', 'imported_at', 'source_rows', 'complete', 'accepted', 'review', 'skipped_sources', 'workflow']);
+    setSheet(LOG_SHEET, merged.logs, ['run_id', 'source_dataset_id', 'source_file', 'source_sheet', 'imported_at', 'source_rows', 'complete', 'accepted', 'review', 'skipped', 'skipped_sources', 'workflow']);
     const oldAudit = run.master.workbook?.Sheets[AUDIT_SHEET] ? xlsx.utils.sheet_to_json(run.master.workbook.Sheets[AUDIT_SHEET]) : [];
     const audit = run.work.flatMap(e => e.history.map(h => ({run_id: run.runId, record_key: e.values._record_key, feedback_id: e.values._feedback_id || '', ...h, details: JSON.stringify(h.details || {}), before: JSON.stringify(h.before || {}), after: JSON.stringify(h.after || {})})));
     setSheet(AUDIT_SHEET, [...oldAudit.filter(a => a.run_id !== run.runId), ...audit], ['run_id', 'record_key', 'feedback_id', 'step', 'name', 'provider', 'model', 'at', 'status', 'reason', 'details', 'before', 'after']);

@@ -11,6 +11,9 @@ from .pipeline_errors import provider_failure
 bp = Blueprint('pipeline', __name__)
 PROVIDERS = ('openai', 'azure', 'ollama', 'jev', 'laya')
 KINDS = ('extract', 'analyze', 'classify', 'split', 'validate', 'lookup')
+MAX_GUIDANCE = 50000
+# Generic second look for extraction reviews. A workflow can replace it with a step's `recheck`, or disable it with "".
+DEFAULT_EXTRACTION_RECHECK = "Read the original again in the configured local context. Consider ordinary spoken forms and spelling variants. For each distinct message, identify the strongest reading and check whether a plausible alternative changes its boundaries or any required field. If the required outputs are supported, return the verbatim pairs. If a decision still depends on missing evidence, cite the exact wording and explain which decision it prevents. Respect the workflow review rules."
 
 
 def require(condition, message):
@@ -43,6 +46,12 @@ def validate_node(node):
             require(not labels or names(labels), 'Allowed values must be distinct, nonempty text.')
         if kind == 'extract':
             require(node.get('verbatimField') in [f['name'] for f in fields] and node.get('verbatimInput') in node['inputs'], 'Extraction needs a verbatim output and its source input.')
+        for key in ('useContext', 'interpretFirst', 'valuesBeforeStatus', 'recheckWithReason', 'tentativeOnReview', 'allowSkip'):
+            require(isinstance(node.get(key, False), bool), f'{key} must be true or false.')
+        for key in ('systemNotes', 'recheck'):
+            require(isinstance(node.get(key, ''), str) and len(node.get(key, '')) <= MAX_GUIDANCE, f'{key} must be text up to 50,000 characters.')
+        require(node.get('fallbackOption') is None or (kind == 'classify' and isinstance(node['fallbackOption'], str) and bool(node['fallbackOption'].strip())),
+                'fallbackOption is a classification label.')
         require(isinstance(node.get('reviewValues', []), list) and all(isinstance(v, str) for v in node.get('reviewValues', [])), 'Review values must be an array of text labels.')
         if kind == 'classify':
             require(len(fields) == 1, 'A classification step has one output. Add more steps for dependent decisions.')
@@ -115,14 +124,14 @@ def parse_values(value, fields):
     for field in fields:
         result = value[field['name']]
         require(isinstance(result, str) and bool(result.strip()), 'An output is empty or has the wrong type.')
-        if field['name'] in ('source_translation_en', 'translation_en'):
-            require(result.strip().casefold() != 'null', 'The model returned a placeholder instead of a translation.')
+        if not field.get('options'):
+            require(result.strip().casefold() != 'null', 'The model returned a placeholder instead of a text answer.')
         if field.get('options'):
             require(result in [label(o) for o in field['options']], 'Response contains a value outside the allowed categories.')
     return value
 
 
-def llm_step(node, record, credentials):
+def llm_step(node, record, credentials, context='', note=''):
     fields = resolved_fields(node, record)
     properties = {}
     for field in fields:
@@ -132,24 +141,23 @@ def llm_step(node, record, credentials):
         properties[field['name']] = prop
     values_schema = object_schema(properties)
     extraction = node['type'] == 'extract'
-    workflow_text = node['instructions'].casefold()
-    drc_feedback = any(term in workflow_text for term in ('congolese swahili', 'democratic republic of the congo', 'in the drc'))
-    translation = drc_feedback and node['type'] == 'analyze' and any(f['name'] in ('translation_en', 'source_translation_en') for f in fields)
-    action = node['type'] == 'classify' and fields[0]['name'] == 'feedback_action' and drc_feedback
-    path = node['type'] == 'classify' and fields[0]['name'] == 'feedback_path' and drc_feedback
-    no_code = 'À vérifier : aucun code ne correspond au type fourni'
+    fallback = node.get('fallbackOption') if node['type'] == 'classify' else None
+    recheck = node.get('recheck', DEFAULT_EXTRACTION_RECHECK if extraction else '')
+    tentative = bool(node.get('tentativeOnReview'))
     interpretation = {}
-    if drc_feedback and (extraction or action or path):
+    if node.get('interpretFirst'):
         interpretation['plainMeaning'] = {
             'type': 'string',
             'description': 'A short English rendering of what the speaker says, preserving ambiguous references and tone. Use an empty string if unintelligible.'
         }
-    schema = object_schema({**interpretation, 'status': {'type': 'string', 'enum': ['ok', 'review']},
-                            'reason': {'type': 'string'},
-                            'items' if extraction else 'values': {'type': 'array', 'items': values_schema} if extraction else values_schema})
-    if translation:
-        # Structured-output models emit properties in schema order. Elicit the translation before the review decision.
-        schema = object_schema({'values': values_schema, 'status': schema['properties']['status'], 'reason': {'type': 'string'}})
+    result_key = 'items' if extraction else 'values'
+    result_schema = {'type': 'array', 'items': values_schema} if extraction else values_schema
+    status_schema = {'type': 'string', 'enum': ['ok', 'review', 'skip'] if node.get('allowSkip') else ['ok', 'review']}
+    if node.get('valuesBeforeStatus'):
+        # Structured-output models emit properties in schema order: elicit the answer before the review decision.
+        schema = object_schema({**interpretation, result_key: result_schema, 'status': status_schema, 'reason': {'type': 'string'}})
+    else:
+        schema = object_schema({**interpretation, 'status': status_schema, 'reason': {'type': 'string'}, result_key: result_schema})
     settings = {**credentials, 'provider': node['provider']}
     if node.get('model'):
         settings[{'azure': 'azureDeployment', 'ollama': 'ollamaModel'}.get(node['provider'], 'model')] = node['model']
@@ -181,61 +189,24 @@ def llm_step(node, record, credentials):
                    'unresolved decision in the review reason. Extraction does not require a full translation or a downstream topic code. '
                    'Keep repeated types and repeated source occurrences. Copy verbatim excerpts as exact contiguous substrings, including original punctuation and spacing. '
                    'Do not split solely because of punctuation or a language change. Do not silently omit difficult messages: mark the whole record review if extraction is incomplete. ')
-    if drc_feedback and (extraction or path or node['type'] == 'analyze'):
-        system += ('Read this as oral community feedback transcribed in the DRC. A single utterance may combine French nouns, '
-                   'Lingala questions, Congolese Swahili verbs and other local varieties. Read across word boundaries, '
-                   'apostrophes and phonetic spellings. In Lingala, “kombo na yango nini” (also “kombo nayango nini”) '
-                   'asks what something is called; a preceding “maladie” supplies the referent. Check apparently capitalized '
-                   'words against nearby pronouns such as “yango” before treating them as place names. In Swahili, forms of '
-                   '“sikia” can express hearing or feeling. “Tuna sikiya ... maneno yenu” reports hearing the addressees’ '
-                   'words. “Basi” may add emphasis or a sense of “just”; the words alone do not establish agreement '
-                   'or hostility. “Kama ... utapata dawa” describes getting medicine under a condition. Read the full '
-                   'utterance for negation, quotation and additional clauses before applying these cues. ')
-    if drc_feedback and extraction:
-        system += ('Distinguish acknowledging or accepting what someone said from praising or thanking them. '
-                   'Use the observation type for a plain statement of agreement when offered. Assign an appreciation '
-                   'only when the wording also supports gratitude, praise, encouragement or positive evaluation. ')
-    if interpretation:
-        system += ('First write the speaker’s plain meaning in plainMeaning, then use it to make the requested decision. '
-                   'Use original wording for every verbatim output. ')
-    if translation:
-        system += ('Use the collection setting stated in the workflow instructions when weighing plausible readings. '
-                   'A short comment can be a conversational reply to something previously said. Preserve references '
-                   'such as “you” or “what you said” even when the exact speaker or preceding message is unknown. '
-                   'Keep unstated advice, actors and disease names out of the English sentence. '
-                   'Translate the utterance as a sentence in natural English. Start with the language or languages '
-                   'that explain the grammar. A whole utterance can be Lingala. Use verb agreement to identify who '
-                   'does what to whom. If a dictionary gloss makes an incoherent clause, reconsider word boundaries, '
-                   'local spelling and the surrounding verbs. When plausible readings share a meaning, translate that '
-                   'shared meaning and preserve the speaker’s tone and degree of certainty. Write that English sentence '
-                   'in values before deciding status. Use ok when uncertainty affects only emphasis and the sentence '
-                   'faithfully expresses the common meaning. For review, include whatever intelligible clause the '
-                   'source supports in values; reserve JSON null for wholly unintelligible text. Where a material detail '
-                   'cannot be recovered, give a readable tentative translation with the unclear span in brackets. ')
-    if node['type'] == 'classify' and 'translation_en' in record and drc_feedback:
-        system += ('Read translation_en alongside the original excerpt as a working gloss. Resolve discrepancies using the '
-                   'excerpt. Ignore details introduced by translation. ')
-    if path:
-        system += ('Within the supplied type branch, compare the subject and speech act with the allowed paths. '
-                   'Resolve references to prior speech at the level the excerpt supports. When positive reception of a '
-                   'message is expressed, consider an information-related path in the assigned branch. The content of '
-                   'the earlier message can remain unknown. Distinguish plain acknowledgment from thanks or praise. '
-                   'If the wording conflicts with the assigned type, describe that conflict for the reviewer. '
-                   'A question about the name of an illness fits other questions about the disease when there is no naming code. '
-                   'Hearing what responders say is an observation about response information, even if the tone is ambiguous. '
-                   'It takes additional evidence to code misinformation, distrust or a lack of information. '
-                   'Choose the most specific supported path. Use an accurate general category when more specific alternatives '
-                   'require facts absent from the excerpt. ')
-    if action:
-        system += ('Apply the configured action rules. When the excerpt simply records an expectation about availability '
-                   'of medicine, a belief and a reassurance can warrant the same action: use “Document and monitor trend” '
-                   'if offered and supported. A conditional expectation alone does not establish a medicine shortage, '
-                   'a current symptomatic patient, a request for supplies or harmful misinformation. ')
+    # Workflow context (e.g. language notes) and step guidance come from the workflow file, never from code.
+    for part in (context if node.get('useContext', True) else '', node.get('systemNotes', '')):
+        if part and part.strip():
+            system += part.strip() + ' '
+    if node.get('allowSkip'):
+        system += ('Return status skip only when the record contains no language at all, such as random keystrokes, '
+                   'test typing or meaningless characters, and give the reason. Short, informal, misspelled, unfamiliar '
+                   'or mixed-language text is language: never skip it; use review if its meaning is unclear. ')
+    if note:
+        system += ('A human reviewer added reviewerNote about this record. Treat it as trusted guidance on meaning, '
+                   'context or language, not as part of the feedback. Never quote it as an excerpt. ')
     format_spec = {'type': 'json_object'} if node.get('responseMode') == 'json' else {'type': 'json_schema', 'json_schema': {'name': 'pipeline_step', 'strict': True, 'schema': schema}}
     prompt_data = {'instructions': instruction, 'outputs': fields, 'record': record, 'decisions': record}
+    if note:
+        prompt_data['reviewerNote'] = note
     if node.get('responseMode') == 'json':
         prompt_data['schema'] = schema
-    translation_drafts = {}
+    kept_drafts = {}
     try:
         for attempt in range(2):
             try:
@@ -252,22 +223,26 @@ def llm_step(node, record, credentials):
                     parsed = json.loads(choice.message.content or '')
                 except (ValueError, TypeError):
                     raise AnalysisOutputError('The model did not return valid JSON.')
-                require(isinstance(parsed, dict) and parsed.get('status') in ('ok', 'review') and isinstance(parsed.get('reason'), str), 'Invalid structured response.')
-                fallback_path = (path and no_code in node.get('reviewValues', []) and isinstance(parsed.get('values'), dict)
-                                 and parsed['values'].get('feedback_path') == no_code)
-                if parsed['status'] == 'review' or fallback_path:
+                require(isinstance(parsed, dict) and parsed.get('status') in status_schema['enum'] and isinstance(parsed.get('reason'), str), 'Invalid structured response.')
+                if parsed['status'] == 'skip':
+                    return {'status': 'skipped', 'reason': parsed['reason'][:1000] or 'Not language.', 'model': model}
+                # Choosing the configured fallback ("no code fits") is a review outcome, eligible for one recheck.
+                chose_fallback = (fallback is not None and isinstance(parsed.get('values'), dict)
+                                  and parsed['values'].get(fields[0]['name']) == fallback)
+                if parsed['status'] == 'review' or chose_fallback:
                     review = {'status': 'review', 'reason': parsed['reason'][:1000] or 'Insufficient evidence.', 'model': model}
-                    if translation:
-                        review['tentativeTranslation'] = True
+                    if tentative:
+                        review['tentative'] = True
                     candidates = parsed.get('items') if extraction else [parsed.get('values')]
                     if isinstance(candidates, list):
-                        drafts = translation_drafts if translation else {}
+                        # Tentative steps keep the first attempt's draft if the recheck returns nothing usable.
+                        drafts = kept_drafts if tentative else {}
                         for field in fields:
                             key = field['name']
                             choices = [label(o) for o in field.get('options', [])]
                             values = [c.get(key) for c in candidates[:100] if isinstance(c, dict)]
                             values = [v for v in values if isinstance(v, str) and v.strip() and (not choices or v in choices)]
-                            if key in ('source_translation_en', 'translation_en'):
+                            if not choices:
                                 values = [v for v in values if v.strip().casefold() != 'null']
                             if extraction and key == node['verbatimField']:
                                 values = [v for v in values if v in str(record[node['verbatimInput']])]
@@ -275,33 +250,14 @@ def llm_step(node, record, credentials):
                                 drafts[key] = ' | '.join(values)
                         if drafts:
                             review['drafts'] = drafts
-                    if attempt == 0 and (extraction or action or path or translation):
-                        if action:
-                            prompt_data['reviewCheck'] = ('Compare the plausible readings against the allowed actions and their rules. '
-                                'If the same first action fits either reading, select it. If different actions genuinely depend '
-                                'on missing evidence, identify them and the specific phrase that prevents the decision.')
-                        elif path:
-                            prompt_data['reviewCheck'] = ('Compare the plain meaning and assigned type with the available paths, including '
-                                'their general categories. Select a supported path if uncertainty affects only a detail or tone. '
-                                'If one path is plausible but needs confirmation, return that path with status review. If no path '
-                                'has textual support, return status review and a null feedback_path; explain whether the assigned '
-                                'type or the topic prevents a match.')
-                            options = [o for o in fields[0]['options'] if label(o) != no_code]
-                            if options and no_code in node.get('reviewValues', []):
+                    if attempt == 0 and recheck:
+                        prompt_data['reviewCheck'] = recheck
+                        if fallback:
+                            options = [o for o in fields[0]['options'] if label(o) != fallback]
+                            if options:
                                 fields[0] = {**fields[0], 'options': options}
-                                properties['feedback_path']['enum'] = [label(o) for o in options] + [None]
-                        elif translation:
-                            prompt_data['reviewCheck'] = ('Translate the source afresh using the supplied collection setting. Check the subject and object of each verb '
-                                'and whether the English makes sense as something a speaker might say. If the wording supports '
-                                'a coherent shared meaning, give it. Keep the record in review if materially different readings '
-                                'remain. Identify the missing detail and explain how it changes the English meaning.')
-                        else:
-                            prompt_data['reviewCheck'] = ('Read the original again in the configured local context. Consider ordinary spoken forms '
-                                'and spelling variants. For each distinct message, identify the strongest reading and check whether a plausible '
-                                'alternative changes its boundaries or any required field. If the required outputs are supported, return the '
-                                'verbatim pairs. If a decision still depends on missing evidence, cite the exact wording and explain which '
-                                'decision it prevents. Respect the workflow review rules.')
-                        if action:
+                                properties[fields[0]['name']]['enum'] = [label(o) for o in options] + [None]
+                        if node.get('recheckWithReason'):
                             prompt_data['previousReviewReason'] = parsed['reason'][:1000]
                         continue
                     return review
@@ -321,7 +277,7 @@ def llm_step(node, record, credentials):
         client.close()
 
 
-def execute_step(node, full_record, credentials):
+def execute_step(node, full_record, credentials, context='', note=''):
     require(isinstance(full_record, dict), 'Record must be an object.')
     require(all(k in full_record for k in node['inputs']), 'A required input column is missing.')
     record = {k: full_record[k] for k in node['inputs']}
@@ -362,7 +318,7 @@ def execute_step(node, full_record, credentials):
         records, calls = evaluate_row(context, [question], [], lambda state, questions: classify(state, questions, config=config, details=True))
         result = records[field['name']]
         return {'status': result['status'], 'reason': result.get('reason'), 'items': [{field['name']: result['value']}], 'model': config['model'], 'audit': records}
-    return llm_step(node, record, credentials)
+    return llm_step(node, record, credentials, context, note)
 
 
 @bp.route('/pipeline')
@@ -380,12 +336,36 @@ def refresh_pipeline_assets(response):
     return response
 
 
-@bp.route('/api/pipeline/templates/<name>')
-def workflow_template(name):
-    templates = {'ebola': 'ebola-feedback.pipeline.json', 'paired': 'paired-feedback.pipeline.json'}
-    if name not in templates:
+PRESETS = Path(__file__).resolve().parent.parent / 'presets'
+SUFFIX = '.pipeline.json'
+
+
+def preset_files():
+    return sorted(PRESETS.glob('*' + SUFFIX))
+
+
+@bp.route('/api/pipeline/presets')
+def list_presets():
+    """Every workflow file in presets/ is offered in Pipeline Studio. Adding a framework needs no code change."""
+    listing = []
+    for path in preset_files():
+        try:
+            data = json.loads(path.read_text(encoding='utf-8'))
+        except ValueError:
+            continue
+        if data.get('format') != 'aidstack-insights-pipeline':
+            continue
+        listing.append({'id': path.name[:-len(SUFFIX)], 'name': data.get('name') or path.name,
+                        'description': data.get('description', ''), 'steps': len(data.get('nodes', []))})
+    return jsonify(presets=listing)
+
+
+@bp.route('/api/pipeline/presets/<preset_id>')
+def get_preset(preset_id):
+    match = next((p for p in preset_files() if p.name == preset_id + SUFFIX), None)
+    if match is None:
         abort(404)
-    return send_file(Path(__file__).resolve().parent.parent / 'examples' / templates[name], mimetype='application/json')
+    return send_file(match, mimetype='application/json')
 
 
 @bp.route('/api/pipeline/validate', methods=['POST'])
@@ -407,10 +387,14 @@ def step():
         require(isinstance(data, dict), 'Invalid step request.')
         node = validate_node(data.get('node'))
         require(isinstance(data.get('credentials', {}), dict), 'Invalid credentials.')
+        context = data.get('context', '')
+        require(isinstance(context, str) and len(context) <= MAX_GUIDANCE, 'Workflow context must be text up to 50,000 characters.')
+        note = data.get('note', '')
+        require(isinstance(note, str) and len(note) <= 5000, 'A reviewer note must be text up to 5,000 characters.')
     except AnalysisOutputError as exc:
         return jsonify(error=str(exc)), 400
     try:
-        result = execute_step(node, data.get('record'), data.get('credentials', {}))
+        result = execute_step(node, data.get('record'), data.get('credentials', {}), context, note.strip())
         if result.get('status') == 'ok' and any(v in node.get('reviewValues', []) for item in result.get('items', []) for v in item.values()):
             result.update(status='review', reason='The selected value is configured to require human review.')
         return jsonify(result)

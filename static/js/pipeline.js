@@ -1,8 +1,8 @@
 import {savePipeline, loadPipeline, hasSavedPipeline} from './pipeline-checkpoint.js';
 import {ScreenWakeLock} from './screen-wake-lock.js';
 import {ProgressTimer, formatDuration} from './progress-timer.js';
-import {defaultWorkflow, defaultNode, portableConfig, importWorkflow, requiredInputs, outputs, seedRun, activeStep, nextWorkIndex, applyResult, retryEntry, reviewCell, scheduleRateRetry, digest} from './pipeline-core.js?v=3';
-import {readSheet, readMaster} from './pipeline-workbook.js?v=3';
+import {defaultWorkflow, defaultNode, portableConfig, importWorkflow, requiredInputs, outputs, seedRun, activeStep, nextWorkIndex, applyResult, retryEntry, reviewCell, scheduleRateRetry, digest, needsLegacyUpgrade, upgradeLegacyWorkflow, locateEntry, rewindCursor, reviewerFields, acceptReviewerAnswer, NOTE_LIMIT, sourceSiblings, discardEntries, restoreEntry} from './pipeline-core.js?v=4';
+import {readSheet, readMaster} from './pipeline-workbook.js?v=4';
 import {classifierFetch} from './classifier-transport.js';
 import {initProviderSettings} from './provider-settings.js';
 
@@ -12,7 +12,8 @@ const lines = value => value.split('\n').map(v => v.trim()).filter(Boolean);
 const option = (value, selected, label = value) => `<option value="${esc(value)}"${value === selected ? ' selected' : ''}>${esc(label)}</option>`;
 let config = defaultWorkflow(), source = null, sourceIdentity = null, sourceWorkbook = null, master = {rows: [], review: [], logs: []}, masterWorkbook = null, run = null, running = false, starting = false, stopRequested = false;
 let sourceToken = 0, masterToken = 0;
-let stage = 'workflow', expandedNode = 0, preset = 'paired', presetToken = 0;
+let stage = 'workflow', expandedNode = 0, preset = '', presetToken = 0, presets = [];
+const DEFAULT_PRESET = 'drc-feedback-messages', LEGACY_PRESET = 'drc-ebola-framework';
 const friendly = value => String(value || '').replaceAll('_', ' ');
 const providerName = value => ({azure:'Azure',openai:'OpenAI',jev:'Jev',laya:'Laya',ollama:'Ollama'})[value] || 'No AI';
 const jsonDownload = (data, name) => {
@@ -49,7 +50,7 @@ function renderOverview() {
     const groups=[];
     config.nodes.forEach((node,i)=>{
         const title = config.nodes[i+1]?.pairedSourceStep === node.id ? 'Classify feedback types' :
-            node.pairedSourceStep ? 'Split classified rows' : node.id==='translate-feedback' ? 'Translate full feedback' : titles[node.type];
+            node.pairedSourceStep ? 'Split classified rows' : titles[node.type];
         if(groups.at(-1)?.title===title) groups.at(-1).count++;
         else groups.push({type:node.type,title,count:1});
     });
@@ -57,7 +58,10 @@ function renderOverview() {
     const providers=[...new Set(config.nodes.filter(n=>n.provider).map(n=>providerName(n.provider)))];
     $('workflow-output-list').textContent=[...new Set(config.nodes.flatMap(outputs))].join(', ');
     $('workflow-summary').textContent=`${config.nodes.length} configured step${config.nodes.length===1?'':'s'}${providers.length?' · '+providers.join(', '):' · No AI connection needed'}. Original IDs and source references are kept automatically.`;
-    for(const key of ['paired','ebola']) {const button=$('preset-'+key);button.classList.toggle('selected',preset===key);button.setAttribute('aria-pressed',String(preset===key));}
+    const fromPreset=presets.some(p=>p.id===preset);
+    $('preset-select').value=fromPreset?preset:'';
+    $('preset-description').textContent=fromPreset?presets.find(p=>p.id===preset).description:'Choose a preset to replace the current workflow.';
+    $('preset-choice').classList.toggle('selected',fromPreset);
     $('import-config').classList.toggle('selected',preset==='imported');
     $('to-files').disabled=!config.nodes.length || running || starting;
 }
@@ -66,25 +70,37 @@ function refreshFileActions() {
     $('test-run').disabled=!ready;$('start-run').disabled=!ready;
     $('test-run').textContent=`Test ${$('test-limit').value || 3} rows`;
 }
+async function fetchPreset(id) {
+    const response=await fetch('/api/pipeline/presets/'+encodeURIComponent(id));
+    if(!response.ok)throw new Error('Could not load the preset. Try again or upload its workflow file.');
+    return response.json();
+}
+async function loadPresetList() {
+    const response=await fetch('/api/pipeline/presets');
+    if(!response.ok)throw new Error('Could not list the presets. Upload a saved workflow instead.');
+    presets=(await response.json()).presets;
+    $('preset-select').innerHTML=option('', '', presets.length?'Choose a preset':'No presets found')+presets.map(p=>option(p.id,'',p.name)).join('');
+    renderOverview();
+}
 async function choosePreset(key) {
+    if(!key)return;
     const token=++presetToken;
-    if(key==='paired')config=defaultWorkflow();
-    else {
-        const response=await fetch('/api/pipeline/templates/ebola');
-        if(!response.ok)throw new Error('Could not load the workflow. Try again or upload its configuration file.');
-        const loaded=await response.json();if(token!==presetToken)return;
-        config=portableConfig(loaded);
-    }
+    const loaded=await fetchPreset(key);if(token!==presetToken)return;
+    config=portableConfig(loaded);
     preset=key;expandedNode=0;renderNodes();showEditor(false);notice('');
     if(source)renderSource();
+}
+// Workflows saved before version 2 get the explicit settings their DRC steps used to receive implicitly.
+async function upgradeIfLegacy(cfg) {
+    if(!needsLegacyUpgrade(cfg))return {config:cfg,upgraded:false};
+    return {config:upgradeLegacyWorkflow(cfg,await fetchPreset(LEGACY_PRESET)),upgraded:true};
 }
 document.querySelectorAll('[data-stage]').forEach(button=>button.onclick=safe(()=>{readEditor();renderOverview();setStage(button.dataset.stage);}));
 document.querySelectorAll('[data-go]').forEach(button=>button.onclick=()=>setStage(button.dataset.go));
 $('to-files').onclick=safe(()=>{portableConfig(readEditor());renderOverview();setStage('files');});
 $('edit-workflow').onclick=safe(()=>{readEditor();renderOverview();showEditor($('workflow-editor').hidden);} );
 $('close-editor').onclick=safe(()=>{readEditor();renderOverview();showEditor(false);$('edit-workflow').focus();});
-$('preset-paired').onclick=safe(()=>choosePreset('paired'));
-$('preset-ebola').onclick=safe(()=>choosePreset('ebola'));
+$('preset-select').onchange=safe(()=>choosePreset($('preset-select').value));
 $('edit-run').onclick=()=>{setStage('workflow');showEditor(true);};
 $('run-full-file').onclick=safe(()=>begin(false));
 $('test-limit').oninput=refreshFileActions;
@@ -133,12 +149,14 @@ async function saveCheckpoint(index, replace, newlyProcessed = 0) {
         renderCheckpoint();
     }
 }
+const ADVANCED = ['sourceBranches', 'branches', 'minConfidence', 'responseMode', 'table', 'rules', 'reviewValues', 'interpretFirst', 'valuesBeforeStatus', 'recheckWithReason', 'fallbackOption', 'tentativeOnReview'];
 function advanced(n) {
-    const keys = ['sourceBranches', 'branches', 'minConfidence', 'responseMode', 'table', 'rules', 'reviewValues'];
+    const keys = ADVANCED;
     return Object.fromEntries(keys.filter(k => n[k] !== undefined).map(k => [k,n[k]]));
 }
 function renderNodes() {
     $('workflow-name').value = config.name;
+    $('workflow-context').value = config.context || '';
     $('nodes').innerHTML = config.nodes.map((n, i) => {
         const ai = ['extract','analyze','classify'].includes(n.type);
         return `<article class="pipeline-node" data-index="${i}"><div class="node-top"><button type="button" class="node-toggle" data-action="toggle" aria-expanded="${expandedNode===i}" aria-controls="node-body-${i}"><span class="node-number">${i+1}</span><span class="node-label"><strong>${esc(friendly(n.name))}</strong><small>${esc(providerName(n.provider))}${n.model?' · '+esc(n.model):''} · ${outputs(n).length} output${outputs(n).length===1?'':'s'}</small></span><i class="bi bi-chevron-${expandedNode===i?'up':'down'} node-chevron" aria-hidden="true"></i></button><div class="node-actions"><button class="btn btn-outline-secondary" data-action="up" aria-label="Move step ${i+1} up" ${!i?'disabled':''}>↑</button><button class="btn btn-outline-secondary" data-action="down" aria-label="Move step ${i+1} down" ${i===config.nodes.length-1?'disabled':''}>↓</button><button class="btn btn-outline-danger" data-action="remove" aria-label="Remove step ${i+1}">×</button></div></div><div class="node-body" id="node-body-${i}" ${expandedNode===i?'':'hidden'}>
@@ -146,12 +164,15 @@ function renderNodes() {
 <label class="form-label small" for="node-inputs-${i}">Input columns (one per line)</label><textarea id="node-inputs-${i}" data-key="inputs" class="form-control mb-2" rows="2">${esc(n.inputs.join('\n'))}</textarea>
 ${ai ? `<div class="row g-2 mb-2"><div class="col-sm-5"><label class="form-label small" for="node-provider-${i}">Provider</label><select id="node-provider-${i}" data-key="provider" class="form-select">${(n.type==='classify'?['azure','openai','jev','laya','ollama']:['azure','openai','ollama']).map(p=>option(p,n.provider,({azure:'Azure AI Foundry',openai:'OpenAI',jev:'Jev',laya:'Laya · local',ollama:'Ollama · local'})[p])).join('')}</select></div><div class="col-sm-7"><label class="form-label small" for="node-model-${i}">Model / Azure deployment</label><input id="node-model-${i}" data-key="model" class="form-control" value="${esc(n.model)}" placeholder="Use this provider’s connection settings"></div></div><label class="form-label small" for="node-instructions-${i}">Instructions</label><textarea id="node-instructions-${i}" data-key="instructions" class="form-control mb-2" rows="4">${esc(n.instructions)}</textarea>
 <div class="fields">${n.fields.map((f,j)=>fieldHTML(f,i,j)).join('')}</div>${n.type!=='classify'?'<button class="btn btn-link btn-sm px-0" data-action="field">+ Add output field</button>':''}
+<div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="node-context-${i}" data-flag="useContext" ${n.useContext===false?'':'checked'}><label class="form-check-label small" for="node-context-${i}">Use workflow context &amp; language notes</label></div>
+<div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="node-skip-${i}" data-flag="allowSkip" ${n.allowSkip?'checked':''}><label class="form-check-label small" for="node-skip-${i}">Let the model skip text that is not language (random typing). Skipped records can be restored. Not used by Jev or Laya.</label></div>
+<details class="subtle-details"><summary>Model guidance</summary><label class="form-label small d-block mt-2" for="node-notes-${i}">Step guidance (added to the system instructions)</label><textarea id="node-notes-${i}" data-key="systemNotes" class="form-control mb-2" rows="4">${esc(n.systemNotes || '')}</textarea><label class="form-label small" for="node-recheck-${i}">Second look when the model asks for review (leave blank for none${n.type==='extract'?'; blank uses the built-in extraction recheck':''})</label><textarea id="node-recheck-${i}" data-key="recheck" class="form-control mb-2" rows="3">${esc(n.recheck ?? '')}</textarea></details>
 <details class="subtle-details"><summary>Response length</summary><label class="form-label small d-block mt-2" for="node-tokens-${i}">Maximum output tokens</label><input id="node-tokens-${i}" data-key="maxOutputTokens" class="form-control mb-2" type="number" min="64" max="32768" value="${n.maxOutputTokens || 4096}"></details>`:''}
 ${n.type==='extract'?`<div class="row g-2"><div class="col-sm-6"><label class="form-label small" for="node-verbatim-input-${i}">Original text input</label><input id="node-verbatim-input-${i}" data-key="verbatimInput" class="form-control" value="${esc(n.verbatimInput)}"></div><div class="col-sm-6"><label class="form-label small" for="node-verbatim-field-${i}">Verbatim excerpt output</label><input id="node-verbatim-field-${i}" data-key="verbatimField" class="form-control" value="${esc(n.verbatimField)}"></div></div><p class="small text-muted mt-2">${config.nodes[i+1]?.pairedSourceStep === n.id ? 'Keeps each source row intact with aligned types and excerpts until the file-wide split.' : 'Returns paired objects and expands them into rows automatically.'} Every excerpt is checked against the original text.</p>`:''}
 ${n.type==='split'?`<label class="form-label small" for="node-delimiter-${i}">Exact separator</label><input id="node-delimiter-${i}" data-key="delimiter" class="form-control" value="${esc(n.delimiter)}"><p class="small text-muted mt-2">All selected columns must have equal item counts. Repeated items are kept. Mismatches go to review.</p>`:''}
 ${n.type==='lookup'?`<label class="form-label small" for="node-output-${i}">Output column</label><input id="node-output-${i}" data-key="output" class="form-control" value="${esc(n.output)}">`:''}
 ${n.type==='validate'?'<p class="small text-muted">Every input must be nonempty. Add allowed-value rules below if needed.</p>':''}
-<details class="mt-2"><summary class="small">${n.type==='lookup'?'Lookup table':n.type==='validate'?'Allowed-value rules':'Advanced rules & response format'} (JSON)</summary><p class="small text-muted mt-2">${n.type==='lookup'?'table: [{"when": {"input": "value"}, "value": "mapped result"}]':n.type==='validate'?'rules: [{"column": "category", "allowed": ["A", "B"]}]':'Branches and option descriptions are preserved on import. minConfidence applies only to Jev/Laya. Set responseMode to "json" for models without strict schema support; outputs are still validated. reviewValues lists labels that must go to human review.'}</p><textarea class="form-control advanced-json" aria-label="Advanced rules for step ${i+1}" rows="5">${esc(JSON.stringify(advanced(n),null,2))}</textarea></details></div></article>`;
+<details class="mt-2"><summary class="small">${n.type==='lookup'?'Lookup table':n.type==='validate'?'Allowed-value rules':'Advanced rules & response format'} (JSON)</summary><p class="small text-muted mt-2">${n.type==='lookup'?'table: [{"when": {"input": "value"}, "value": "mapped result"}]':n.type==='validate'?'rules: [{"column": "category", "allowed": ["A", "B"]}]':'Branches and option descriptions are preserved on import. minConfidence applies only to Jev/Laya. Set responseMode to "json" for models without strict schema support; outputs are still validated. reviewValues lists labels that must go to human review. interpretFirst asks for a plain-meaning sentence before deciding; valuesBeforeStatus asks for the answer before the review decision; fallbackOption is a “no code fits” label that always goes to review; tentativeOnReview lets later steps continue tentatively when this step is flagged.'}</p><textarea class="form-control advanced-json" aria-label="Advanced rules for step ${i+1}" rows="5">${esc(JSON.stringify(advanced(n),null,2))}</textarea></details></div></article>`;
     }).join('');
     renderMappings();renderOverview();refreshFileActions();
 }
@@ -160,12 +181,22 @@ function fieldHTML(f, i, j) {
 }
 function readEditor() {
     config.name = $('workflow-name').value;
+    const context = $('workflow-context').value.trim();
+    if (context) config.context = context; else delete config.context;
     $('nodes').querySelectorAll('[data-index]').forEach(card => {
         const n = config.nodes[Number(card.dataset.index)];
-        card.querySelectorAll('[data-key]').forEach(el => { const k = el.dataset.key; n[k] = k==='inputs'?lines(el.value):k==='maxOutputTokens'?Number(el.value):el.value; });
+        card.querySelectorAll('[data-key]').forEach(el => {
+            const k = el.dataset.key;
+            if (k === 'systemNotes' || k === 'recheck') { const text = el.value.trim(); if (text) n[k] = text; else delete n[k]; return; }
+            n[k] = k==='inputs'?lines(el.value):k==='maxOutputTokens'?Number(el.value):el.value;
+        });
+        const contextFlag = card.querySelector('[data-flag="useContext"]');
+        if (contextFlag) { if (contextFlag.checked) delete n.useContext; else n.useContext = false; }
+        const skipFlag = card.querySelector('[data-flag="allowSkip"]');
+        if (skipFlag) { if (skipFlag.checked) n.allowSkip = true; else delete n.allowSkip; }
         if (n.fields) n.fields = [...card.querySelectorAll('.field-row')].map((el,j)=>({name: el.querySelector('[data-field-name]').value.trim(), options: lines(el.querySelector('[data-field-options]').value).map(label=>n.fields[j]?.options?.find(o => (typeof o==='string'?o:o.label)===label) || label)}));
         const extra = JSON.parse(card.querySelector('.advanced-json').value || '{}');
-        const allowed = ['sourceBranches','branches','minConfidence','responseMode','table','rules','reviewValues'];
+        const allowed = ADVANCED;
         if (!extra || typeof extra !== 'object' || Array.isArray(extra) || Object.keys(extra).some(k=>!allowed.includes(k))) throw new Error('Unknown advanced step setting.');
         allowed.forEach(k=>delete n[k]); Object.assign(n,extra);
     });
@@ -192,13 +223,15 @@ $('nodes').addEventListener('change', safe(()=>{readEditor();renderMappings();re
 $('column-mappings').addEventListener('change', event=>{if(event.target.dataset.mapping) {config.mappings[event.target.dataset.mapping]=event.target.value;renderMappings();}});
 $('original-id').onchange=()=>{config.idColumn=$('original-id').value;};
 $('add-step').onclick=safe(()=>{readEditor();config.nodes.push(defaultNode($('step-kind').value));expandedNode=config.nodes.length-1;preset='custom';renderNodes();});
-$('new-workflow').onclick=()=>{config=defaultWorkflow();preset='custom';expandedNode=0;renderNodes();setStage('workflow');showEditor(true);notice('Change the first step or add steps to create your workflow.');};
+$('new-workflow').onclick=()=>{presetToken++;config=defaultWorkflow();preset='custom';expandedNode=0;renderNodes();setStage('workflow');showEditor(true);notice('Change the first step or add steps to create your workflow.');};
 $('export-config').onclick=safe(()=>{jsonDownload(portableConfig(readEditor()),'pipeline-config.json');});
 $('import-config').onclick=()=>$('config-file').click();
 $('append-config').onclick=()=>$('append-file').click();
 async function importConfig(file, append=false) {
     if(!file) return;
     const imported=importWorkflow(JSON.parse(await file.text()));
+    const legacy=await upgradeIfLegacy(imported.config);
+    imported.config=legacy.config;
     if(append) {
         readEditor();
         const ids=new Map(imported.config.nodes.map(n=>[n.id,crypto.randomUUID()]));
@@ -209,8 +242,9 @@ async function importConfig(file, append=false) {
         }
     }
     else config=imported.config;
+    if(append && !config.context && imported.config.context) { config.context=imported.config.context; config.roles={...imported.config.roles,...config.roles}; }
     presetToken++;preset='imported';expandedNode=append?config.nodes.length-imported.config.nodes.length:0;
-    renderNodes(); if(source) renderSource(); setStage('workflow');showEditor(append);notice(append?'Steps added. Open a step to check its settings.':'Workflow loaded. Review the summary, then continue to files.');
+    renderNodes(); if(source) renderSource(); setStage('workflow');showEditor(append);notice((append?'Steps added. Open a step to check its settings.':'Workflow loaded. Review the summary, then continue to files.')+(legacy.upgraded?' Its DRC steps were saved in the older format and now use the DRC Ebola framework preset settings.':''));
 }
 $('config-file').onchange=safe(e=>importConfig(e.target.files[0]));
 $('append-file').onchange=safe(e=>importConfig(e.target.files[0],true));
@@ -282,7 +316,7 @@ async function callStep(node, values) {
             ? {status:'review',items,reason:'The selected value is configured to require human review.'}
             : {status:'ok',items};
     }
-    if(node.provider!=='laya') return post('/api/pipeline/step',{node,record,credentials:credentials(node.provider)});
+    if(node.provider!=='laya') return post('/api/pipeline/step',{node,record,credentials:credentials(node.provider),context:run?.config.context || '',note:values._reviewer_note || ''});
     let options=node.fields[0].options || [];
     for(const key of ['sourceBranches','branches']) if(node[key]?.length) {
         const matches=node[key].filter(b=>Object.entries(b.when).every(([k,v])=>record[k]===v));
@@ -308,8 +342,8 @@ async function post(path, body) {
 }
 function lock(locked) {
     $('source-controls').disabled=locked;$('master-controls').disabled=locked;$('workflow-controls').disabled=locked;
-    for(const id of ['new-workflow','import-config','export-config','test-run','start-run','test-limit','restore-run','load-run','apply-run-settings']) $(id).disabled=locked;
-    for(const id of ['preset-paired','preset-ebola','to-files'])$(id).disabled=locked;
+    for(const id of ['new-workflow','import-config','export-config','test-run','start-run','test-limit','parallel-limit','restore-run','load-run','apply-run-settings']) $(id).disabled=locked;
+    for(const id of ['preset-select','to-files'])$(id).disabled=locked;
     $('pause-run').disabled=!locked;refreshFileActions();
 }
 async function begin(test) {
@@ -342,9 +376,28 @@ async function waitForProvider(entry, node) {
     }
     return !stopRequested;
 }
+// Requests run in parallel (1–8, default 4). Local models (Laya, Ollama) take one request at a time.
+const LOCAL_PROVIDERS = new Set(['laya', 'ollama']);
+const PARALLEL_KEY = 'aidstack-pipeline-parallel';
+function parallelLimit() {
+    const value = Number($('parallel-limit').value);
+    return Number.isInteger(value) && value >= 1 && value <= 8 ? value : 4;
+}
+async function runStep(entry, hint, node, values) {
+    if (!await waitForProvider(entry, node)) return {entry, hint, node, skipped: true};
+    $('run-status').textContent=`${run.test?'Test · ':''}${node.name}: original row ${entry.values._source_row}, message ${entry.values._message_number}`;
+    try {
+        const result = node.pairedSourceStep && entry.pairedItems ? {status:'ok',items:entry.pairedItems} : await callStep(node, values);
+        return {entry, hint, node, result};
+    } catch (error) {
+        return {entry, hint, node, error};
+    }
+}
 async function continueRun({newRun = false} = {}) {
     if(running||!run)return;
     running=true;stopRequested=false;delete run.pauseReason;setStage('results');lock(true);renderRun();
+    const inFlight = new Map();
+    let failure = null;
     try {
         wakeLock.start();
         const reviewsOnly = run.work.some(e => e.status === 'pending' && e.reviewRetry);
@@ -357,19 +410,29 @@ async function continueRun({newRun = false} = {}) {
         timerInterval = setInterval(renderTime, 1000);
         renderTime();
         if (newRun || checkpointFailed) await saveCheckpoint(undefined,newRun);
-        let lastPaint = performance.now();
-        const cursor={phase:0,index:0};
-        while(!stopRequested) {
-            const index=nextWorkIndex(run,reviewsOnly,cursor);if(index<0)break;
-            const entry=run.work[index], {node,values}=activeStep(run,entry);
-            if(!await waitForProvider(entry,node)) break;
-            $('run-status').textContent=`${run.test?'Test · ':''}${node.name}: original row ${entry.values._source_row}, message ${entry.values._message_number}`;
-            const result=node.pairedSourceStep && entry.pairedItems ? {status:'ok',items:entry.pairedItems} : await callStep(node,values);
+        let lastPaint = performance.now(), halt = false;
+        const limit = parallelLimit(), cursor = {phase:0,index:0};
+        const localBusy = provider => LOCAL_PROVIDERS.has(provider) && [...inFlight.values()].some(job => job.provider === provider);
+        const isBusy = entry => inFlight.has(entry) || localBusy(activeStep(run, entry).node?.provider);
+        while (true) {
+            while (!stopRequested && !halt && inFlight.size < limit) {
+                const index = nextWorkIndex(run, reviewsOnly, cursor, isBusy, inFlight.size);
+                if (index < 0) break;
+                const entry = run.work[index], {node, values} = activeStep(run, entry);
+                inFlight.set(entry, {provider: node.provider, promise: runStep(entry, index, node, values)});
+            }
+            if (!inFlight.size) break;
+            const {entry, hint, node, result, error, skipped} = await Promise.race([...inFlight.values()].map(job => job.promise));
+            inFlight.delete(entry);
+            const index = locateEntry(run, entry, hint);
+            rewindCursor(cursor, index);
+            if (skipped) continue;
+            if (error) { failure ||= error; halt = true; continue; }
             const rateAction=scheduleRateRetry(run,index,result);
             if(rateAction==='retry' || rateAction==='pause') {
                 if(rateAction==='pause') {
                     run.pauseReason=`${providerName(node.provider)} requested a longer wait. Continue processing after ${new Date(entry.retryAt).toLocaleTimeString()}. Completed steps are saved.`;
-                    await saveCheckpoint(index);break;
+                    halt = true;
                 }
                 await saveCheckpoint(index);renderRun();continue;
             }
@@ -386,14 +449,16 @@ async function continueRun({newRun = false} = {}) {
             finished++;
             timer.update(finished,finished + unitsLeft);
             if(rateAction==='exhausted' || result.errorCode==='quota_exhausted' || result.errorCode==='authentication') {
-                run.pauseReason=rateAction==='exhausted'
+                // Stop sending; requests already in flight finish and are saved.
+                run.pauseReason ||= rateAction==='exhausted'
                     ? 'Paused after three rate-limit responses. Check the provider limits, then retry failed steps. Completed steps are saved.'
                     : result.reason;
-                await saveCheckpoint(index,false,newlyProcessed);renderRun();break;
+                halt = true;
             }
             await saveCheckpoint(index,false,newlyProcessed);
             if (performance.now() - lastPaint >= 1000) { renderRun();lastPaint=performance.now(); }
         }
+        if (failure) throw failure;
         $('run-status').textContent=run.pauseReason || (run.work.some(e=>e.status==='pending')?'Paused. Pending steps can be resumed.':`${run.test?'Test complete':'Processing complete'}. Review the flagged records, then download the workbook.`);
     } catch(e) { notice(e.message,true);$('run-status').textContent='Paused. Saved results are available to download.'; }
     finally {
@@ -407,7 +472,7 @@ async function continueRun({newRun = false} = {}) {
     }
 }
 $('test-run').onclick=safe(()=>begin(true));$('start-run').onclick=safe(()=>begin(false));
-$('pause-run').onclick=()=>{stopRequested=true;$('run-status').textContent='Pausing after the current step…';};
+$('pause-run').onclick=()=>{stopRequested=true;$('run-status').textContent='Pausing after the requests already sent…';};
 $('resume-run').onclick=safe(()=>continueRun());
 $('apply-run-settings').onclick=safe(async()=>{
     const updated=portableConfig(readEditor());
@@ -462,10 +527,10 @@ $('download-run').onclick=$('backup-now').onclick=()=>{
 };
 async function restore(saved, imported=false) {
     if(!saved || saved.format!=='aidstack-pipeline-run' || saved.version!==1 || !Array.isArray(saved.work) || !saved.master || !Array.isArray(saved.master.rows) || !Array.isArray(saved.master.review) || !Array.isArray(saved.master.logs) || !Number.isSafeInteger(saved.nextId) || saved.nextId<1 || !saved.source) throw new Error('Invalid pipeline recovery file.');
-    saved.config=portableConfig(saved.config);
+    saved.config=(await upgradeIfLegacy(portableConfig(saved.config))).config;
     const keys=new Set(), ids=new Set();
     for(const e of saved.work) {
-        if(!e.values || !Array.isArray(e.history) || !Number.isInteger(e.node) || e.node<0 || e.node>saved.config.nodes.length || !['ok','pending','review','error','discarded'].includes(e.status) || e.status==='pending' && e.node>=saved.config.nodes.length || typeof e.values._record_key!=='string' || keys.has(e.values._record_key)) throw new Error('Recovery file has invalid records.');
+        if(!e.values || !Array.isArray(e.history) || !Number.isInteger(e.node) || e.node<0 || e.node>saved.config.nodes.length || !['ok','pending','review','error','discarded','skipped'].includes(e.status) || e.status==='pending' && e.node>=saved.config.nodes.length || typeof e.values._record_key!=='string' || keys.has(e.values._record_key)) throw new Error('Recovery file has invalid records.');
         keys.add(e.values._record_key);
         if(e.values._feedback_id) {if(!Number.isSafeInteger(e.values._feedback_id) || e.values._feedback_id>=saved.nextId || ids.has(e.values._feedback_id))throw new Error('Recovery file has invalid IDs.');ids.add(e.values._feedback_id);}
     }
@@ -484,7 +549,7 @@ function failureDetails(entry) {
     if(!run || !['review','error','pending'].includes(entry.status))return '';
     const {node}=activeStep(run,entry);
     if(!node)return '';
-    const step=entry.status==='pending'?'Current step':(entry.translationFlag || entry.drafts?.feedback_path)?'Flagged at':'Stopped at';
+    const step=entry.status==='pending'?'Current step':(entry.translationFlag || (run.config.roles?.code && entry.drafts?.[run.config.roles.code]))?'Flagged at':'Stopped at';
     let html=`<div class="review-reason"><strong>${step}:</strong> ${esc(friendly(node.name))}${node.provider?' · '+esc(providerName(node.provider)):''}</div>`;
     if(node.type==='extract' && entry.status!=='pending') {
         let original=entry.values[node.verbatimInput];
@@ -498,7 +563,7 @@ function statusLabel(entry) {
     if(entry.errorCode==='quota_exhausted')return 'Quota / billing limit';
     if(entry.errorCode==='authentication')return 'Check credentials';
     if(entry.status==='pending' && entry.retryAt>Date.now())return 'Waiting for provider';
-    return ({ok:'Accepted',review:'Needs review',error:'Provider error',pending:'Processing',discarded:'Discarded'})[entry.status];
+    return ({ok:'Accepted',review:'Needs review',error:'Provider error',pending:'Processing',discarded:'Discarded',skipped:'Skipped'})[entry.status];
 }
 let exportRun, exporting = false;
 function configureExport() {
@@ -545,7 +610,7 @@ $('download-results').onclick = safe(async () => {
 });
 function renderRun() {
     const entries=run?.work||[];
-    const counts = {ok:0,pending:0,review:0,error:0,discarded:0};
+    const counts = {ok:0,pending:0,review:0,error:0,discarded:0,skipped:0};
     const stoppedColumns=new Set();
     const pairedSplit = run?.config.nodes.findIndex(n => n.pairedSourceStep) ?? -1;
     let multiple=0, previousId, siblings=0, awaitingSplit=false;
@@ -561,7 +626,7 @@ function renderRun() {
         if (siblings===2) multiple++;
         if (e.status==='review') {
             for (const key of [...outputs(run.config.nodes[e.node]), ...Object.keys(e.drafts || {})]) stoppedColumns.add(key);
-            if (e.translationFlag) { stoppedColumns.add('feedback_path'); stoppedColumns.add('feedback_category'); }
+            if (e.translationFlag) for (const key of [run.config.roles?.code, run.config.roles?.category]) if (key) stoppedColumns.add(key);
         }
     }
     renderProgress(remainingSteps);
@@ -569,7 +634,7 @@ function renderRun() {
     const count=status=>counts[status];
     configureExport();completedDownloadState();renderTime();
     $('split-summary').textContent=run ? `${run.test?'Test · ':''}${run.source.count} source rows in run${run.source.uploadedCount ? ' of '+run.source.uploadedCount+' uploaded' : ''} · ${multiple} source${multiple===1?'':'s'} split into multiple messages · ${entries.length} current records${pairedSplit>=0 ? (awaitingSplit ? ' · Split in progress or pending' : ' · Split stage complete for eligible rows') : ''}` : '';
-    $('run-counts').innerHTML=run?`<span>${count('ok')} accepted</span><span>${count('review')+count('error')} review</span><span>${count('pending')} pending</span><span>${run.skipped} sources skipped</span>`:'';
+    $('run-counts').innerHTML=run?`<span>${count('ok')} accepted</span><span>${count('review')+count('error')} review</span><span>${count('pending')} pending</span><span>${count('skipped')} skipped</span><span>${count('discarded')} discarded</span><span>${run.skipped} already imported</span>`:'';
     $('resume-run').disabled=running||!count('pending');$('retry-run').disabled=running||!count('error');
     $('apply-run-settings').disabled=running||!run;
     $('download-master').disabled=exportingAudit || !run || !entries.some(e=>e.status!=='pending');$('download-run').disabled=!run;
@@ -586,7 +651,7 @@ function renderRun() {
     const visible=[];
     for(let i=0;i<entries.length && visible.length<100;i++) {
         const e=entries[i];
-        if(filter==='all'||filter==='ok'&&e.status==='ok'||filter==='review'&&['review','error'].includes(e.status)) visible.push({e,i});
+        if(filter==='all'||filter===e.status||filter==='review'&&e.status==='error') visible.push({e,i});
     }
     const expected=run?[...new Set(run.config.nodes.flatMap(outputs))]:[];
     const sourceColumns=run?.source.columns || Object.keys(entries[0]?.values || {}).filter(k=>!k.startsWith('_'));
@@ -595,35 +660,105 @@ function renderRun() {
     $('column-visibility-note').textContent=run?`Showing ${shown} of ${expected.length} configured result columns. “Not run” means an earlier step must finish first.`:'';
     const cell=(entry,column)=>{
         if(entry.status==='review') {
-            const marked = reviewCell(run.config.nodes[entry.node],entry,column);
+            const marked = reviewCell(run.config,run.config.nodes[entry.node],entry,column);
             if(marked !== null) return esc(marked);
         }
         if(entry.values[column]!==undefined && entry.values[column]!==null)return esc(typeof entry.values[column]==='object'?JSON.stringify(entry.values[column]):entry.values[column]);
         const stepIndex=run.config.nodes.findIndex(n=>outputs(n).includes(column));
         if(stepIndex===entry.node && entry.status==='error')return '<span class="text-muted small">Failed</span>';
-        return stepIndex>=entry.node && entry.status!=='ok'?'<span class="text-muted small">Not run</span>':'';
+        return stepIndex>=entry.node && !['ok','skipped','discarded'].includes(entry.status)?'<span class="text-muted small">Not run</span>':'';
     };
-    $('results').innerHTML=run?`<p class="small text-muted">Showing ${visible.length} of ${entries.length} current records (preview limit 100).</p><table class="table table-sm align-middle"><thead><tr><th>Status / action</th><th>Feedback ID</th><th>Original ID</th><th>Source</th><th>Message</th>${cols.map(c=>`<th>${esc(friendly(c))}</th>`).join('')}</tr></thead><tbody>${visible.map(({e,i})=>`<tr><td><span class="status-label status-${esc(e.status)}">${esc(statusLabel(e))}</span><div class="review-reason">${esc(e.reason||'')}</div>${failureDetails(e)}${['review','error'].includes(e.status)?`<button class="btn btn-sm btn-outline-primary mt-2" data-review="${i}" ${running?'disabled':''}>Review</button><button class="btn btn-sm btn-link text-danger" data-discard="${i}" ${running?'disabled':''}>Discard</button>`:''}</td><td>${esc(e.values._feedback_id||'Pending')}</td><td>${esc(e.values._original_id)}</td><td>${esc(e.values._source_filename)}<br>${esc(e.values._source_sheet)} · row ${esc(e.values._source_row)}</td><td>${esc(e.values._message_number)}</td>${cols.map(c=>`<td>${cell(e,c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'<p class="text-muted">Your results will appear here.</p>';
+    renderSelection();
+    $('results').innerHTML=run?`<p class="small text-muted">Showing ${visible.length} of ${entries.length} current records (preview limit 100).</p><table class="table table-sm align-middle"><thead><tr><th class="select-cell"><input type="checkbox" class="form-check-input" id="select-visible" aria-label="Select all flagged records shown" ${running?'disabled':''}></th><th>Status / action</th><th>Feedback ID</th><th>Original ID</th><th>Source</th><th>Message</th>${cols.map(c=>`<th>${esc(friendly(c))}</th>`).join('')}</tr></thead><tbody>${visible.map(({e,i})=>`<tr><td class="select-cell">${['review','error'].includes(e.status)?`<input type="checkbox" class="form-check-input" data-select="${i}" aria-label="Select record ${esc(e.values._feedback_id||i+1)}" ${selected.has(e)?'checked':''} ${running?'disabled':''}>`:''}</td><td><span class="status-label status-${esc(e.status)}">${esc(statusLabel(e))}</span><div class="review-reason">${esc(e.reason||'')}</div>${failureDetails(e)}${['review','error'].includes(e.status)?`<button class="btn btn-sm btn-outline-primary mt-2" data-review="${i}" ${running?'disabled':''}>Review</button><button class="btn btn-sm btn-link text-danger" data-discard="${i}" ${running?'disabled':''}>Discard</button>`:''}${['skipped','discarded'].includes(e.status)?`<div class="review-reason">${esc(e.values._discard_reason?'Reason: '+e.values._discard_reason:'')}</div><button class="btn btn-sm btn-outline-secondary mt-2" data-restore="${i}" ${running?'disabled':''}>${e.status==='skipped'?'Process anyway':'Restore'}</button>`:''}</td><td>${esc(e.values._feedback_id||(e.status==='pending'?'Pending':'—'))}</td><td>${esc(e.values._original_id)}</td><td>${esc(e.values._source_filename)}<br>${esc(e.values._source_sheet)} · row ${esc(e.values._source_row)}</td><td>${esc(e.values._message_number)}</td>${cols.map(c=>`<td>${cell(e,c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'<p class="text-muted">Your results will appear here.</p>';
 }
 $('result-filter').onchange=$('all-result-columns').onchange=renderRun;
+// Selected records are held by reference: indexes shift when processing splits rows.
+const selected=new Set();
+function renderSelection() {
+    for (const entry of [...selected]) if (!run?.work.includes(entry) || !['review','error'].includes(entry.status)) selected.delete(entry);
+    $('bulk-actions').hidden=!selected.size;
+    $('bulk-count').textContent=`${selected.size} selected`;
+}
+let discardTargets=[];
+function openDiscard(indexes, siblings) {
+    discardTargets=indexes;
+    const extra=siblings.filter(i=>!indexes.includes(i));
+    $('discard-context').textContent=`${indexes.length} record${indexes.length===1?'':'s'} will be discarded.`;
+    $('discard-siblings-row').hidden=!extra.length;
+    $('discard-siblings-label').textContent=`Also discard ${extra.length} other flagged message${extra.length===1?'':'s'} from the same source row${indexes.length===1?'':'s'}`;
+    $('discard-siblings').checked=true;
+    $('discard-siblings').dataset.extra=JSON.stringify(extra);
+    $('discard-other').value='';
+    $('discard-dialog').showModal();
+}
+$('confirm-discard').onclick=safe(async()=>{
+    const choice=document.querySelector('[name="discard-reason"]:checked')?.value;
+    const reason=choice==='other'?$('discard-other').value:choice;
+    const extra=$('discard-siblings-row').hidden||!$('discard-siblings').checked?[]:JSON.parse($('discard-siblings').dataset.extra||'[]');
+    const count=discardEntries(run,[...discardTargets,...extra],reason);
+    selected.clear();$('discard-dialog').close();
+    await saveCheckpoint();notice(`Discarded ${count} record${count===1?'':'s'}: ${reason.trim()}.`);renderRun();
+});
+$('discard-other').oninput=()=>{ $('reason-other').checked=true; };
+$('bulk-discard').onclick=safe(()=>{
+    const indexes=[...selected].map(e=>run.work.indexOf(e)).filter(i=>i>=0);
+    openDiscard(indexes,[...new Set(indexes.flatMap(i=>sourceSiblings(run,i)))]);
+});
+$('bulk-clear').onclick=()=>{selected.clear();renderRun();};
 let reviewIndex=null;
 $('results').onclick=safe(async event=>{
     if(running)return;
-    const discard=event.target.closest('[data-discard]');if(discard){const index=Number(discard.dataset.discard),e=run.work[index];e.status='discarded';e.history.push({status:'discarded',at:new Date().toISOString()});await saveCheckpoint(index);renderRun();return;}
+    const pick=event.target.closest('[data-select]');
+    if(pick){const e=run.work[Number(pick.dataset.select)];if(pick.checked)selected.add(e);else selected.delete(e);renderSelection();return;}
+    if(event.target.id==='select-visible'){
+        for(const box of $('results').querySelectorAll('[data-select]')){box.checked=event.target.checked;const e=run.work[Number(box.dataset.select)];if(box.checked)selected.add(e);else selected.delete(e);}
+        renderSelection();return;
+    }
+    const discard=event.target.closest('[data-discard]');if(discard){const index=Number(discard.dataset.discard);openDiscard([index],sourceSiblings(run,index));return;}
+    const restore=event.target.closest('[data-restore]');
+    if(restore){
+        const status=restoreEntry(run,Number(restore.dataset.restore));await saveCheckpoint();
+        if(status==='pending')await continueRun();else renderRun();
+        return;
+    }
     const btn=event.target.closest('[data-review]');if(!btn)return;
     reviewIndex=Number(btn.dataset.review);const e=run.work[reviewIndex], n=run.config.nodes[e.node];
     $('review-context').textContent=`${e.values._source_filename}, row ${e.values._source_row}, message ${e.values._message_number} — ${n.name}. ${e.reason}`;
     $('review-fields').innerHTML=n.inputs.map((k,i)=>`<label class="form-label mt-2" for="correction-${i}">${esc(k)}</label><textarea id="correction-${i}" data-correction="${esc(k)}" class="form-control" rows="3">${esc(e.values[k])}</textarea>`).join('');
+    $('review-note').value=e.values._reviewer_note || '';
+    const fields=reviewerFields(n,e.values);
+    $('review-answer-section').hidden=!fields.length;
+    // Start from the model's tentative answer where it is a valid choice.
+    $('review-answer').innerHTML=fields.map((f,i)=>{
+        const draft=String(e.drafts?.[f.name] ?? e.values[f.name] ?? '');
+        const label=`<label class="form-label mt-2" for="answer-${i}">${esc(friendly(f.name))}</label>`;
+        return f.options.length
+            ? label+`<select id="answer-${i}" data-answer="${esc(f.name)}" class="form-select">${option('','','Choose a value')}${f.options.map(o=>option(o,draft)).join('')}</select>`
+            : label+`<textarea id="answer-${i}" data-answer="${esc(f.name)}" class="form-control" rows="3">${esc(draft.replace(/^\[Needs Review\] \| /,''))}</textarea>`;
+    }).join('');
     $('review-dialog').showModal();
 });
 $('save-correction').onclick=safe(async()=>{
     const edits={};$('review-fields').querySelectorAll('[data-correction]').forEach(el=>{if(el.value!==String(run.work[reviewIndex].values[el.dataset.correction]??''))edits[el.dataset.correction]=el.value;});
-    retryEntry(run,reviewIndex,edits);await saveCheckpoint();$('review-dialog').close();await continueRun();
+    retryEntry(run,reviewIndex,edits,$('review-note').value);await saveCheckpoint();$('review-dialog').close();await continueRun();
+});
+$('accept-answer').onclick=safe(async()=>{
+    const answer=Object.fromEntries([...$('review-answer').querySelectorAll('[data-answer]')].map(el=>[el.dataset.answer,el.value]));
+    acceptReviewerAnswer(run,reviewIndex,answer,$('review-note').value);
+    await saveCheckpoint();$('review-dialog').close();
+    // Later steps for this record continue automatically.
+    if(run.work.some(e=>e.status==='pending'))await continueRun();else renderRun();
 });
 initProviderSettings();
 $('api-settings-btn').onclick=()=>bootstrap.Modal.getOrCreateInstance($('api-settings-modal')).show();
 window.addEventListener('beforeunload',event=>{if(running){event.preventDefault();event.returnValue='';}});
 renderNodes();renderRun();setStage('workflow',false);
+try { const saved=localStorage.getItem(PARALLEL_KEY); if(saved)$('parallel-limit').value=saved; } catch { /* Storage can be unavailable; the default applies. */ }
+$('parallel-limit').onchange=()=>{ $('parallel-limit').value=parallelLimit(); try { localStorage.setItem(PARALLEL_KEY,$('parallel-limit').value); } catch { /* Not remembered in this browser. */ } };
+// Start from the default preset unless the person has already chosen or restored something.
+loadPresetList().then(()=>{
+    if(!preset && !run && presets.some(p=>p.id===DEFAULT_PRESET)) return choosePreset(DEFAULT_PRESET);
+}).catch(e=>notice(e.message,true));
 hasSavedPipeline().then(exists=>{
     $('saved-run-banner').hidden = !exists || Boolean(run);
 }).catch(()=>{ /* Starting or restoring a run reports storage errors in context. */ });

@@ -4,15 +4,38 @@ Open **Pipeline Studio** in the app navigation, or visit `/pipeline`. It is an o
 
 ## Start with the feedback workflow
 
-1. In **Choose workflow**, select **Code DRC community feedback**. This loads [`examples/ebola-feedback.pipeline.json`](examples/ebola-feedback.pipeline.json) in one click. It translates all source rows, then classifies the feedback types and aligns each with its original excerpt and English rendering. The **Pipeline classifications** worksheet preserves one row per classified source with corresponding fields joined by ` || `. After every eligible source has been classified or flagged, the workflow splits the validated pairs. Each message keeps its original ID and receives its own codebook path, category, subcode and code. The default provider is Azure; enter a deployment in Connections & models or override it on individual steps.
+1. In **Choose workflow**, pick **DRC Ebola framework** from the preset list. This loads [`presets/drc-ebola-framework.pipeline.json`](presets/drc-ebola-framework.pipeline.json). It translates all source rows, then classifies the feedback types and aligns each with its original excerpt and English rendering. The **Pipeline classifications** worksheet preserves one row per classified source with corresponding fields joined by ` || `. After every eligible source has been classified or flagged, the workflow splits the validated pairs. Each message keeps its original ID and receives its own codebook path, category, subcode and code. The default provider is Azure; enter a deployment in Connections & models or override it on individual steps.
 2. Click **Continue to files**. Upload the team's Excel/CSV file, select its worksheet and header row, and map `Feedback` to the actual source column. Select the original ID column, or choose no existing ID.
 3. Optionally upload the current Excel master and select its main worksheet. Master headers must be on row 1. Without a master, the pipeline creates a new workbook.
 4. Test a few source rows, inspect the results, then process the file. A test run creates a separate result; a full run replaces the browser's latest checkpoint, so download a test recovery file if you want to keep it.
-5. Correct flagged records in the review queue, or discard them. Use **Choose download columns** and **Download completed sheet** for a single Excel worksheet containing accepted messages from this run. **Download audit workbook** includes the cumulative master, review queue, workflow and history. Use that workbook for later master imports.
+5. Review flagged records (see [Reviewing flagged records](#reviewing-flagged-records)), or discard them. Use **Choose download columns** and **Download completed sheet** for a single Excel worksheet containing accepted messages from this run. **Download audit workbook** includes the cumulative master, review queue, workflow and history. Use that workbook for later master imports.
 
-[`examples/paired-feedback.pipeline.json`](examples/paired-feedback.pipeline.json) contains only generic paired extraction. Add translation, classification, validation or lookup steps for another context. **Append steps from configuration** can add a legacy analysis configuration or the supplied step 2 classification codebook after extraction.
+The **DRC feedback messages** preset ([`presets/drc-feedback-messages.pipeline.json`](presets/drc-feedback-messages.pipeline.json)) only separates messages and pairs them with feedback types. [`examples/paired-feedback.pipeline.json`](examples/paired-feedback.pipeline.json) is an older-format example of the same extraction. Add translation, classification, validation or lookup steps for another context. **Append steps from configuration** can add a legacy analysis configuration or the supplied step 2 classification codebook after extraction.
 
 The new module does not change the existing analysis and classification modes.
+
+## Presets and workflow files
+
+Every `*.pipeline.json` file in the `presets` folder appears in the preset list, using its `name` and `description`. To add a framework, save a workflow with **Saved work → Save workflow as a file**, add a `description`, and put the file in `presets`. No code change is needed.
+
+A workflow file contains everything the workflow does. The server applies no hidden rules based on language, place names or column names. The context, step guidance and review behaviour of the DRC presets are written in their files and can be edited in **Edit steps & models**:
+
+| Setting | Where | Effect |
+| --- | --- | --- |
+| `context` | Workflow (**Context & language notes**) | Setting, languages and local terms, added to the system instructions of each AI step that uses context |
+| `useContext` | Step (checkbox) | `false` leaves the workflow context out of this step. Default `true` |
+| `systemNotes` | Step (**Model guidance**) | Step-specific guidance added after the context |
+| `recheck` | Step (**Model guidance**) | When the model asks for review, it gets one more attempt with this instruction. Extraction steps have a built-in recheck unless this is set to `""` |
+| `recheckWithReason` | Step (advanced JSON) | The recheck also receives the first review reason |
+| `interpretFirst` | Step (advanced JSON) | The model writes a short plain-meaning sentence (`plainMeaning`) before deciding |
+| `valuesBeforeStatus` | Step (advanced JSON) | The model gives its answer before the ok/review decision |
+| `fallbackOption` | Classify step (advanced JSON) | A “no code fits” label: choosing it is a review outcome, the recheck excludes it, and it is never written as a result |
+| `allowSkip` | Step (checkbox) | The model may answer “skip” when the text is not language at all (random typing). The record becomes **Skipped** and can be processed anyway. Off by default, including in the presets; turning it on changes that step's prompt, so check it on a test batch |
+| `screening` | Workflow (JSON) | Rules applied before any AI step: `requireLetters`, `minLetters`, `randomTyping`, optional `columns` (default: the workflow's input columns). See [Skipped and discarded records](#skipped-and-discarded-records) |
+| `tentativeOnReview` | Step (advanced JSON) | When this step is flagged, the record continues through the next steps tentatively and stays in review |
+| `roles` | Workflow (JSON) | Names the columns that tentative review, ID preservation on retry and the **Pipeline classifications** sheet use: `sourceTranslation`, `messageTranslation`, `excerpt`, `messageType`, `code`, `category`, `tentativeColumns`. Without roles these features are off |
+
+Workflow files are `version: 2`. Version 1 files and saved runs still load. Before version 2, the server recognised DRC wording (“Congolese Swahili”, “in the DRC”) and DRC column names. A version 1 workflow containing such steps is upgraded on import or restore: those steps receive the settings of the equivalent step in the DRC Ebola framework preset, so they send the same requests as before.
 
 ## Steps and model selection
 
@@ -60,6 +83,31 @@ Each result preserves the source columns and these additional fields:
 Example citation: `Feedback 104582, Beni.xlsx, Sheet1, original Excel row 83, message 2`.
 
 Corrections/retries preserve assigned IDs. If a failed extraction is corrected and then produces multiple messages, the first child retains the original review ID and additional children receive new IDs. Preserve the same latest master when processing successive imports: independent copies of a master cannot coordinate a globally unique numeric sequence.
+
+## Reviewing flagged records
+
+Click **Review** on a flagged record. The dialog offers two ways forward:
+
+- **Ask the AI again.** Write a **Note for the model**, for example “‘maso’ here means ‘words’, not ‘eyes’”, and click **Save & retry with AI**. The note goes to the model as trusted reviewer guidance, separately from the feedback text, so it is never translated, coded or quoted as an excerpt. It stays with the record and the messages split from it for every later step, and is exported in `_reviewer_note`. **Correct the input text** is only for real errors in the text, such as a transcription mistake: extracted excerpts must match the text used, although the original row is always kept in `_original_record`. Jev and Laya steps do not receive notes.
+- **Enter the result yourself.** For translation/analysis, classification and lookup steps, type or choose the answer and click **Accept my answer**. Choices are limited to the step's allowed values, including the codebook branch for this record; a `fallbackOption` is not offered. The record continues with the next steps automatically. The step is recorded as a reviewer decision: `_reviewer_decisions` lists the steps a person answered, and the audit history shows `reviewer` as the provider. For a flagged DRC translation, entering the English reopens the source, and its messages are extracted and coded again; messages found again with the same excerpt and type keep their IDs. Extraction and split steps cannot be answered this way: add a note or correct the input.
+
+## Skipped and discarded records
+
+**Skipped** records never reached a decision, because they cannot be feedback. The DRC presets screen every row before any AI request, without cost:
+
+- no letters at all: empty cells, numbers, symbols (`12345`, `---`);
+- fewer than `minLetters` letters (default 2);
+- every word looks like random typing: no vowels in 5+ letters (`sdfgh`), one repeated letter (`jjjj`), a repeated 2–3 letter chunk (`sdfsdf`, `hahaha`), or 5 keys in a row on a QWERTY or AZERTY keyboard (`qwert`, `azert`).
+
+The rules are deliberately narrow, so real Lingala, Swahili and French text passes (including `polepole`, `malamu malamu`, abbreviations such as `MSF`). Short random text such as `kdjfa` still goes to the workflow; switch on `allowSkip` for a step to let the model skip it, or discard it in review. Skipped records show their reason in `_skip_reason`, are counted separately, and are listed on the review sheet. **Process anyway** sends a skipped record through the workflow.
+
+**Discarded** records were rejected by a person. Use **Discard** on a flagged record, or tick several records and use **Discard selected**. Choose a reason (test or random typing, no meaningful content, cannot be translated, duplicate, or your own). When a source row was split into several messages, you can discard all of its flagged messages at once. The reason is kept in `_discard_reason` and the audit history. **Restore** returns a discarded record to review.
+
+Skipped and discarded records stay out of the accepted master. Because they are on the review sheet, importing the same file into that master again does not bring them back.
+
+## Speed
+
+Pipeline Studio sends several requests at once: 4 by default, adjustable from 1 to 8 in **Run options** (remembered in this browser). Laya and Ollama always take one request at a time. Records still move through the workflow in the same phases, and each record goes through the same steps with the same inputs as when running one at a time. Only the order in which new feedback IDs are assigned can differ. After a rate-limit, quota or credential error, no new requests are sent; requests already sent finish and are saved. If a provider keeps asking you to slow down, lower **Requests at a time**.
 
 ## Excel output, duplicate prevention and recovery
 

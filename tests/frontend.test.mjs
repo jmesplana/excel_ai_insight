@@ -385,6 +385,8 @@ test('invalid output order cannot omit results through duplicate or unknown name
         assert.throws(() => validateReportConfig({sourceColumns: ['Text'],
             questions: [{outputColumnName: 'Class'}], outputOrder}, ['Text']), /outputOrder/);
     }
+    assert.throws(() => orderedJevOutputs({questions: [{outputColumnName: 'Renamed'}],
+        outputOrder: ['Old name', 'Old name']}), /Repeated names: "Old name".*Names without a question or derived output: "Old name".*Workflow and report settings/);
 });
 
 test('v2 preserves structured questions, branches, lookups and reporting settings', () => {
