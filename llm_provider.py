@@ -19,6 +19,11 @@ Configuration is resolved per request with this precedence:
 
 That ordering lets an individual override a server default without one being
 required, and lets the server supply credentials so users never type a key.
+
+Server credentials are offered only when the request may use them: always when
+sign-in is off, otherwise only to a signed-in, approved user (insights.auth). A
+connection is never mixed: a browser-supplied endpoint is used only with a
+browser-supplied key, so the server key cannot be sent to an address a visitor chose.
 """
 
 import os
@@ -44,6 +49,12 @@ def _clean(value):
         return None
     text = str(value).strip()
     return text or None
+
+
+def server_value(name):
+    """A server credential from the environment, or None when this request may not use it."""
+    from insights.auth import server_credentials_allowed
+    return _clean(os.environ.get(name)) if server_credentials_allowed() else None
 
 
 def resolve_config(data=None):
@@ -85,14 +96,16 @@ def resolve_config(data=None):
                 'endpoint': endpoint, 'api_version': None}
 
     if provider == 'azure':
-        api_key = (
-            _clean(data.get('apiKey'))
-            or _clean(os.environ.get('AZURE_OPENAI_API_KEY'))
-        )
-        endpoint = (
-            _clean(data.get('azureEndpoint'))
-            or _clean(os.environ.get('AZURE_OPENAI_ENDPOINT'))
-        )
+        api_key = _clean(data.get('apiKey'))
+        if api_key:
+            endpoint = (
+                _clean(data.get('azureEndpoint'))
+                or _clean(os.environ.get('AZURE_OPENAI_ENDPOINT'))
+            )
+        else:
+            # The server key only ever goes to the server's own endpoint.
+            api_key = server_value('AZURE_OPENAI_API_KEY')
+            endpoint = server_value('AZURE_OPENAI_ENDPOINT')
         model = (
             _clean(data.get('azureDeployment'))
             or _clean(data.get('model'))
@@ -133,7 +146,7 @@ def resolve_config(data=None):
 
     api_key = (
         _clean(data.get('apiKey'))
-        or _clean(os.environ.get('OPENAI_API_KEY'))
+        or server_value('OPENAI_API_KEY')
     )
     if not api_key:
         raise LLMConfigError(

@@ -1,3 +1,4 @@
+import os
 import json
 import unittest
 import httpx
@@ -76,6 +77,10 @@ class PipelineTests(unittest.TestCase):
                 self.assertEqual(next(iter(schema['properties'])), 'values')
 
     def setUp(self):
+        # Keep a local .env sign-in list from changing these tests.
+        env = patch.dict(os.environ, {'AUTH_ALLOWED_EMAILS': '', 'AUTH_ALLOWED_DOMAINS': ''})
+        env.start()
+        self.addCleanup(env.stop)
         self.client = create_app().test_client()
 
     def test_page_and_validation(self):

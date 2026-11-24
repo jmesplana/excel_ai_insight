@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest.mock import patch, MagicMock
 from app import create_app
@@ -7,6 +8,10 @@ import jev_provider
 
 class AppTests(unittest.TestCase):
     def setUp(self):
+        # Keep a local .env sign-in list from changing these tests.
+        env = patch.dict(os.environ, {'AUTH_ALLOWED_EMAILS': '', 'AUTH_ALLOWED_DOMAINS': ''})
+        env.start()
+        self.addCleanup(env.stop)
         self.app = create_app()
         self.client = self.app.test_client()
 

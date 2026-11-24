@@ -1,0 +1,6 @@
+Sign in to Aidstack Insights Pipeline Studio
+
+Open this link to sign in:
+{{ url }}
+
+The link expires in {{ minutes }} minutes. If you didn't request it, you can ignore this email.

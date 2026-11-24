@@ -10,6 +10,7 @@
 </button>
 </div>
 <div class="modal-body p-4">
+{% if signed_in_email %}<p class="alert alert-info small" role="note">You're signed in, so the organization's AI connection is used for any provider you leave blank here. Keys you add take precedence and are billed to you.</p>{% endif %}
 <ul class="nav nav-pills gap-2 mb-4" role="tablist" aria-label="Connection categories">
 <li class="nav-item" role="presentation">
 <button class="nav-link active" id="settings-tab-text" data-bs-toggle="pill" data-bs-target="#settings-text" type="button" role="tab" aria-controls="settings-text" aria-selected="true">Text generation</button>

@@ -65,3 +65,4 @@ framework2_overlap.json
 
 # Local websites allowed to access the Laya connector
 .laya-origins.json
+.env.local

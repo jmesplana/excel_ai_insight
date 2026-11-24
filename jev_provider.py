@@ -88,6 +88,7 @@ def resolve_config(data=None):
     Raises:
         JevConfigError: if no API key is available.
     """
+    from llm_provider import server_value
     data = data or {}
 
     provider = data.get('classificationProvider') or os.environ.get('CLASSIFICATION_PROVIDER', 'jev')
@@ -101,11 +102,11 @@ def resolve_config(data=None):
         if model not in ('english', 'multilingual', 'typed-decisions'):
             raise JevConfigError('Choose an English, multilingual or typed-decisions Laya checkpoint.')
         return {'provider': 'laya', 'endpoint': endpoint, 'model': model,
-                'api_key': _clean(data.get('layaApiKey')) or os.environ.get('LAYA_API_KEY') or ''}
+                'api_key': _clean(data.get('layaApiKey')) or server_value('LAYA_API_KEY') or ''}
 
     api_key = (
         _clean(data.get('jevApiKey'))
-        or _clean(os.environ.get('TYPESAFE_API_KEY'))
+        or server_value('TYPESAFE_API_KEY')
     )
     if not api_key:
         raise JevConfigError(

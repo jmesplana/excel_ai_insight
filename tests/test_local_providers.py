@@ -11,6 +11,10 @@ from laya_provider import validate_configs
 
 class LocalProviderTests(unittest.TestCase):
     def setUp(self):
+        # Keep a local .env sign-in list from changing these tests.
+        env = patch.dict(os.environ, {'AUTH_ALLOWED_EMAILS': '', 'AUTH_ALLOWED_DOMAINS': ''})
+        env.start()
+        self.addCleanup(env.stop)
         self.client = create_app().test_client()
 
     def test_ollama_never_uses_cloud_keys_or_models(self):

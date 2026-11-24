@@ -14,6 +14,12 @@ The **DRC feedback messages** preset ([`presets/drc-feedback-messages.pipeline.j
 
 The new module does not change the existing analysis and classification modes.
 
+## Sign-in and server credentials
+
+Set `AUTH_ALLOWED_EMAILS` and/or `AUTH_ALLOWED_DOMAINS` (comma-separated; domains match exactly) to require sign-in. Opening Pipeline Studio then asks for an email address. An approved address receives a sign-in link that works for 15 minutes; any other address is told it is not on the approved list. A session lasts 7 days, and removing an address from the list signs it out on its next request.
+
+While sign-in is on, the server's AI credentials (`AZURE_OPENAI_*`, `OPENAI_API_KEY`, `TYPESAFE_API_KEY`) are available only to signed-in users, anywhere in the app. A key entered in **AI connections** takes precedence. A provider left blank there uses the server's connection; a browser-supplied endpoint is only ever used with a browser-supplied key. Sign-in also needs `SECRET_KEY`, `APP_BASE_URL` and the SMTP settings `EMAIL_SERVER_HOST`, `EMAIL_SERVER_PORT`, `EMAIL_SERVER_USER`, `EMAIL_SERVER_PASSWORD` and `EMAIL_FROM` (see `.env.example`). Links are stateless: one can be reused until it expires. The rest of the app is unaffected.
+
 ## Presets and workflow files
 
 Every `*.pipeline.json` file in the `presets` folder appears in the preset list, using its `name` and `description`. To add a framework, save a workflow with **Saved work → Save workflow as a file**, add a `description`, and put the file in `presets`. No code change is needed.

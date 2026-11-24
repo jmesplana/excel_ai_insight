@@ -17,8 +17,10 @@ def create_app():
     from insights.jev import bp as jev
     from insights.jev_report import bp as jev_report
     from insights.pipeline import bp as pipeline
+    from insights import auth
     for blueprint in (analysis, chat, icd, jev, jev_report, pipeline):
         app.register_blueprint(blueprint)
+    auth.init_app(app)
 
     @app.errorhandler(413)
     def too_large(error):

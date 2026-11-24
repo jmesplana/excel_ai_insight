@@ -337,6 +337,7 @@ async function callStep(node, values) {
 async function post(path, body) {
     const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(180000)});
     let result;try{result=await response.json();}catch{throw new Error('The server returned an incomplete response. Resume to retry the pending step.');}
+    if(response.status===401){stopRequested=true;throw new Error(result.error || 'Sign in again to continue.');}
     if(!response.ok) throw new Error(result.error || `Request failed (${response.status}).`);
     return result;
 }
