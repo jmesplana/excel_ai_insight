@@ -1,7 +1,7 @@
 import {savePipeline, loadPipeline, hasSavedPipeline} from './pipeline-checkpoint.js';
 import {ScreenWakeLock} from './screen-wake-lock.js';
 import {ProgressTimer, formatDuration} from './progress-timer.js';
-import {defaultWorkflow, defaultNode, portableConfig, importWorkflow, requiredInputs, outputs, seedRun, activeStep, nextWorkIndex, applyResult, retryEntry, reviewCell, scheduleRateRetry, digest, needsLegacyUpgrade, upgradeLegacyWorkflow, locateEntry, rewindCursor, reviewerFields, acceptReviewerAnswer, NOTE_LIMIT, sourceSiblings, discardEntries, restoreEntry} from './pipeline-core.js?v=4';
+import {defaultWorkflow, defaultNode, portableConfig, importWorkflow, requiredInputs, outputs, seedRun, activeStep, nextWorkIndex, applyResult, retryEntry, reviewCell, exportedRow, scheduleRateRetry, digest, needsLegacyUpgrade, upgradeLegacyWorkflow, locateEntry, rewindCursor, reviewerFields, acceptReviewerAnswer, NOTE_LIMIT, sourceSiblings, discardEntries, restoreEntry} from './pipeline-core.js?v=4';
 import {readSheet, readMaster} from './pipeline-workbook.js?v=4';
 import {classifierFetch} from './classifier-transport.js';
 import {initProviderSettings} from './provider-settings.js';
@@ -579,19 +579,46 @@ function configureExport() {
 function selectedColumns() {
     return [...$('export-columns').querySelectorAll('input:checked')].map(input => input.value);
 }
-function completedDownloadState() {
-    $('download-results').disabled = !run || exporting || !selectedColumns().length || !run.work.some(e => e.status === 'ok');
+function matchesResultFilter(entry, filter) {
+    return filter === 'all' || entry.status === filter || (filter === 'review' && entry.status === 'error');
 }
-$('export-columns').onchange = completedDownloadState;
-$('download-results').onclick = safe(async () => {
-    const columns = selectedColumns(), records = run.work.filter(e => e.status === 'ok');
-    if (!columns.length || !records.length || exporting) return;
+function updateDownloadButtons() {
+    const disabled = !run || exporting || !selectedColumns().length;
+    const filter = $('result-filter').value;
+    $('download-results').disabled = disabled || !run.work.some(e => e.status === 'ok');
+    $('download-filtered').disabled = disabled || !run.work.some(e => matchesResultFilter(e, filter));
+}
+$('export-columns').onchange = updateDownloadButtons;
+$('download-results').onclick = safe(() => downloadResults(false));
+$('download-filtered').onclick = safe(() => downloadResults(true));
+async function downloadResults(filtered) {
+    const selected = selectedColumns();
+    if (!run || !selected.length || exporting) return;
+    const filter = filtered ? $('result-filter').value : 'ok';
+    const records = run.work.filter(e => matchesResultFilter(e, filter));
+    if (!records.length) return;
     const format = $('export-format').value;
+    const suffix = filtered ? {all:'all_records', ok:'accepted', review:'needs_review'}[filter] || filter : 'completed';
     const filename = (run.test ? 'test_' : run.work.some(e => e.status === 'pending') ? 'partial_' : '') +
-        run.source.filename.replace(/\.[^.]+$/, '') + '_completed.' + format;
+        run.source.filename.replace(/\.[^.]+$/, '') + '_' + suffix + '.' + format;
+    const columns = filtered ? [...selected, '_reason', '_discard_reason', '_failed_step', '_error_code',
+        '_feedback_id', '_original_id', '_source_filename', '_source_sheet', '_source_row', '_message_number'] : selected;
+    const headers = [...columns];
+    const statuses = {ok:'Accepted', review:'Needs review', error:'Needs review (provider error)',
+        pending:'Pending', skipped:'Skipped', discarded:'Discarded'};
+    if (filtered) {
+        let label = 'Pipeline status';
+        for (let n = 2; headers.includes(label); n++) label = 'Pipeline status (' + n + ')';
+        headers.push(label);
+    }
+    // Snapshot filtered rows before processing or review actions can change their status.
+    const snapshot = filtered && records.map(entry => {
+        const values = exportedRow(run, entry);
+        return [...columns.map(key => values[key] ?? null), statuses[entry.status]];
+    });
     const worker = new Worker(new URL('./pipeline-results-worker.js',import.meta.url));
     exporting = true;
-    completedDownloadState();
+    updateDownloadButtons();
     try {
         const file = await new Promise((resolve,reject) => {
             let offset = 0;
@@ -600,15 +627,16 @@ $('download-results').onclick = safe(async () => {
                 if (data.error) { reject(new Error(data.error)); return; }
                 if (data.file) { resolve(data.file); return; }
                 if (offset >= records.length) { worker.postMessage({finish:true}); return; }
-                const batch = records.slice(offset,offset+512);
+                const batch = filtered ? snapshot.slice(offset,offset+512) :
+                    records.slice(offset,offset+512).map(entry => columns.map(key => entry.values[key] ?? null));
                 offset += batch.length;
-                worker.postMessage({rows:batch.map(e => columns.map(key => e.values[key] ?? null))});
+                worker.postMessage({rows:batch});
             };
-            worker.postMessage({headers:columns,format});
+            worker.postMessage({headers,format});
         });
         downloadBlob(file, filename);
-    } finally {worker.terminate();exporting=false;completedDownloadState();}
-});
+    } finally {worker.terminate();exporting=false;updateDownloadButtons();}
+}
 function renderRun() {
     const entries=run?.work||[];
     const counts = {ok:0,pending:0,review:0,error:0,discarded:0,skipped:0};
@@ -633,7 +661,7 @@ function renderRun() {
     renderProgress(remainingSteps);
     $('run-activity').hidden = !running;
     const count=status=>counts[status];
-    configureExport();completedDownloadState();renderTime();
+    configureExport();updateDownloadButtons();renderTime();
     $('split-summary').textContent=run ? `${run.test?'Test · ':''}${run.source.count} source rows in run${run.source.uploadedCount ? ' of '+run.source.uploadedCount+' uploaded' : ''} · ${multiple} source${multiple===1?'':'s'} split into multiple messages · ${entries.length} current records${pairedSplit>=0 ? (awaitingSplit ? ' · Split in progress or pending' : ' · Split stage complete for eligible rows') : ''}` : '';
     $('run-counts').innerHTML=run?`<span>${count('ok')} accepted</span><span>${count('review')+count('error')} review</span><span>${count('pending')} pending</span><span>${count('skipped')} skipped</span><span>${count('discarded')} discarded</span><span>${run.skipped} already imported</span>`:'';
     $('resume-run').disabled=running||!count('pending');$('retry-run').disabled=running||!count('error');
@@ -652,7 +680,7 @@ function renderRun() {
     const visible=[];
     for(let i=0;i<entries.length && visible.length<100;i++) {
         const e=entries[i];
-        if(filter==='all'||filter===e.status||filter==='review'&&e.status==='error') visible.push({e,i});
+        if(matchesResultFilter(e, filter)) visible.push({e,i});
     }
     const expected=run?[...new Set(run.config.nodes.flatMap(outputs))]:[];
     const sourceColumns=run?.source.columns || Object.keys(entries[0]?.values || {}).filter(k=>!k.startsWith('_'));

@@ -504,3 +504,49 @@ test('junk rows are skipped without AI calls, flagged rows are discarded in bulk
  await expect(page.locator('#run-counts')).toContainText('1 skipped');
  expect(sent).toContain(12345);
 });
+
+test('filtered downloads include every matching record and its review details', async ({page}) => {
+ const statuses = [...Array(101).fill('review'), 'error', 'skipped', 'discarded', 'pending'];
+ const config = {format:'aidstack-insights-pipeline',version:2,name:'Review export',
+   nodes:[{id:'check',name:'Check',type:'analyze',provider:'azure',instructions:'Check feedback.',
+     inputs:['Feedback'],fields:[{name:'answer',options:[]}]}]};
+ const work = statuses.map((status,i) => ({
+   node:0,status,history:[],reason:status+' reason',
+   drafts:status==='review'?{answer:'Draft '+i}:undefined,
+   values:{Feedback:'Message '+i,_source_row:i+2,_source_record_id:'s:'+i,_record_key:'s:'+i,
+     _discard_reason:status==='discarded'?'Duplicate':undefined}
+ }));
+ const recovery = {format:'aidstack-pipeline-run',version:1,runId:'filter-export',nextId:1,skipped:0,
+   source:{filename:'feedback.csv',count:work.length,columns:['Feedback']},
+   master:{rows:[],review:[],logs:[]},config,work};
+ await page.goto('/pipeline');
+ await page.locator('#run-file').setInputFiles({name:'saved.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(recovery))});
+ await expect(page.locator('#notice')).toContainText('Run restored');
+ await expect(page.locator('#download-results')).toBeDisabled();
+ await page.getByText('Choose download columns', {exact:true}).click();
+ await page.locator('#export-columns input[value="Feedback"]').uncheck();
+ for (const [filter,suffix] of [['all','all_records'],['review','needs_review'],['pending','pending'],['skipped','skipped'],['discarded','discarded']]) {
+   await page.locator('#result-filter').selectOption(filter);
+   const format = filter==='review'?'xlsx':'csv';
+   await page.locator('#export-format').selectOption(format);
+   const downloaded = page.waitForEvent('download');
+   await page.locator('#download-filtered').click();
+   const file = await downloaded;
+   expect(file.suggestedFilename()).toBe('partial_feedback_'+suffix+'.'+format);
+   const chunks = [];
+   for await (const chunk of await file.createReadStream()) chunks.push(chunk);
+   const rows = await page.evaluate(data => {
+     const book = XLSX.read(data,{type:'base64'});
+     return XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]]);
+   },Buffer.concat(chunks).toString('base64'));
+   const expected = work.filter(e => filter==='all' || e.status===filter || (filter==='review' && e.status==='error'));
+   const labels = {review:'Needs review',error:'Needs review (provider error)',pending:'Pending',skipped:'Skipped',discarded:'Discarded'};
+   expect(Object.keys(rows[0]).at(-1)).toBe('Pipeline status');
+   expect(rows.map(r=>[r._source_row,r['Pipeline status']])).toEqual(expected.map(e=>[e.values._source_row,labels[e.status]]));
+   expect(rows[0]).not.toHaveProperty('Feedback');
+   if (filter==='review') expect(rows[0]).toMatchObject({answer:'[Needs Review] | Draft 0',_reason:'review reason'});
+   if (filter==='discarded') expect(rows[0]._discard_reason).toBe('Duplicate');
+ }
+ await page.locator('#result-filter').selectOption('ok');
+ await expect(page.locator('#download-filtered')).toBeDisabled();
+});
