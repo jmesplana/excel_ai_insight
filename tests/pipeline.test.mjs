@@ -266,7 +266,7 @@ test('a review path fills supported lookup drafts and keeps them outside accepte
  assert.deepEqual(rows.map(r=>[r.values.feedback_path,r.values._status]),[[null,'review'],[null,'review']]);
 });
 
-const GUIDANCE=['useContext','systemNotes','interpretFirst','valuesBeforeStatus','recheck','recheckWithReason','fallbackOption','tentativeOnReview'];
+const GUIDANCE=['contextColumns','useContext','systemNotes','interpretFirst','valuesBeforeStatus','recheck','recheckWithReason','fallbackOption','tentativeOnReview'];
 const asVersion1=preset=>({...structuredClone(preset),version:1,context:undefined,roles:undefined,
  nodes:preset.nodes.map(n=>Object.fromEntries(Object.entries(n).filter(([k])=>!GUIDANCE.includes(k))))});
 
@@ -275,8 +275,7 @@ test('version 1 DRC workflows upgrade to exactly the preset settings they used t
   const preset=JSON.parse(fs.readFileSync(`presets/${file}.pipeline.json`,'utf8'));
   const legacy=portableConfig(asVersion1(preset));
   assert.equal(needsLegacyUpgrade(legacy),true);
-  const ebola=JSON.parse(fs.readFileSync('presets/drc-ebola-framework.pipeline.json','utf8'));
-  const upgraded=upgradeLegacyWorkflow(legacy,ebola);
+  const upgraded=upgradeLegacyWorkflow(legacy,preset);
   assert.equal(upgraded.context,preset.context);
   assert.deepEqual(upgraded.nodes,portableConfig(preset).nodes,file);
   for(const [role,column] of Object.entries(preset.roles||{})) assert.deepEqual(upgraded.roles[role],column);

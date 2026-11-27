@@ -1,6 +1,7 @@
 """Stateless pipeline steps. Workbooks and resumable orchestration stay in the browser."""
 import json
 import hashlib
+import re
 from pathlib import Path
 from flask import Blueprint, jsonify, render_template, request, send_file, abort
 from openai import AuthenticationError, BadRequestError, RateLimitError
@@ -30,6 +31,8 @@ def validate_node(node):
     require(names(node.get('inputs')), 'Select at least one distinct input column (names cannot start with _).')
     kind = node['type']
     if kind in ('extract', 'analyze', 'classify'):
+        if 'contextColumns' in node:
+            require(names(node['contextColumns']), 'Context columns must be distinct input names.')
         require(node.get('provider') in PROVIDERS, 'Choose an AI provider for this step.')
         require(isinstance(node.get('instructions'), str) and bool(node['instructions'].strip()), 'AI steps need instructions.')
         require(type(node.get('maxOutputTokens', 4096)) is int and 64 <= node.get('maxOutputTokens', 4096) <= 32768, 'Output token limit must be between 64 and 32768.')
@@ -129,6 +132,20 @@ def parse_values(value, fields):
         if field.get('options'):
             require(result in [label(o) for o in field['options']], 'Response contains a value outside the allowed categories.')
     return value
+
+
+def source_excerpt(excerpt, source):
+    """Recover original spacing only when the quoted words identify one source span."""
+    if excerpt in source:
+        return excerpt
+    words = excerpt.split()
+    if not words:
+        return None
+    pattern = r'\s+'.join(re.escape(word) for word in words)
+    matches = re.finditer(pattern, source)
+    first = next(matches, None)
+    if first is not None and next(matches, None) is None:
+        return first.group()
 
 
 def llm_step(node, record, credentials, context='', note=''):
@@ -245,7 +262,7 @@ def llm_step(node, record, credentials, context='', note=''):
                             if not choices:
                                 values = [v for v in values if v.strip().casefold() != 'null']
                             if extraction and key == node['verbatimField']:
-                                values = [v for v in values if v in str(record[node['verbatimInput']])]
+                                values = [span for v in values if (span := source_excerpt(v, str(record[node['verbatimInput']])))]
                             if values:
                                 drafts[key] = ' | '.join(values)
                         if drafts:
@@ -266,7 +283,10 @@ def llm_step(node, record, credentials, context='', note=''):
                 for item in items:
                     parse_values(item, fields)
                     if extraction:
-                        require(item[node['verbatimField']] in str(record[node['verbatimInput']]), 'An excerpt is not an exact substring of the original feedback.')
+                        key = node['verbatimField']
+                        span = source_excerpt(item[key], str(record[node['verbatimInput']]))
+                        require(span is not None, 'An excerpt is not an exact substring of the original feedback.')
+                        item[key] = span
                 return {'status': 'ok', 'items': items, 'model': model, 'attempts': attempt + 1}
             except (AuthenticationError, BadRequestError, RateLimitError):
                 raise
@@ -318,6 +338,9 @@ def execute_step(node, full_record, credentials, context='', note=''):
         records, calls = evaluate_row(context, [question], [], lambda state, questions: classify(state, questions, config=config, details=True))
         result = records[field['name']]
         return {'status': result['status'], 'reason': result.get('reason'), 'items': [{field['name']: result['value']}], 'model': config['model'], 'audit': records}
+    for key in node.get('contextColumns', []):
+        if key in full_record:
+            record[key] = full_record[key]
     return llm_step(node, record, credentials, context, note)
 
 

@@ -369,6 +369,38 @@ class PipelineTests(unittest.TestCase):
             self.assertNotIn('oral community feedback', system)
             self.assertNotIn('plainMeaning', schema['properties'])
 
+    def test_extraction_recovers_verbatim_spacing_without_accepting_rewrites(self):
+        node = extract()
+        client = MagicMock()
+        api = client.with_options.return_value.chat.completions.create
+        source = "D'accord,  merci"
+        for quote, expected in [("D'accord, merci", 'ok'), ("D'accord merci", 'review')]:
+            with self.subTest(quote=quote), patch('insights.pipeline.get_client_and_model', return_value=(client, 'test')):
+                api.return_value = completion({'status':'ok','reason':'','items':[{'excerpt':quote,'type':'Thanks'}]})
+                result = self.client.post('/api/pipeline/step', json={'node':node,'record':{'Feedback':source}}).get_json()
+                self.assertEqual(result['status'], expected)
+                if expected == 'ok':
+                    self.assertEqual(result['items'][0]['excerpt'], source)
+
+    def test_drc_sector_receives_source_context_and_only_configured_metadata(self):
+        with self.client.get('/api/pipeline/presets/drc-ebola-framework') as response:
+            workflow = response.get_json()
+        for step in workflow['nodes']:
+            if step['type'] in ('analyze','extract','classify'):
+                self.assertTrue(step.get('useContext', True), step['name'])
+        node = next(step for step in workflow['nodes'] if step['name'] == 'feedback_sector_suggested')
+        record = {'Feedback':'Merci. Na mateya. Na bino', 'feedback_excerpt':'Merci.', 'translation_en':'Thanks.',
+                  'type_of_feedback':'Appréciations', 'feedback_path':'Appreciation', 'Langue':'lingala', 'Location':'private'}
+        client = MagicMock()
+        api = client.with_options.return_value.chat.completions.create
+        api.return_value = completion({'status':'ok','reason':'','values':{'feedback_sector_suggested':'RCCE/CEA'}})
+        with patch('insights.pipeline.get_client_and_model', return_value=(client, 'test')):
+            result = self.client.post('/api/pipeline/step', json={'node':node,'record':record,'context':workflow['context']}).get_json()
+        self.assertEqual(result['status'], 'ok')
+        messages = api.call_args.kwargs['messages']
+        self.assertIn(workflow['context'], messages[0]['content'])
+        self.assertEqual(json.loads(messages[1]['content'])['record'], {k:v for k,v in record.items() if k != 'Location'})
+
     def test_workflow_context_and_step_guidance_reach_the_model(self):
         node = {**extract(), 'systemNotes': 'Step note.', 'interpretFirst': True}
         client = MagicMock()

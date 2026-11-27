@@ -30,6 +30,7 @@ A workflow file contains everything the workflow does. The server applies no hid
 | --- | --- | --- |
 | `context` | Workflow (**Context & language notes**) | Setting, languages and local terms, added to the system instructions of each AI step that uses context |
 | `useContext` | Step (checkbox) | `false` leaves the workflow context out of this step. Default `true` |
+| `contextColumns` | Step (**Advanced rules**) | Optional named columns sent to the text model when present. The DRC Ebola preset uses the complete feedback to resolve references in excerpts and treats the enumerator’s language and type as hints. |
 | `systemNotes` | Step (**Model guidance**) | Step-specific guidance added after the context |
 | `recheck` | Step (**Model guidance**) | When the model asks for review, it gets one more attempt with this instruction. Extraction steps have a built-in recheck unless this is set to `""` |
 | `recheckWithReason` | Step (advanced JSON) | The recheck also receives the first review reason |

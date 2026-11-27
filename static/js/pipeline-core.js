@@ -2,7 +2,7 @@
 export const FORMAT = 'aidstack-insights-pipeline';
 export const TYPES = ['extract', 'analyze', 'classify', 'split', 'validate', 'lookup'];
 export const PROVIDERS = ['openai', 'azure', 'ollama', 'jev', 'laya'];
-const NODE_KEYS = ['id', 'name', 'type', 'inputs', 'provider', 'model', 'instructions', 'fields', 'verbatimField', 'verbatimInput', 'maxOutputTokens', 'responseMode', 'minConfidence', 'questionType', 'sourceBranches', 'branches', 'delimiter', 'pairedSourceStep', 'table', 'output', 'rules', 'reviewValues', 'useContext', 'systemNotes', 'interpretFirst', 'valuesBeforeStatus', 'recheck', 'recheckWithReason', 'fallbackOption', 'tentativeOnReview', 'allowSkip'];
+const NODE_KEYS = ['contextColumns', 'id', 'name', 'type', 'inputs', 'provider', 'model', 'instructions', 'fields', 'verbatimField', 'verbatimInput', 'maxOutputTokens', 'responseMode', 'minConfidence', 'questionType', 'sourceBranches', 'branches', 'delimiter', 'pairedSourceStep', 'table', 'output', 'rules', 'reviewValues', 'useContext', 'systemNotes', 'interpretFirst', 'valuesBeforeStatus', 'recheck', 'recheckWithReason', 'fallbackOption', 'tentativeOnReview', 'allowSkip'];
 // Workflow-level column roles. They name the columns that tentative-translation review, ID preservation and the
 // classification sheet use, so these features carry no hard-coded column names. Absent roles turn the feature off.
 const ROLE_KEYS = ['sourceTranslation', 'messageTranslation', 'excerpt', 'messageType', 'code', 'category'];
@@ -51,6 +51,7 @@ export function portableConfig(raw) {
         if (!n || !TYPES.includes(n.type) || typeof n.id !== 'string' || !n.id || ids.has(n.id)) fail('Step IDs must be unique and step types supported.');
         ids.add(n.id);
         if (!Array.isArray(n.inputs) || !n.inputs.length || n.inputs.some(k => typeof k !== 'string' || !k.trim() || k.startsWith('_')) || new Set(n.inputs).size !== n.inputs.length) fail('Every step needs distinct input columns without a leading _.');
+        if (n.contextColumns !== undefined && (!Array.isArray(n.contextColumns) || !n.contextColumns.length || n.contextColumns.some(k => typeof k !== 'string' || !k.trim() || k.startsWith('_')) || new Set(n.contextColumns).size !== n.contextColumns.length)) fail('Context columns must be distinct input names.');
         if (outputs(n).some(k => typeof k !== 'string' || !k.trim() || k.startsWith('_') || ['__proto__', 'constructor', 'prototype'].includes(k))) fail('Output names cannot be empty or start with _.');
         if (['extract', 'analyze', 'classify'].includes(n.type) && !PROVIDERS.includes(n.provider)) fail('Choose a supported AI provider.');
         return clone(Object.fromEntries(NODE_KEYS.filter(k => n[k] !== undefined).map(k => [k, n[k]])));
@@ -426,7 +427,7 @@ export function mergeRun(run) {
 
 /* Version 1 workflows relied on the server recognising DRC wording and column names. That recognition now lives
    only here, as a one-time upgrade: matching steps receive the explicit settings of the DRC preset's equivalent step. */
-const GUIDANCE_KEYS = ['useContext', 'systemNotes', 'interpretFirst', 'valuesBeforeStatus', 'recheck', 'recheckWithReason', 'fallbackOption', 'tentativeOnReview'];
+const GUIDANCE_KEYS = ['contextColumns', 'useContext', 'systemNotes', 'interpretFirst', 'valuesBeforeStatus', 'recheck', 'recheckWithReason', 'fallbackOption', 'tentativeOnReview'];
 const LEGACY_MARKERS = ['congolese swahili', 'democratic republic of the congo', 'in the drc'];
 const isLegacyDrcNode = n => ['extract', 'analyze', 'classify'].includes(n.type) && LEGACY_MARKERS.some(m => String(n.instructions || '').toLowerCase().includes(m));
 function legacyRole(n) {
@@ -446,7 +447,8 @@ export function upgradeLegacyWorkflow(config, preset) {
     const templates = {};
     for (const n of preset.nodes) templates[legacyRole(n)] ??= n;
     const nodes = config.nodes.map(n => {
-        const role = legacyRole(n), template = templates[role];
+        const role = legacyRole(n);
+        const template = preset.nodes.find(step => step.id === n.id && legacyRole(step) === role) || templates[role];
         if (!['extract', 'analyze', 'classify'].includes(n.type)) return n;
         const upgraded = Object.fromEntries(Object.entries(n).filter(([k]) => !GUIDANCE_KEYS.includes(k)));
         if (role === 'none' || role === 'classify') return {...upgraded, useContext: false};

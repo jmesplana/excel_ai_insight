@@ -252,6 +252,7 @@ test('DRC translates a source row once before coding its distinct messages',asyn
  expect(calls.map(c=>c.id)).toEqual(['translate-feedback','translate-feedback','extract-messages','extract-messages','codebook-1','codebook-1','codebook-1']);
  expect(calls[0].record).toEqual({Feedback:source});
  expect(calls[2].record).toEqual({Feedback:source,source_translation_en:translation});
+ expect(calls.slice(4).map(c=>c.record.Feedback)).toEqual([source,source,'Bravo.']);
  expect(calls.slice(4).map(c=>[c.record.translation_en,c.record.type_of_feedback])).toEqual([
    ['Thank you.','Appréciations'],['Where is the centre?','Questions'],['Bravo.','Appréciations']]);
 });

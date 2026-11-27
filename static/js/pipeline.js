@@ -1,7 +1,7 @@
 import {savePipeline, loadPipeline, hasSavedPipeline} from './pipeline-checkpoint.js';
 import {ScreenWakeLock} from './screen-wake-lock.js';
 import {ProgressTimer, formatDuration} from './progress-timer.js';
-import {defaultWorkflow, defaultNode, portableConfig, importWorkflow, requiredInputs, outputs, seedRun, activeStep, nextWorkIndex, applyResult, retryEntry, reviewCell, exportedRow, scheduleRateRetry, digest, needsLegacyUpgrade, upgradeLegacyWorkflow, locateEntry, rewindCursor, reviewerFields, acceptReviewerAnswer, NOTE_LIMIT, sourceSiblings, discardEntries, restoreEntry} from './pipeline-core.js?v=4';
+import {defaultWorkflow, defaultNode, portableConfig, importWorkflow, requiredInputs, outputs, seedRun, activeStep, nextWorkIndex, applyResult, retryEntry, reviewCell, exportedRow, scheduleRateRetry, digest, needsLegacyUpgrade, upgradeLegacyWorkflow, locateEntry, rewindCursor, reviewerFields, acceptReviewerAnswer, NOTE_LIMIT, sourceSiblings, discardEntries, restoreEntry} from './pipeline-core.js?v=5';
 import {readSheet, readMaster} from './pipeline-workbook.js?v=4';
 import {classifierFetch} from './classifier-transport.js';
 import {initProviderSettings} from './provider-settings.js';
@@ -93,7 +93,8 @@ async function choosePreset(key) {
 // Workflows saved before version 2 get the explicit settings their DRC steps used to receive implicitly.
 async function upgradeIfLegacy(cfg) {
     if(!needsLegacyUpgrade(cfg))return {config:cfg,upgraded:false};
-    return {config:upgradeLegacyWorkflow(cfg,await fetchPreset(LEGACY_PRESET)),upgraded:true};
+    const template = cfg.nodes.every(n => n.type === 'extract' || n.type === 'split') ? DEFAULT_PRESET : LEGACY_PRESET;
+    return {config:upgradeLegacyWorkflow(cfg,await fetchPreset(template)),upgraded:true};
 }
 document.querySelectorAll('[data-stage]').forEach(button=>button.onclick=safe(()=>{readEditor();renderOverview();setStage(button.dataset.stage);}));
 document.querySelectorAll('[data-go]').forEach(button=>button.onclick=()=>setStage(button.dataset.go));
@@ -149,7 +150,7 @@ async function saveCheckpoint(index, replace, newlyProcessed = 0) {
         renderCheckpoint();
     }
 }
-const ADVANCED = ['sourceBranches', 'branches', 'minConfidence', 'responseMode', 'table', 'rules', 'reviewValues', 'interpretFirst', 'valuesBeforeStatus', 'recheckWithReason', 'fallbackOption', 'tentativeOnReview'];
+const ADVANCED = ['contextColumns', 'sourceBranches', 'branches', 'minConfidence', 'responseMode', 'table', 'rules', 'reviewValues', 'interpretFirst', 'valuesBeforeStatus', 'recheckWithReason', 'fallbackOption', 'tentativeOnReview'];
 function advanced(n) {
     const keys = ADVANCED;
     return Object.fromEntries(keys.filter(k => n[k] !== undefined).map(k => [k,n[k]]));
@@ -172,7 +173,7 @@ ${n.type==='extract'?`<div class="row g-2"><div class="col-sm-6"><label class="f
 ${n.type==='split'?`<label class="form-label small" for="node-delimiter-${i}">Exact separator</label><input id="node-delimiter-${i}" data-key="delimiter" class="form-control" value="${esc(n.delimiter)}"><p class="small text-muted mt-2">All selected columns must have equal item counts. Repeated items are kept. Mismatches go to review.</p>`:''}
 ${n.type==='lookup'?`<label class="form-label small" for="node-output-${i}">Output column</label><input id="node-output-${i}" data-key="output" class="form-control" value="${esc(n.output)}">`:''}
 ${n.type==='validate'?'<p class="small text-muted">Every input must be nonempty. Add allowed-value rules below if needed.</p>':''}
-<details class="mt-2"><summary class="small">${n.type==='lookup'?'Lookup table':n.type==='validate'?'Allowed-value rules':'Advanced rules & response format'} (JSON)</summary><p class="small text-muted mt-2">${n.type==='lookup'?'table: [{"when": {"input": "value"}, "value": "mapped result"}]':n.type==='validate'?'rules: [{"column": "category", "allowed": ["A", "B"]}]':'Branches and option descriptions are preserved on import. minConfidence applies only to Jev/Laya. Set responseMode to "json" for models without strict schema support; outputs are still validated. reviewValues lists labels that must go to human review. interpretFirst asks for a plain-meaning sentence before deciding; valuesBeforeStatus asks for the answer before the review decision; fallbackOption is a “no code fits” label that always goes to review; tentativeOnReview lets later steps continue tentatively when this step is flagged.'}</p><textarea class="form-control advanced-json" aria-label="Advanced rules for step ${i+1}" rows="5">${esc(JSON.stringify(advanced(n),null,2))}</textarea></details></div></article>`;
+<details class="mt-2"><summary class="small">${n.type==='lookup'?'Lookup table':n.type==='validate'?'Allowed-value rules':'Advanced rules & response format'} (JSON)</summary><p class="small text-muted mt-2">${n.type==='lookup'?'table: [{"when": {"input": "value"}, "value": "mapped result"}]':n.type==='validate'?'rules: [{"column": "category", "allowed": ["A", "B"]}]':'contextColumns lists optional columns supplied to text models as background. Branches and option descriptions are preserved on import. minConfidence applies only to Jev/Laya. Set responseMode to "json" for models without strict schema support; outputs are still validated. reviewValues lists labels that must go to human review. interpretFirst asks for a plain-meaning sentence before deciding; valuesBeforeStatus asks for the answer before the review decision; fallbackOption is a “no code fits” label that always goes to review; tentativeOnReview lets later steps continue tentatively when this step is flagged.'}</p><textarea class="form-control advanced-json" aria-label="Advanced rules for step ${i+1}" rows="5">${esc(JSON.stringify(advanced(n),null,2))}</textarea></details></div></article>`;
     }).join('');
     renderMappings();renderOverview();refreshFileActions();
 }
@@ -244,7 +245,7 @@ async function importConfig(file, append=false) {
     else config=imported.config;
     if(append && !config.context && imported.config.context) { config.context=imported.config.context; config.roles={...imported.config.roles,...config.roles}; }
     presetToken++;preset='imported';expandedNode=append?config.nodes.length-imported.config.nodes.length:0;
-    renderNodes(); if(source) renderSource(); setStage('workflow');showEditor(append);notice((append?'Steps added. Open a step to check its settings.':'Workflow loaded. Review the summary, then continue to files.')+(legacy.upgraded?' Its DRC steps were saved in the older format and now use the DRC Ebola framework preset settings.':''));
+    renderNodes(); if(source) renderSource(); setStage('workflow');showEditor(append);notice((append?'Steps added. Open a step to check its settings.':'Workflow loaded. Review the summary, then continue to files.')+(legacy.upgraded?' Its DRC steps were saved in the older format and now use the matching DRC preset settings.':''));
 }
 $('config-file').onchange=safe(e=>importConfig(e.target.files[0]));
 $('append-file').onchange=safe(e=>importConfig(e.target.files[0],true));
@@ -316,7 +317,12 @@ async function callStep(node, values) {
             ? {status:'review',items,reason:'The selected value is configured to require human review.'}
             : {status:'ok',items};
     }
-    if(node.provider!=='laya') return post('/api/pipeline/step',{node,record,credentials:credentials(node.provider),context:run?.config.context || '',note:values._reviewer_note || ''});
+    if(node.provider!=='laya') {
+        if (['azure','openai','ollama'].includes(node.provider)) {
+            for (const key of node.contextColumns || []) if (Object.hasOwn(values,key)) record[key] = values[key];
+        }
+        return post('/api/pipeline/step',{node,record,credentials:credentials(node.provider),context:run?.config.context || '',note:values._reviewer_note || ''});
+    }
     let options=node.fields[0].options || [];
     for(const key of ['sourceBranches','branches']) if(node[key]?.length) {
         const matches=node[key].filter(b=>Object.entries(b.when).every(([k,v])=>record[k]===v));
